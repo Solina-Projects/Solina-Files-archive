@@ -76,8 +76,10 @@ class ApkToolsActivity : AppCompatActivity() {
                     dexFiles.forEach { entry ->
                         out.appendLine("\n[${entry.name}]")
                         val bytes = zip.getInputStream(entry).use { it.readBytes() }
+                        out.append(dexStructureReport(bytes))
                         val strings = Regex("[ -~]{5,}").findAll(bytes.toString(Charsets.ISO_8859_1))
                             .map { it.value }.distinct().take(120).toList()
+                        out.appendLine("سطرهای قابل‌خواندن (نمونه):")
                         strings.forEach { out.appendLine(it.take(300)) }
                     }
                 }
@@ -86,6 +88,118 @@ class ApkToolsActivity : AppCompatActivity() {
             } catch (e: Exception) { "تحلیل APK ناموفق بود: ${e.message}" }
             runOnUiThread { result.text = report }
         }.start()
+    }
+
+    /**
+     * Reads standard DEX identifier tables without executing or modifying the APK.
+     * This is a structural inspector, not a full Dalvik disassembler.
+     */
+    private fun dexStructureReport(data: ByteArray): String {
+        if (data.size < 112 || !data.copyOfRange(0, 4).contentEquals(byteArrayOf(100, 101, 120, 10))) {
+            return "هشدار: سرآیند DEX معتبر یا کامل نیست.\\n"
+        }
+        fun u16(offset: Int): Int {
+            if (offset < 0 || offset + 2 > data.size) return -1
+            return (data[offset].toInt() and 0xff) or ((data[offset + 1].toInt() and 0xff) shl 8)
+        }
+        fun u32(offset: Int): Int {
+            if (offset < 0 || offset + 4 > data.size) return -1
+            return (data[offset].toInt() and 0xff) or
+                ((data[offset + 1].toInt() and 0xff) shl 8) or
+                ((data[offset + 2].toInt() and 0xff) shl 16) or
+                ((data[offset + 3].toInt() and 0xff) shl 24)
+        }
+        fun validTable(count: Int, offset: Int, itemSize: Int): Boolean =
+            count in 0..1_000_000 && offset >= 0 && offset <= data.size &&
+                (count.toLong() * itemSize.toLong() + offset.toLong()) <= data.size.toLong()
+        fun uleb(start: Int): Pair<Int, Int> {
+            var value = 0
+            var shift = 0
+            var cursor = start
+            while (cursor < data.size && shift <= 28) {
+                val b = data[cursor++].toInt() and 0xff
+                value = value or ((b and 0x7f) shl shift)
+                if ((b and 0x80) == 0) return value to cursor
+                shift += 7
+            }
+            return 0 to start
+        }
+        fun dexString(offset: Int): String {
+            if (offset !in 0 until data.size) return "?"
+            val (_, start) = uleb(offset)
+            if (start !in 0 until data.size) return "?"
+            var end = start
+            while (end < data.size && data[end].toInt() != 0) end++
+            return if (end <= data.size) String(data, start, end - start, Charsets.UTF_8) else "?"
+        }
+        return try {
+            val fileSize = u32(32)
+            val stringCount = u32(56); val stringOff = u32(60)
+            val typeCount = u32(64); val typeOff = u32(68)
+            val protoCount = u32(72); val protoOff = u32(76)
+            val fieldCount = u32(80); val fieldOff = u32(84)
+            val methodCount = u32(88); val methodOff = u32(92)
+            val classCount = u32(96); val classOff = u32(100)
+            if (!validTable(stringCount, stringOff, 4) || !validTable(typeCount, typeOff, 4) ||
+                !validTable(protoCount, protoOff, 12) || !validTable(methodCount, methodOff, 8) ||
+                !validTable(classCount, classOff, 32) || !validTable(fieldCount, fieldOff, 8)) {
+                return "ساختار جدول‌های DEX خارج از محدودهٔ فایل است؛ گزارش ساختاری محدود شد.\\n"
+            }
+            val strings = Array(stringCount) { index -> dexString(u32(stringOff + index * 4)) }
+            val types = Array(typeCount) { index ->
+                val stringIndex = u32(typeOff + index * 4)
+                strings.getOrNull(stringIndex) ?: "?"
+            }
+            val prototypes = Array(protoCount) { index ->
+                val off = protoOff + index * 12
+                val returnIndex = u32(off + 4)
+                val paramsOff = u32(off + 8)
+                val params = if (paramsOff > 0 && paramsOff + 4 <= data.size) {
+                    val count = u32(paramsOff).coerceIn(0, 256)
+                    (0 until count).mapNotNull { n ->
+                        types.getOrNull(u16(paramsOff + 4 + n * 2))
+                    }
+                } else emptyList()
+                (params.joinToString("") to (types.getOrNull(returnIndex) ?: "?"))
+            }
+            val classes = linkedSetOf<Int>()
+            val classNames = mutableListOf<String>()
+            for (index in 0 until classCount) {
+                val classIndex = u32(classOff + index * 32)
+                if (classIndex >= 0 && classIndex < types.size) {
+                    classes.add(classIndex)
+                    classNames.add(types[classIndex])
+                }
+            }
+            val out = StringBuilder()
+            out.appendLine("تحلیل ساختاری DEX")
+            out.appendLine("نسخه: " + data.getOrNull(4)?.toInt()?.let { it.toChar() } + data.getOrNull(5)?.toInt()?.let { it.toChar() } + data.getOrNull(6)?.toInt()?.let { it.toChar() })
+            out.appendLine("اندازهٔ ثبت‌شده: $fileSize بایت؛ اندازهٔ واقعی: ${data.size} بایت")
+            out.appendLine("جدول‌ها: رشته‌ها=$stringCount، نوع‌ها=$typeCount، پروتوتایپ‌ها=$protoCount، فیلدها=$fieldCount، متدها=$methodCount، کلاس‌ها=$classCount")
+            out.appendLine("کلاس‌ها (حداکثر 80 مورد):")
+            classNames.take(80).forEach { out.appendLine("  $it") }
+            out.appendLine("امضاهای متد (حداکثر 160 مورد):")
+            var printed = 0
+            for (index in 0 until methodCount) {
+                if (printed >= 160) break
+                val off = methodOff + index * 8
+                val classIndex = u16(off)
+                val protoIndex = u16(off + 2)
+                val nameIndex = u32(off + 4)
+                if (classIndex !in classes) continue
+                val owner = types.getOrNull(classIndex) ?: "?"
+                val name = strings.getOrNull(nameIndex) ?: "?"
+                val proto = prototypes.getOrNull(protoIndex)
+                if (proto != null) {
+                    out.appendLine("  $owner->$name(${proto.first})${proto.second}")
+                    printed++
+                }
+            }
+            if (methodCount > printed) out.appendLine("  … برای محدودیت حجم، فهرست متدها کوتاه شده است.")
+            out.toString()
+        } catch (e: Exception) {
+            "خواندن جدول‌های DEX ناموفق بود: ${e.localizedMessage}\\n"
+        }
     }
 
     private fun queryName(uri: android.net.Uri): String {
