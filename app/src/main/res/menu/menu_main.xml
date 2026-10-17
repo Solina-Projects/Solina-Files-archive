@@ -2,6 +2,10 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
+        android:id="@+id/action_dual_pane"
+        android:title="Dual pane"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_new_folder"
         android:title="@string/new_folder"
         app:showAsAction="never" />
