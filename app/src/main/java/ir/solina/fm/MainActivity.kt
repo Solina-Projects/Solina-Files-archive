@@ -536,6 +536,7 @@ class MainActivity : AppCompatActivity() {
             R.id.action_apk_tools -> startActivity(Intent(this, ApkToolsActivity::class.java))
             R.id.action_file_tools -> startActivity(Intent(this, FileToolsActivity::class.java)
                 .putExtra("root_path", current.absolutePath))
+            R.id.action_recycle_bin -> startActivity(Intent(this, RecycleBinActivity::class.java))
             R.id.action_hidden -> {
                 showHidden = !item.isChecked
                 item.isChecked = showHidden
@@ -891,9 +892,17 @@ class MainActivity : AppCompatActivity() {
         val items = selected.toList()
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.delete)
-            .setMessage(getString(R.string.delete_message, items.size))
-            .setPositiveButton(R.string.delete) { _, _ ->
-                runInBackground { items.forEach { it.deleteRecursively() } }
+            .setMessage("تعداد $\\{items.size} مورد به سطل بازیافت منتقل شود؟ می‌توانی بعداً آن‌ها را بازیابی یا برای همیشه حذف کنی.")
+            .setPositiveButton("انتقال به سطل بازیافت") { _, _ ->
+                runInBackground {
+                    var moved = 0
+                    items.forEach { if (TrashStore.moveToTrash(this, it)) moved++ }
+                    runOnUiThread {
+                        selected.clear()
+                        refresh()
+                        toast("$\\{moved} از $\\{items.size} مورد به سطل بازیافت منتقل شد")
+                    }
+                }
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
