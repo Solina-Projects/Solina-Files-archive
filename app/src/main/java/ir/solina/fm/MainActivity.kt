@@ -280,6 +280,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
     private fun fmt(bytes: Long): String = Formatter.formatFileSize(this, bytes)
 
     private fun showStorageSheet() {
