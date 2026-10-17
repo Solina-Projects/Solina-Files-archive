@@ -2,12 +2,14 @@ package ir.solina.fm
 
 import android.os.Bundle
 import android.view.Gravity
-import android.widget.Button
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.widget.LinearLayout
+import android.widget.ImageView
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 
 class RecycleBinActivity : AppCompatActivity() {
@@ -16,7 +18,11 @@ class RecycleBinActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(12), dp(16), dp(12)) }
-        root.addView(TextView(this).apply { text = "سطل بازیافت"; textSize = 22f })
+        root.addView(MaterialToolbar(this).apply {
+            title = "سطل بازیافت"
+            setNavigationIcon(R.drawable.ic_arrow_back)
+            setNavigationOnClickListener { finish() }
+        }, LinearLayout.LayoutParams(-1, dp(56)))
         root.addView(TextView(this).apply {
             text = "فایل‌ها تا زمان حذف دائمی یا بازیابی، با تغییر نام مخفی در محل اصلی نگه داشته می‌شوند."
             textSize = 13f
@@ -26,7 +32,6 @@ class RecycleBinActivity : AppCompatActivity() {
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         scroll.addView(list)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(Button(this).apply { text = "بستن"; setOnClickListener { finish() } })
         setContentView(root)
         render()
     }
@@ -49,14 +54,33 @@ class RecycleBinActivity : AppCompatActivity() {
                 setPadding(dp(10), dp(8), dp(10), dp(8))
                 background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@RecycleBinActivity, R.drawable.item_bg)
             }
-            card.addView(TextView(this).apply { text = entry.original.name; textSize = 16f })
-            card.addView(TextView(this).apply {
+            val header = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            val fileIcon = ImageView(this).apply {
+                FileTypeVisuals.applyTo(this, entry.original)
+                background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@RecycleBinActivity, R.drawable.icon_bg)
+                setPadding(dp(8), dp(8), dp(8), dp(8))
+                contentDescription = null
+            }
+            header.addView(fileIcon, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(10) })
+            val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            details.addView(TextView(this).apply {
+                text = entry.original.name
+                textSize = 15f
+                setTextColor(androidx.core.content.ContextCompat.getColor(this@RecycleBinActivity, R.color.solina_on_surface))
+            })
+            details.addView(TextView(this).apply {
                 text = entry.original.parent ?: entry.original.absolutePath
                 textSize = 11f
+                setTextColor(androidx.core.content.ContextCompat.getColor(this@RecycleBinActivity, R.color.solina_on_surface_variant))
                 setTextIsSelectable(true)
             })
+            header.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
+            card.addView(header)
             val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            actions.addView(Button(this@RecycleBinActivity).apply {
+            actions.addView(MaterialButton(this@RecycleBinActivity).apply {
                 text = "بازیابی"
                 isAllCaps = false
                 setOnClickListener {
@@ -72,7 +96,7 @@ class RecycleBinActivity : AppCompatActivity() {
                 text = "حذف دائمی"
                 isAllCaps = false
                 setOnClickListener {
-                    AlertDialog.Builder(this@RecycleBinActivity).setTitle("حذف دائمی")
+                    MaterialAlertDialogBuilder(this@RecycleBinActivity).setTitle("حذف دائمی")
                         .setMessage("«${entry.original.name}» برای همیشه حذف شود؟ این کار قابل بازگشت نیست.")
                         .setPositiveButton("حذف دائمی") { _, _ ->
                             if (TrashStore.deletePermanently(this@RecycleBinActivity, entry)) render()
