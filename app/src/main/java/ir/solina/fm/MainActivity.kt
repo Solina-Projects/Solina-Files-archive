@@ -384,6 +384,10 @@ class MainActivity : AppCompatActivity() {
             R.id.action_bookmarks -> showBookmarks()
             R.id.action_sort -> showSortOptions()
             R.id.action_storage_analysis -> analyzeStorage()
+            R.id.action_vault -> startActivity(Intent(this, VaultActivity::class.java))
+            R.id.action_root -> startActivity(Intent(this, RootExplorerActivity::class.java))
+            R.id.action_network -> startActivity(Intent(this, NetworkStorageActivity::class.java))
+            R.id.action_apk_tools -> startActivity(Intent(this, ApkToolsActivity::class.java))
             R.id.action_hidden -> {
                 showHidden = !item.isChecked
                 item.isChecked = showHidden
@@ -787,6 +791,7 @@ class MainActivity : AppCompatActivity() {
             "mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi" -> playAudio(file)
             "mp4", "m4v", "3gp", "webm", "mkv", "avi", "mov", "mpeg", "mpg" -> playVideo(file)
             "zip" -> browseArchive(file)
+            "rar", "7z" -> startActivity(Intent(this, ArchiveToolsActivity::class.java).putExtra("archive_path", file.absolutePath))
             else -> openExternal(file)
         }
     }
