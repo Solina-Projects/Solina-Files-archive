@@ -128,7 +128,7 @@ class DualPaneActivity : AppCompatActivity() {
             panesHost.addView(p.root)
             refresh(index)
         }
-        updateTitle()
+        updateTopBar()
     }
 
     private fun refresh(index: Int) {
