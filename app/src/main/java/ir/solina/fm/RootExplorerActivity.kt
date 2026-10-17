@@ -31,7 +31,7 @@ class RootExplorerActivity : AppCompatActivity() {
         root.addView(TextView(this).apply { text = "Root Explorer"; textSize = 22f })
         root.addView(TextView(this).apply {
             text = "هشدار: تغییر یا حذف فایل‌های سیستمی ممکن است باعث بوت‌نشدن دستگاه یا ازکارافتادن برنامه‌ها شود."
-            setTextColor(0xffb3261e); setPadding(0, 6, 0, 10)
+            setTextColor(0xFFB3261E.toInt()); setPadding(0, 6, 0, 10)
         })
         val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         bar.addView(Button(this).apply { text = "بالا"; setOnClickListener { currentPath = File(currentPath).parent ?: "/"; loadPath() } })
