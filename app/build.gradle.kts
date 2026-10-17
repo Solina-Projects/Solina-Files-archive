@@ -25,7 +25,7 @@ android {
 
     packaging {
         resources {
-            excludes += "META-INF/DEPENDENCIES"
+            excludes += setOf("META-INF/DEPENDENCIES", "META-INF/LICENSE", "META-INF/LICENSE.md", "META-INF/NOTICE", "META-INF/NOTICE.md", "META-INF/AL2.0", "META-INF/LGPL2.1")
         }
     }
 }
