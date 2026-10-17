@@ -1434,7 +1434,28 @@ class MainActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: VH, position: Int) {
             val file = items[position]
             holder.name.text = file.name
-            holder.icon.setImageResource(if (file.isDirectory) R.drawable.ic_folder else R.drawable.ic_file)
+            val extension = file.extension.lowercase(Locale.ROOT)
+            val (fileIcon, fileTint) = when {
+                file.isDirectory -> R.drawable.ic_folder to R.color.solina_primary
+                extension in setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "svg", "tif", "tiff") ->
+                    R.drawable.ic_file_image to R.color.solina_file_image
+                extension in setOf("mp3", "wav", "ogg", "m4a", "flac", "aac", "opus", "mid", "midi") ->
+                    R.drawable.ic_file_audio to R.color.solina_file_audio
+                extension in setOf("mp4", "mkv", "mov", "avi", "webm", "3gp", "mpeg", "mpg", "m4v") ->
+                    R.drawable.ic_file_video to R.color.solina_file_video
+                extension in setOf("zip", "rar", "7z", "tar", "gz", "bz2", "xz", "tgz", "tbz2", "txz") ->
+                    R.drawable.ic_file_archive to R.color.solina_file_archive
+                extension == "apk" -> R.drawable.ic_file_apk to R.color.solina_file_apk
+                extension in setOf("pdf", "doc", "docx", "odt", "rtf", "xls", "xlsx", "ppt", "pptx", "epub") ->
+                    R.drawable.ic_file_document to R.color.solina_file_document
+                extension in setOf("txt", "md", "log", "json", "xml", "csv", "tsv", "ini", "kt", "java", "smali", "properties", "html", "htm", "css", "js", "gradle", "kts", "yaml", "yml", "sh", "sql", "py", "c", "cpp", "h", "rs", "cfg", "conf") ->
+                    R.drawable.ic_file_code to R.color.solina_file_code
+                else -> R.drawable.ic_file to R.color.solina_file_generic
+            }
+            holder.icon.setImageResource(fileIcon)
+            holder.icon.imageTintList = android.content.res.ColorStateList.valueOf(
+                ContextCompat.getColor(this@MainActivity, fileTint)
+            )
             val date = formatDate(file.lastModified())
             holder.info.text =
                 if (file.isDirectory) date else fmt(file.length()) + " • " + date
