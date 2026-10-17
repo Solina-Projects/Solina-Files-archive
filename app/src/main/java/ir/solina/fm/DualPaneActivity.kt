@@ -62,6 +62,7 @@ class DualPaneActivity : AppCompatActivity() {
     private var mode = LayoutMode.HORIZONTAL
     private var grid = false
     private var details = true
+    private var showHiddenFiles = false
     private var iconDp = 38
     private var columns = 2
     private var player: MediaPlayer? = null
@@ -194,7 +195,9 @@ class DualPaneActivity : AppCompatActivity() {
     private fun refresh(index: Int) {
         val p = pane(index)
         p.path.text = (if (index == 0) "چپ: " else "راست: ") + p.current.absolutePath
-        val unsorted = p.current.listFiles()?.filter { it.isFile || it.isDirectory } ?: emptyList()
+        val unsorted = p.current.listFiles()
+            ?.filter { (it.isFile || it.isDirectory) && (showHiddenFiles || !it.name.startsWith(".")) }
+            ?: emptyList()
         val allFiles = when (p.sortMode) {
             SortMode.NAME -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) }))
             SortMode.SIZE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.length() }))
@@ -477,9 +480,19 @@ class DualPaneActivity : AppCompatActivity() {
     }
 
     private fun showDisplaySettings() {
-        val options = arrayOf("جزئیات: " + if (details) "روشن" else "خاموش", "شبکه‌ای: " + if (grid) "روشن" else "خاموش", "اندازه آیکون: " + iconDp + " dp")
+        val options = arrayOf(
+            "جزئیات: " + if (details) "روشن" else "خاموش",
+            "شبکه‌ای: " + if (grid) "روشن" else "خاموش",
+            "فایل‌های مخفی: " + if (showHiddenFiles) "نمایش داده می‌شوند" else "پنهان",
+            "اندازه آیکون: " + iconDp + " dp"
+        )
         AlertDialog.Builder(this).setTitle("نمایش فایل‌ها").setItems(options) { _, which ->
-            when (which) { 0 -> details = !details; 1 -> grid = !grid; 2 -> showIconSize() }
+            when (which) {
+                0 -> details = !details
+                1 -> grid = !grid
+                2 -> showHiddenFiles = !showHiddenFiles
+                3 -> { showIconSize(); return@setItems }
+            }
             renderPanes()
         }.setNegativeButton("بستن", null).show()
     }
