@@ -541,6 +541,8 @@ class MainActivity : AppCompatActivity() {
             selectionBar.menu.findItem(R.id.action_rename).isVisible = selected.size == 1
             selectionBar.menu.findItem(R.id.action_extract).isVisible =
                 selected.any { it.isFile && it.extension.equals("zip", ignoreCase = true) }
+            selectionBar.menu.findItem(R.id.action_hex_editor).isVisible =
+                selected.size == 1 && selected.first().isFile
         }
         pasteFab.visibility =
             if (clipFiles.isNotEmpty() && !sel) View.VISIBLE else View.GONE
@@ -561,6 +563,9 @@ class MainActivity : AppCompatActivity() {
             R.id.action_root -> startActivity(Intent(this, RootExplorerActivity::class.java))
             R.id.action_network -> startActivity(Intent(this, NetworkStorageActivity::class.java))
             R.id.action_apk_tools -> startActivity(Intent(this, ApkToolsActivity::class.java))
+            R.id.action_hex_editor -> selected.firstOrNull()?.let { file ->
+                startActivity(Intent(this, DocumentViewerActivity::class.java).putExtra("file_path", file.absolutePath))
+            }
             R.id.action_file_tools -> startActivity(Intent(this, FileToolsActivity::class.java)
                 .putExtra("root_path", current.absolutePath))
             R.id.action_recycle_bin -> startActivity(Intent(this, RecycleBinActivity::class.java))
@@ -1125,6 +1130,7 @@ class MainActivity : AppCompatActivity() {
     private fun openFile(file: File) {
         RecentFilesStore.add(this, file)
         when (file.extension.lowercase(Locale.ROOT)) {
+            "pdf" -> startActivity(Intent(this, DocumentViewerActivity::class.java).putExtra("file_path", file.absolutePath))
             "apk" -> installApk(file)
             "txt", "md", "log", "json", "xml", "csv", "tsv", "ini", "kt", "java",
             "html", "htm", "css", "js", "gradle", "kts", "yml", "yaml", "sh",
