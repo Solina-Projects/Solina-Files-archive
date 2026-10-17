@@ -19,7 +19,7 @@
     <string name="show_hidden">نمایش فایل‌های مخفی</string>
     <string name="ok">تأیید</string>
     <string name="cancel">لغو</string>
-    <string name="permission_needed">برای نمایش فایل‌ها، SolinaFM به دسترسی «همه فایل‌ها» نیاز دارد.</string>
+    <string name="permission_needed">برای نمایش فایل‌ها، Solina Files به دسترسی «همه فایل‌ها» نیاز دارد.</string>
     <string name="grant_access">اعطای دسترسی</string>
     <string name="empty_folder">این پوشه خالی است</string>
     <string name="cannot_read">خواندن این پوشه ممکن نیست</string>
