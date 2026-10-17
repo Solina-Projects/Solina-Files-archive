@@ -350,7 +350,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun applyFileLayout() {
         list.layoutManager = if (gridLayout) GridLayoutManager(this, 2) else LinearLayoutManager(this)
-        layoutModeButton.text = if (gridLayout) "☷" else "▦"
+        layoutModeButton.setIconResource(if (gridLayout) R.drawable.ic_list_view else R.drawable.ic_grid_view)
+        layoutModeButton.text = ""
         layoutModeButton.contentDescription = if (gridLayout) "تغییر به چیدمان فهرستی" else "تغییر به چیدمان شبکه‌ای"
     }
 
