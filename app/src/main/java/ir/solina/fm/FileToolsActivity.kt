@@ -149,7 +149,7 @@ class FileToolsActivity : AppCompatActivity() {
                 .setMessage("قطعه‌ها در همین پوشه با پسوند .part001، .part002 و ... ساخته می‌شوند.")
                 .setPositiveButton("شروع") { _, _ ->
                     val mb = sizeInput.text.toString().toLongOrNull()
-                    if (mb == null || mb !in 1..4096) {
+                    if (mb == null || mb !in 1L..4096L) {
                         toast("اندازه باید بین ۱ تا ۴۰۹۶ مگابایت باشد")
                         return@setPositiveButton
                     }
