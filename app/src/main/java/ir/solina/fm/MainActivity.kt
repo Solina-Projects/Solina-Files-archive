@@ -1171,16 +1171,18 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
 
-    private fun verifyAppPin(pin: String): Boolean = try {
-        val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
-        val saltHex = prefs.getString("app_lock_salt", null) ?: return false
-        val expected = prefs.getString("app_lock_hash", null) ?: return false
-        val salt = saltHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-        val actual = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-            .generateSecret(PBEKeySpec(pin.toCharArray(), salt, 120_000, 256)).encoded
-            .joinToString("") { "%02x".format(it) }
-        MessageDigest.isEqual(expected.toByteArray(), actual.toByteArray())
-    } catch (_: Exception) { false }
+    private fun verifyAppPin(pin: String): Boolean {
+        return try {
+            val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
+            val saltHex = prefs.getString("app_lock_salt", null) ?: return false
+            val expected = prefs.getString("app_lock_hash", null) ?: return false
+            val salt = saltHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val actual = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+                .generateSecret(PBEKeySpec(pin.toCharArray(), salt, 120_000, 256)).encoded
+                .joinToString("") { "%02x".format(it) }
+            MessageDigest.isEqual(expected.toByteArray(), actual.toByteArray())
+        } catch (_: Exception) { false }
+    }
 
     override fun onStop() {
         super.onStop()
