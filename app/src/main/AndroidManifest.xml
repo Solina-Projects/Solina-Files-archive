@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".SolinaApp"
@@ -12,6 +13,12 @@
         android:localeConfig="@xml/locales_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.SolinaFM">
+
+        <activity android:name=".VaultActivity" android:exported="false" />
+        <activity android:name=".RootExplorerActivity" android:exported="false" />
+        <activity android:name=".NetworkStorageActivity" android:exported="false" />
+        <activity android:name=".ApkToolsActivity" android:exported="false" />
+        <activity android:name=".ArchiveToolsActivity" android:exported="false" />
 
         <activity
             android:name=".DualPaneActivity"
