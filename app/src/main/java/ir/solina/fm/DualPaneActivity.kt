@@ -347,6 +347,7 @@ class DualPaneActivity : AppCompatActivity() {
     }
     private fun toggleMode() {
         mode = if (mode == LayoutMode.VERTICAL) LayoutMode.HORIZONTAL else LayoutMode.VERTICAL
+        if (mode == LayoutMode.HORIZONTAL) grid = false
         renderPanes()
     }
 
@@ -690,58 +691,65 @@ class DualPaneActivity : AppCompatActivity() {
 
     private inner class PaneAdapter(private val paneIndex: Int) : RecyclerView.Adapter<PaneAdapter.Holder>() {
         var items: List<File> = emptyList()
-        inner class Holder(val row: LinearLayout, val check: CheckBox, val icon: ImageView, val content: LinearLayout, val name: TextView, val info: TextView) : RecyclerView.ViewHolder(row)
+
+        inner class Holder(
+            val row: LinearLayout,
+            val check: CheckBox,
+            val icon: ImageView,
+            val name: TextView,
+            val info: TextView
+        ) : RecyclerView.ViewHolder(row)
+
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
-            val row = LinearLayout(this@DualPaneActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(4), dp(6), dp(4), dp(6)); isClickable = true; isFocusable = true }
-            val check = CheckBox(this@DualPaneActivity)
-            val content = LinearLayout(this@DualPaneActivity).apply {
-                orientation = if (mode == LayoutMode.VERTICAL) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+            val row = LinearLayout(this@DualPaneActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
+                setPadding(dp(8), dp(7), dp(8), dp(7))
+                isClickable = true
+                isFocusable = true
+                background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@DualPaneActivity, R.drawable.item_bg)
             }
+            val check = CheckBox(this@DualPaneActivity)
             val icon = ImageView(this@DualPaneActivity).apply {
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
+                setPadding(dp(3), dp(3), dp(3), dp(3))
                 val tv = android.util.TypedValue()
                 theme.resolveAttribute(com.google.android.material.R.attr.colorPrimary, tv, true)
                 imageTintList = android.content.res.ColorStateList.valueOf(tv.data)
-                scaleType = ImageView.ScaleType.CENTER_INSIDE
-                setPadding(dp(3), dp(3), dp(3), dp(3))
             }
-            val name = TextView(this@DualPaneActivity).apply { gravity = if (mode == LayoutMode.VERTICAL) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER; textSize = 13f; maxLines = 2 }
-            val info = TextView(this@DualPaneActivity).apply { gravity = if (mode == LayoutMode.VERTICAL) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER; textSize = 10f }
+            val textBlock = LinearLayout(this@DualPaneActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(10), 0, dp(4), 0)
+                layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
+            }
+            val name = TextView(this@DualPaneActivity).apply {
+                textSize = 14f
+                maxLines = 2
+                setTextColor(resolveThemeColor(com.google.android.material.R.attr.colorOnSurface))
+            }
+            val info = TextView(this@DualPaneActivity).apply {
+                textSize = 11f
+                setTextColor(resolveThemeColor(com.google.android.material.R.attr.colorOnSurfaceVariant))
+            }
+            textBlock.addView(name, LinearLayout.LayoutParams(-1, -2))
+            textBlock.addView(info, LinearLayout.LayoutParams(-1, -2))
             row.addView(check, LinearLayout.LayoutParams(-2, -2))
-            if (mode == LayoutMode.VERTICAL) {
-                content.addView(icon, LinearLayout.LayoutParams(dp(42), dp(42)))
-                val textBlock = LinearLayout(this@DualPaneActivity).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
-                textBlock.addView(name, LinearLayout.LayoutParams(-1, -2))
-                textBlock.addView(info, LinearLayout.LayoutParams(-1, -2))
-                content.addView(textBlock)
-            } else {
-                content.addView(icon, LinearLayout.LayoutParams(-1, dp(iconDp + 4)))
-                content.addView(name, LinearLayout.LayoutParams(-1, -2))
-                content.addView(info, LinearLayout.LayoutParams(-1, -2))
-            }
-            row.addView(content)
-            return Holder(row, check, icon, content, name, info)
+            row.addView(icon, LinearLayout.LayoutParams(dp(38), dp(38)))
+            row.addView(textBlock)
+            return Holder(row, check, icon, name, info)
         }
+
         override fun getItemCount() = items.size
+
         override fun onBindViewHolder(holder: Holder, position: Int) {
             val file = items[position]
             holder.icon.setImageResource(if (file.isDirectory) R.drawable.ic_folder else R.drawable.ic_file)
-            holder.content.orientation = if (mode == LayoutMode.VERTICAL) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-            val iconParams = holder.icon.layoutParams
-            if (mode == LayoutMode.VERTICAL) {
-                iconParams.width = dp(42); iconParams.height = dp(42)
-            } else {
-                iconParams.width = -1; iconParams.height = dp(iconDp + 4)
-            }
-            holder.icon.layoutParams = iconParams
-            val tint = android.util.TypedValue()
-            theme.resolveAttribute(com.google.android.material.R.attr.colorPrimary, tint, true)
-            holder.icon.imageTintList = android.content.res.ColorStateList.valueOf(tint.data)
             holder.name.text = file.name
             holder.info.text = if (!details) "" else if (file.isDirectory) "پوشه" else Formatter.formatFileSize(this@DualPaneActivity, file.length())
             val p = pane(paneIndex)
-            holder.row.alpha = if (p.selected.contains(file)) 0.85f else 1f
+            holder.row.isActivated = p.selected.contains(file)
+            holder.row.alpha = if (p.selected.contains(file)) 0.92f else 1f
             holder.check.setOnCheckedChangeListener(null)
             holder.check.visibility = if (p.selected.isNotEmpty()) View.VISIBLE else View.GONE
             holder.check.isChecked = p.selected.contains(file)
@@ -754,10 +762,8 @@ class DualPaneActivity : AppCompatActivity() {
             holder.row.setOnClickListener { activePane = paneIndex; actionOpen(file, false); updateTopBar() }
             holder.row.setOnLongClickListener {
                 activePane = paneIndex
-                val selectedAlready = p.selected.contains(file)
-                if (!selectedAlready) {
-                    actionOpen(file, true)
-                } else {
+                if (!p.selected.contains(file)) actionOpen(file, true)
+                else {
                     val clip = ClipData.newPlainText("solina-file", file.absolutePath)
                     holder.row.startDragAndDrop(clip, View.DragShadowBuilder(holder.row), file.absolutePath, 0)
                 }
@@ -765,6 +771,7 @@ class DualPaneActivity : AppCompatActivity() {
             }
             holder.row.setOnDragListener { _, event -> handleDropEvent(paneIndex, event, file) }
         }
+
         private fun actionOpen(file: File, longPress: Boolean) {
             val p = pane(paneIndex)
             if (longPress || p.selected.isNotEmpty()) {
@@ -772,9 +779,15 @@ class DualPaneActivity : AppCompatActivity() {
                 refresh(paneIndex)
                 updateTopBar()
                 toast(p.selected.size.toString() + " مورد انتخاب شده")
-            } else if (file.isDirectory) {
-                navigateTo(paneIndex, file)
-            } else openFile(file, paneIndex)
+            } else if (file.isDirectory) navigateTo(paneIndex, file)
+            else openFile(file, paneIndex)
         }
     }
+
+    private fun resolveThemeColor(attribute: Int): Int {
+        val value = android.util.TypedValue()
+        theme.resolveAttribute(attribute, value, true)
+        return value.data
+    }
+}
 }
