@@ -26,4 +26,12 @@
     <color name="solina_surface_container">#1D2220</color>
     <color name="solina_surface_container_high">#282D2A</color>
     <color name="solina_surface_container_highest">#333835</color>
+    <color name="solina_file_image">#D7B9F3</color>
+    <color name="solina_file_audio">#8AD7EC</color>
+    <color name="solina_file_video">#FFB77D</color>
+    <color name="solina_file_archive">#E5D77A</color>
+    <color name="solina_file_document">#AFC8FF</color>
+    <color name="solina_file_code">#A6D5B5</color>
+    <color name="solina_file_apk">#A5D6A7</color>
+    <color name="solina_file_generic">#C0C9C4</color>
 </resources>
