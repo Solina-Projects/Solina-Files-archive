@@ -421,7 +421,9 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val raw = current.listFiles()
-        val unsorted = (raw ?: emptyArray()).filter { showHidden || !it.name.startsWith(".") }
+        val unsorted = (raw ?: emptyArray()).filter {
+            !it.name.startsWith(".solina-trash-") && (showHidden || !it.name.startsWith("."))
+        }
         allFiles = when (sortMode) {
             SortMode.NAME -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) }))
             SortMode.SIZE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { if (it.isDirectory) 0L else it.length() }))
