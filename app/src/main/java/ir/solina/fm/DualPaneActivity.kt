@@ -65,7 +65,7 @@ class DualPaneActivity : AppCompatActivity() {
         navBack = MaterialButton(this).apply { text = "‹"; textSize = 26f; minWidth = dp(40); setPadding(0, 0, 0, 0); setOnClickListener { navigateHistory(activePane, true) } }
         navForward = MaterialButton(this).apply { text = "›"; textSize = 26f; minWidth = dp(40); setPadding(0, 0, 0, 0); setOnClickListener { navigateHistory(activePane, false) } }
         pathTitle = TextView(this).apply { textSize = 13f; maxLines = 1; setPadding(dp(6), dp(4), dp(6), dp(4)) }
-        searchInput = EditText(this).apply { hint = "جست‌وجوی فایل و پوشه"; singleLine = true; textSize = 13f; setPadding(dp(8), 0, dp(8), 0) }
+        searchInput = EditText(this).apply { hint = "جست‌وجوی فایل و پوشه"; setSingleLine(true); textSize = 13f; setPadding(dp(8), 0, dp(8), 0) }
         navigation.addView(navBack, LinearLayout.LayoutParams(dp(40), dp(48)))
         navigation.addView(navForward, LinearLayout.LayoutParams(dp(40), dp(48)))
         navigation.addView(pathTitle, LinearLayout.LayoutParams(0, dp(48), 1f))
