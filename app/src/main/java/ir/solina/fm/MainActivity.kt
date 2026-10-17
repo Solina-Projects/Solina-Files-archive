@@ -546,6 +546,8 @@ class MainActivity : AppCompatActivity() {
                 selected.any { it.isFile && it.extension.equals("zip", ignoreCase = true) }
             selectionBar.menu.findItem(R.id.action_hex_editor).isVisible =
                 selected.size == 1 && selected.first().isFile
+            selectionBar.menu.findItem(R.id.action_text_editor).isVisible =
+                selected.size == 1 && selected.first().isFile && selected.first().extension.lowercase(Locale.ROOT) in setOf("txt", "md", "log", "json", "xml", "csv", "tsv", "ini", "kt", "java", "smali", "properties", "html", "htm", "css", "js", "gradle", "kts", "yaml", "yml", "sh", "sql", "py", "c", "cpp", "h", "rs", "cfg", "conf")
         }
         pasteFab.visibility =
             if (clipFiles.isNotEmpty() && !sel) View.VISIBLE else View.GONE
@@ -577,6 +579,8 @@ class MainActivity : AppCompatActivity() {
                 .putExtra("current_path", current.absolutePath))
             R.id.action_wifi_transfer -> startActivity(Intent(this, WifiTransferActivity::class.java)
                 .putExtra("root_path", current.absolutePath))
+            R.id.action_text_editor -> startActivity(Intent(this, TextEditorActivity::class.java)
+                .putExtra("pick_on_start", true))
             R.id.action_hidden -> {
                 showHidden = !item.isChecked
                 item.isChecked = showHidden
@@ -719,6 +723,9 @@ class MainActivity : AppCompatActivity() {
             R.id.action_deselect_all -> clearSelection()
             R.id.action_compress -> compressSelected()
             R.id.action_extract -> extractSelectedArchives()
+            R.id.action_text_editor -> selected.firstOrNull()?.let { file ->
+                startActivity(Intent(this, TextEditorActivity::class.java).putExtra("file_path", file.absolutePath))
+            }
             R.id.action_file_tools -> startActivity(Intent(this, FileToolsActivity::class.java)
                 .putExtra("root_path", current.absolutePath)
                 .putStringArrayListExtra("selected_paths", ArrayList(selected.map { it.absolutePath })))
