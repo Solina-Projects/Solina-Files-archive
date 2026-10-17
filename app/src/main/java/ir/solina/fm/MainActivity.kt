@@ -299,7 +299,7 @@ class MainActivity : AppCompatActivity() {
         val unsorted = (raw ?: emptyArray()).filter { showHidden || !it.name.startsWith(".") }
         allFiles = when (sortMode) {
             SortMode.NAME -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) }))
-            SortMode.SIZE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { if (it.isDirectory) directorySize(it) else it.length() }))
+            SortMode.SIZE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { if (it.isDirectory) 0L else it.length() }))
             SortMode.MODIFIED -> unsorted.sortedByDescending { it.lastModified() }
             SortMode.TYPE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.extension.lowercase(Locale.ROOT) }, { it.name.lowercase(Locale.ROOT) }))
         }
@@ -724,7 +724,7 @@ class MainActivity : AppCompatActivity() {
                         items[0].absolutePath,
                         fmt(size),
                         formatDate(items[0].lastModified())
-                    ) + (hash?.let { "\\nSHA-256: $it" } ?: "")
+                    ) + (hash?.let { "\nSHA-256: $it" } ?: "")
                 } else {
                     getString(R.string.details_multi, items.size, fmt(size))
                 }
