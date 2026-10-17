@@ -155,6 +155,11 @@ class FileToolsActivity : AppCompatActivity() {
                     }
                     runWorker("تقسیم فایل") {
                         val chunkSize = mb * 1024L * 1024L
+                        val expectedParts = ((file.length() + chunkSize - 1L) / chunkSize).coerceAtLeast(1L)
+                        for (partNumber in 1L..expectedParts) {
+                            val existing = File(file.parentFile, file.name + ".part" + partNumber.toString().padStart(3, '0'))
+                            if (existing.exists()) throw IllegalStateException("فایل مقصد از قبل وجود دارد: ${existing.name}")
+                        }
                         var part = 1
                         var total = 0L
                         FileInputStream(file).buffered().use { input ->
@@ -200,6 +205,14 @@ class FileToolsActivity : AppCompatActivity() {
             val prefix = parts.first().name.replace(Regex("\\.part\\d+$", RegexOption.IGNORE_CASE), "")
             if (parts.any { !it.name.startsWith(prefix, ignoreCase = true) }) {
                 toast("همهٔ قطعه‌ها باید متعلق به یک فایل باشند")
+                return@chooseFiles
+            }
+            val numbers = parts.mapNotNull {
+                Regex("\\.part(\\d+)$", RegexOption.IGNORE_CASE).find(it.name)?.groupValues?.get(1)?.toIntOrNull()
+            }
+            if (numbers.size != parts.size || numbers.firstOrNull() != 1 ||
+                numbers.zipWithNext().any { (previous, next) -> next != previous + 1 }) {
+                toast("ترتیب قطعه‌ها ناقص است؛ همهٔ قطعه‌ها از part001 و بدون شمارهٔ جاافتاده انتخاب شوند")
                 return@chooseFiles
             }
             val target = File(rootDir, prefix)
