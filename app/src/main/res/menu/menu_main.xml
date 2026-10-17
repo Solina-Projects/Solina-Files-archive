@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
-    <item android:id="@+id/action_theme" android:title="تغییر تم روشن/تیره" app:showAsAction="never" />
+    <item android:id="@+id/action_theme" android:title="تغییر حالت روشن و تاریک" app:showAsAction="never" />
     <item
         android:id="@+id/action_dual_pane"
-        android:title="Dual pane"
+        android:title="مدیریت دوپنجره‌ای"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_bookmark"
@@ -23,15 +23,15 @@
         android:title="تحلیل فضای پوشه"
         app:showAsAction="never" />
     <item android:id="@+id/action_vault" android:title="خزانه رمزگذاری‌شده" app:showAsAction="never" />
-    <item android:id="@+id/action_root" android:title="Root Explorer" app:showAsAction="never" />
-    <item android:id="@+id/action_network" android:title="اتصال FTP/SFTP/SMB/WebDAV" app:showAsAction="never" />
-    <item android:id="@+id/action_apk_tools" android:title="ابزار APK / DEX" app:showAsAction="never" />
+    <item android:id="@+id/action_root" android:title="مدیریت فایل با دسترسی ریشه" app:showAsAction="never" />
+    <item android:id="@+id/action_network" android:title="اتصال به فضای شبکه" app:showAsAction="never" />
+    <item android:id="@+id/action_apk_tools" android:title="تحلیل APK و DEX" app:showAsAction="never" />
     <item android:id="@+id/action_file_tools" android:title="ابزارهای تکمیلی فایل" app:showAsAction="never" />
     <item android:id="@+id/action_recycle_bin" android:title="سطل بازیافت" app:showAsAction="never" />
     <item android:id="@+id/action_recent_files" android:title="فایل‌های اخیر" app:showAsAction="never" />
     <item android:id="@+id/action_advanced_settings" android:title="تنظیمات تکمیلی" app:showAsAction="never" />
     <item android:id="@+id/action_wifi_transfer" android:title="انتقال فایل با Wi-Fi" app:showAsAction="never" />
-    <item android:id="@+id/action_text_editor" android:title="ویرایشگر متن / Smali و چاپ" app:showAsAction="never" />
+    <item android:id="@+id/action_text_editor" android:title="ویرایشگر متن و ابزار Smali" app:showAsAction="never" />
     <item
         android:id="@+id/action_new_folder"
         android:title="@string/new_folder"
