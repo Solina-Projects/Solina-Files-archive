@@ -5,7 +5,8 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.Gravity
-import android.widget.Button
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.appbar.MaterialToolbar
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -21,19 +22,26 @@ class ApkToolsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(16, 14, 16, 14) }
-        root.addView(TextView(this).apply { text = "ابزار APK / DEX"; textSize = 22f })
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(8), dp(16), dp(12))
+        }
+        root.addView(MaterialToolbar(this).apply {
+            title = "تحلیل APK و DEX"
+            setNavigationIcon(R.drawable.ic_arrow_back)
+            setNavigationOnClickListener { finish() }
+        }, LinearLayout.LayoutParams(-1, dp(56)))
         root.addView(TextView(this).apply {
             text = "بررسی اطلاعات بسته، مجوزها، اثرانگشت گواهی و استخراج رشته‌های قابل‌خواندن از DEX."
-            setPadding(0, 8, 0, 12)
+            setPadding(0, dp(8), 0, dp(12))
         })
-        root.addView(Button(this).apply { text = "انتخاب فایل APK"; setOnClickListener {
+        root.addView(MaterialButton(this).apply { text = "انتخاب فایل APK"; setOnClickListener {
             startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE); type = "application/vnd.android.package-archive"
             }, 701)
         } })
         val scroll = ScrollView(this)
-        result = TextView(this).apply { textSize = 13f; setTextIsSelectable(true); gravity = Gravity.TOP; setPadding(0, 12, 0, 12) }
+        result = TextView(this).apply { textSize = 13f; setTextIsSelectable(true); gravity = Gravity.TOP; setPadding(0, dp(12), 0, dp(12)) }
         scroll.addView(result)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
@@ -294,4 +302,6 @@ class ApkToolsActivity : AppCompatActivity() {
 
     private fun sha256Bytes(bytes: ByteArray) =
         MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+
 }
