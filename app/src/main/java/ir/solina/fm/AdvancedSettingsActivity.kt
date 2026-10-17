@@ -10,6 +10,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.biometric.BiometricManager
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -34,6 +35,7 @@ class AdvancedSettingsActivity : AppCompatActivity() {
         }, LinearLayout.LayoutParams(-1, dp(56)))
         root.addView(action("تنظیم پوشهٔ آغازین") { editHomeFolder() })
         root.addView(action("تنظیم یا تغییر رمز قفل برنامه") { setAppPin() })
+        root.addView(action(if (prefs.getBoolean("biometric_lock_enabled", false)) "غیرفعال‌کردن بازگشایی زیستی" else "فعال‌کردن اثرانگشت/قفل دستگاه") { toggleBiometric() })
         root.addView(action("غیرفعال‌کردن قفل برنامه") { disableAppLock() })
         root.addView(action("ساخت میان‌بر پوشهٔ فعلی روی صفحهٔ اصلی") { pinShortcut() })
         root.addView(action("فایل‌های اخیر") { startActivity(Intent(this, RecentFilesActivity::class.java)) })
@@ -67,6 +69,26 @@ class AdvancedSettingsActivity : AppCompatActivity() {
                 } else Toast.makeText(this, "مسیر معتبر و قابل‌خواندن نیست", Toast.LENGTH_LONG).show()
             }
         }.setNegativeButton("لغو", null).show()
+    }
+
+    private fun toggleBiometric() {
+        if (prefs.getBoolean("biometric_lock_enabled", false)) {
+            prefs.edit().putBoolean("biometric_lock_enabled", false).apply()
+            Toast.makeText(this, "بازگشایی زیستی غیرفعال شد", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!prefs.getBoolean("app_lock_enabled", false)) {
+            Toast.makeText(this, "ابتدا رمز قفل برنامه را تنظیم کن", Toast.LENGTH_LONG).show()
+            return
+        }
+        val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or
+            BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        if (BiometricManager.from(this).canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
+            Toast.makeText(this, "اثر انگشت یا قفل صفحهٔ دستگاه آماده نیست؛ ابتدا در تنظیمات Android آن را فعال کن", Toast.LENGTH_LONG).show()
+            return
+        }
+        prefs.edit().putBoolean("biometric_lock_enabled", true).apply()
+        Toast.makeText(this, "بازگشایی با اثر انگشت یا قفل دستگاه فعال شد", Toast.LENGTH_LONG).show()
     }
 
     private fun setAppPin() {
