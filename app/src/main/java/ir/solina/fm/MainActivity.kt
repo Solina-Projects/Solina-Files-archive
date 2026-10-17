@@ -29,6 +29,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -59,6 +60,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var mainBar: MaterialToolbar
     private lateinit var selectionBar: MaterialToolbar
     private lateinit var storageButton: MaterialButton
+    private lateinit var storageQuickBar: LinearLayout
+    private lateinit var sortFilterButton: MaterialButton
+    private lateinit var overflowButton: MaterialButton
     private lateinit var pathView: TextView
     private lateinit var navBack: MaterialButton
     private lateinit var navForward: MaterialButton
@@ -104,12 +108,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val savedNightMode = getSharedPreferences("solina_preferences", MODE_PRIVATE).getInt("night_mode", 0)
+        if (savedNightMode != 0) AppCompatDelegate.setDefaultNightMode(savedNightMode)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         mainBar = findViewById(R.id.mainBar)
         selectionBar = findViewById(R.id.selectionBar)
         storageButton = findViewById(R.id.storageButton)
+        storageQuickBar = findViewById(R.id.storageQuickBar)
+        sortFilterButton = findViewById(R.id.sortFilterButton)
+        overflowButton = findViewById(R.id.overflowButton)
         pathView = findViewById(R.id.pathView)
         navBack = findViewById(R.id.navBack)
         navForward = findViewById(R.id.navForward)
@@ -132,6 +141,14 @@ class MainActivity : AppCompatActivity() {
         selectionBar.setOnMenuItemClickListener { onSelectionMenu(it) }
 
         storageButton.setOnClickListener { showStorageSheet() }
+        sortFilterButton.setOnClickListener { showSortOptions() }
+        sortFilterButton.setOnLongClickListener {
+            showHidden = !showHidden
+            refresh()
+            toast(if (showHidden) "نمایش فایل‌های مخفی فعال شد" else "نمایش فایل‌های مخفی غیرفعال شد")
+            true
+        }
+        overflowButton.setOnClickListener { mainBar.showOverflowMenu() }
         navBack.setOnClickListener { navigateHistory(back = true) }
         navForward.setOnClickListener { navigateHistory(back = false) }
         searchInput.addTextChangedListener(object : TextWatcher {
@@ -206,6 +223,59 @@ class MainActivity : AppCompatActivity() {
             )
         }
         volumes = result
+        renderStorageQuickBar()
+    }
+
+    private fun renderStorageQuickBar() {
+        if (!::storageQuickBar.isInitialized) return
+        storageQuickBar.removeAllViews()
+        volumes.forEach { volume ->
+            val item = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = android.view.Gravity.CENTER
+                setPadding(dp(8), dp(3), dp(8), dp(2))
+                isClickable = true
+                isFocusable = true
+                background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@MainActivity, R.drawable.item_bg)
+                contentDescription = volume.name
+                setOnClickListener {
+                    currentVol = volume
+                    navigate(volume.dir)
+                    renderStorageQuickBar()
+                }
+            }
+            val icon = ImageView(this).apply {
+                setImageResource(when (volume.kind) {
+                    Kind.INTERNAL -> R.drawable.ic_hard_drive
+                    Kind.SD -> R.drawable.ic_sd_card
+                    Kind.USB -> R.drawable.ic_usb
+                })
+                val tv = android.util.TypedValue()
+                theme.resolveAttribute(com.google.android.material.R.attr.colorPrimary, tv, true)
+                imageTintList = android.content.res.ColorStateList.valueOf(tv.data)
+                contentDescription = volume.name
+            }
+            item.addView(icon, LinearLayout.LayoutParams(dp(27), dp(27)))
+            val label = TextView(this).apply {
+                text = volume.name
+                textSize = 10f
+                maxLines = 1
+                val tv = android.util.TypedValue()
+                theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurfaceVariant, tv, true)
+                setTextColor(tv.data)
+            }
+            item.addView(label, LinearLayout.LayoutParams(-2, dp(17)))
+            item.addView(TextView(this).apply {
+                text = "⌄"
+                textSize = 14f
+                gravity = android.view.Gravity.CENTER
+                val tv = android.util.TypedValue()
+                theme.resolveAttribute(com.google.android.material.R.attr.colorPrimary, tv, true)
+                setTextColor(tv.data)
+            }, LinearLayout.LayoutParams(-1, dp(14)))
+            item.isSelected = currentVol?.dir?.path == volume.dir.path
+            storageQuickBar.addView(item, LinearLayout.LayoutParams(0, dp(66), 1f))
+        }
     }
 
     private fun fmt(bytes: Long): String = Formatter.formatFileSize(this, bytes)
@@ -385,6 +455,7 @@ class MainActivity : AppCompatActivity() {
             R.id.action_bookmarks -> showBookmarks()
             R.id.action_sort -> showSortOptions()
             R.id.action_storage_analysis -> analyzeStorage()
+            R.id.action_theme -> toggleTheme()
             R.id.action_vault -> startActivity(Intent(this, VaultActivity::class.java))
             R.id.action_root -> startActivity(Intent(this, RootExplorerActivity::class.java))
             R.id.action_network -> startActivity(Intent(this, NetworkStorageActivity::class.java))
@@ -396,6 +467,13 @@ class MainActivity : AppCompatActivity() {
             }
         }
         return true
+    }
+
+    private fun toggleTheme() {
+        val isNight = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val nextMode = if (isNight) AppCompatDelegate.MODE_NIGHT_NO else AppCompatDelegate.MODE_NIGHT_YES
+        getSharedPreferences("solina_preferences", MODE_PRIVATE).edit().putInt("night_mode", nextMode).apply()
+        AppCompatDelegate.setDefaultNightMode(nextMode)
     }
 
     private fun onSelectionMenu(item: MenuItem): Boolean {
