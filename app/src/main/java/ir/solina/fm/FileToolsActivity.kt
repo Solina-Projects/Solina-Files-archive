@@ -92,7 +92,7 @@ class FileToolsActivity : AppCompatActivity() {
             return
         }
         val checked = BooleanArray(files.size) { files[it] in initialSelection }
-        AlertDialog.Builder(this).setTitle(title).setMultiChoiceItems(labels, checked) { _, which, value -> checked[which] = value }
+        MaterialAlertDialogBuilder(this).setTitle(title).setMultiChoiceItems(labels, checked) { _, which, value -> checked[which] = value }
             .setPositiveButton("ادامه") { _, _ -> callback(files.filterIndexed { index, _ -> checked[index] }) }
             .setNegativeButton("لغو", null).show()
     }
@@ -115,7 +115,7 @@ class FileToolsActivity : AppCompatActivity() {
         val find = EditText(this).apply { hint = "متن برای جایگزینی (اختیاری)"; setSingleLine(true) }
         val replacement = EditText(this).apply { hint = "جایگزین با"; setSingleLine(true) }
         form.addView(prefix); form.addView(suffix); form.addView(find); form.addView(replacement)
-        AlertDialog.Builder(this).setTitle("تغییر نام ${files.size} فایل").setView(form)
+        MaterialAlertDialogBuilder(this).setTitle("تغییر نام ${files.size} فایل").setView(form)
             .setMessage("پسوند اصلی فایل حفظ می‌شود. نام‌های تکراری نادیده گرفته خواهند شد.")
             .setPositiveButton("اجرای تغییر نام") { _, _ ->
                 val pre = prefix.text.toString()
@@ -146,7 +146,7 @@ class FileToolsActivity : AppCompatActivity() {
                 setText("100")
                 inputType = android.text.InputType.TYPE_CLASS_NUMBER
             }
-            AlertDialog.Builder(this).setTitle("تقسیم ${file.name}").setView(sizeInput)
+            MaterialAlertDialogBuilder(this).setTitle("تقسیم ${file.name}").setView(sizeInput)
                 .setMessage("قطعه‌ها در همین پوشه با پسوند .part001، .part002 و ... ساخته می‌شوند.")
                 .setPositiveButton("شروع") { _, _ ->
                     val mb = sizeInput.text.toString().toLongOrNull()
@@ -221,7 +221,7 @@ class FileToolsActivity : AppCompatActivity() {
                 toast("فایل مقصد از قبل وجود دارد: ${target.name}")
                 return@chooseFiles
             }
-            AlertDialog.Builder(this).setTitle("ادغام قطعه‌ها")
+            MaterialAlertDialogBuilder(this).setTitle("ادغام قطعه‌ها")
                 .setMessage("${parts.size} قطعه به فایل ${target.name} ادغام می‌شوند. ترتیب بر اساس نام است.")
                 .setPositiveButton("ادغام") { _, _ ->
                     runWorker("ادغام قطعه‌ها") {
@@ -264,7 +264,7 @@ class FileToolsActivity : AppCompatActivity() {
 
     private fun searchContents() {
         val queryInput = EditText(this).apply { hint = "متن مورد جست‌وجو"; setSingleLine(true) }
-        AlertDialog.Builder(this).setTitle("جست‌وجو در محتوای فایل‌ها").setView(queryInput)
+        MaterialAlertDialogBuilder(this).setTitle("جست‌وجو در محتوای فایل‌ها").setView(queryInput)
             .setMessage("فایل‌های متنی تا ۲ مگابایت در پوشهٔ فعلی و زیرپوشه‌ها بررسی می‌شوند.")
             .setPositiveButton("جست‌وجو") { _, _ ->
                 val query = queryInput.text.toString()
