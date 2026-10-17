@@ -2,6 +2,9 @@ package ir.solina.fm
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -877,7 +880,7 @@ class MainActivity : AppCompatActivity() {
             val video = VideoView(this)
             video.setVideoPath(file.absolutePath)
             val controls = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 12, 12, 12) }
-            controls.addView(video, LinearLayout.LayoutParams(-1, dp(260)))
+            controls.addView(video, LinearLayout.LayoutParams(-1, (260 * resources.displayMetrics.density).toInt()))
             val play = MaterialButton(this).apply { text = "پخش / توقف"; isAllCaps = false }
             controls.addView(play)
             val dialog = MaterialAlertDialogBuilder(this).setTitle(file.name).setView(controls)
