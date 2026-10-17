@@ -292,7 +292,9 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:text="کپی" />
+            android:text="کپی" 
+            app:icon="@drawable/ic_content_copy"
+            app:iconPadding="8dp"/>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/bottomMove"
@@ -300,7 +302,9 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:text="انتقال" />
+            android:text="انتقال" 
+            app:icon="@drawable/ic_content_cut"
+            app:iconPadding="8dp"/>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/bottomDelete"
@@ -308,6 +312,8 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:text="حذف" />
+            android:text="حذف" 
+            app:icon="@drawable/ic_delete"
+            app:iconPadding="8dp"/>
     </LinearLayout>
 </LinearLayout>
