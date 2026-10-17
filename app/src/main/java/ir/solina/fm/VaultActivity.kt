@@ -6,7 +6,9 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.view.Gravity
 import android.view.View
-import android.widget.Button
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -36,15 +38,22 @@ class VaultActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(18, 16, 18, 12) }
-        root.addView(TextView(this).apply { text = "خزانهٔ رمزگذاری‌شده"; textSize = 22f })
-        root.addView(TextView(this).apply { text = "فایل‌ها با AES-GCM رمزگذاری می‌شوند و ورود به خزانه با قفل دستگاه/اثر انگشت محافظت می‌شود."; textSize = 13f; setPadding(0, 8, 0, 12) })
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(8), dp(16), dp(12))
+        }
+        root.addView(MaterialToolbar(this).apply {
+            title = "خزانهٔ رمزگذاری‌شده"
+            setNavigationIcon(R.drawable.ic_arrow_back)
+            setNavigationOnClickListener { finish() }
+        }, LinearLayout.LayoutParams(-1, dp(56)))
+        root.addView(TextView(this).apply { text = "فایل‌ها با AES-GCM رمزگذاری می‌شوند و ورود به خزانه با قفل دستگاه/اثر انگشت محافظت می‌شود."; textSize = 13f; setPadding(0, dp(8), 0, dp(12)) })
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        actions.addView(Button(this).apply { text = "افزودن فایل"; setOnClickListener { if (unlocked) pickFile() else authenticate() } }, LinearLayout.LayoutParams(0, -2, 1f))
-        actions.addView(Button(this).apply { text = "قفل"; setOnClickListener { unlocked = false; authenticate() } }, LinearLayout.LayoutParams(0, -2, 1f))
+        actions.addView(MaterialButton(this).apply { text = "افزودن فایل"; setOnClickListener { if (unlocked) pickFile() else authenticate() } }, LinearLayout.LayoutParams(0, -2, 1f))
+        actions.addView(MaterialButton(this).apply { text = "قفل"; setOnClickListener { unlocked = false; authenticate() } }, LinearLayout.LayoutParams(0, -2, 1f))
         root.addView(actions)
         val scroll = ScrollView(this)
-        list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 8, 0, 0) }
+        list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(8), 0, 0) }
         scroll.addView(list)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
@@ -147,28 +156,28 @@ class VaultActivity : AppCompatActivity() {
     private fun renderFiles() {
         list.removeAllViews()
         if (!unlocked) {
-            list.addView(TextView(this).apply { text = "خزانه قفل است."; setPadding(8, 20, 8, 20) })
+            list.addView(TextView(this).apply { text = "خزانه قفل است."; setPadding(dp(8), dp(20), dp(8), dp(20)) })
             return
         }
         val files = vaultDir.listFiles()?.filter { it.isFile && it.extension == "svault" }.orEmpty()
         if (files.isEmpty()) list.addView(TextView(this).apply { text = "هنوز فایلی در خزانه نیست."; setPadding(8, 20, 8, 20) })
         files.forEach { file ->
-            val row = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(10, 10, 10, 10) }
+            val row = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), dp(10), dp(10), dp(10)) }
             row.addView(TextView(this).apply {
                 text = prefs.getString(file.name, file.nameWithoutExtension) + "\n" + android.text.format.Formatter.formatFileSize(this@VaultActivity, file.length())
                 textSize = 15f
             })
             val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            buttons.addView(Button(this@VaultActivity).apply { text = "بازیابی"; setOnClickListener { if (unlocked) decryptToExport(file) } }, LinearLayout.LayoutParams(0, -2, 1f))
-            buttons.addView(Button(this@VaultActivity).apply { text = "حذف"; setOnClickListener {
-                androidx.appcompat.app.AlertDialog.Builder(this@VaultActivity).setMessage("فایل رمزگذاری‌شده حذف شود؟")
-                    .setNegativeButton("لغو", null).setPositiveButton("حذف") { _, _ ->
+            buttons.addView(MaterialButton(this@VaultActivity).apply { text = "بازیابی"; setOnClickListener { if (unlocked) decryptToExport(file) } }, LinearLayout.LayoutParams(0, -2, 1f))
+            buttons.addView(MaterialButton(this@VaultActivity).apply { text = "حذف"; setOnClickListener {
+                MaterialAlertDialogBuilder(this@VaultActivity).setMessage("فایل رمزگذاری‌شده حذف شود؟")
+                    .setNegativeMaterialButton("لغو", null).setPositiveMaterialButton("حذف") { _, _ ->
                         file.delete(); prefs.edit().remove(file.name).apply(); renderFiles()
                     }.show()
             } }, LinearLayout.LayoutParams(0, -2, 1f))
             row.addView(buttons)
             list.addView(row)
-            list.addView(View(this).apply { setBackgroundColor(0x22333333); layoutParams = LinearLayout.LayoutParams(-1, 1) })
+            list.addView(View(this).apply { setBackgroundColor(androidx.core.graphics.ColorUtils.setAlphaComponent(ContextCompat.getColor(this@VaultActivity, R.color.solina_outline), 90)); layoutParams = LinearLayout.LayoutParams(-1, dp(1)) })
         }
     }
 
@@ -206,6 +215,8 @@ class VaultActivity : AppCompatActivity() {
             toast("فایل با موفقیت رمزگشایی و در مقصد انتخابی ذخیره شد")
         } catch (_: Exception) { toast("رمزگشایی ناموفق بود؛ فایل یا کلید ممکن است آسیب دیده باشد") }
     }
+
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_LONG).show()
 }
