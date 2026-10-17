@@ -6,6 +6,22 @@
         android:title="Dual pane"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_bookmark"
+        android:title="افزودن/حذف نشانک پوشه"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_bookmarks"
+        android:title="نشانک‌های پوشه"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_sort"
+        android:title="مرتب‌سازی فایل‌ها"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_storage_analysis"
+        android:title="تحلیل فضای پوشه"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_new_folder"
         android:title="@string/new_folder"
         app:showAsAction="never" />
