@@ -196,6 +196,81 @@ class ApkToolsActivity : AppCompatActivity() {
                 }
             }
             if (methodCount > printed) out.appendLine("  … برای محدودیت حجم، فهرست متدها کوتاه شده است.")
+            out.appendLine("\nنمونهٔ دستورهای DEX به‌شکل شبه-Smali (حداکثر 20 متد و 40 دستور از هر متد):")
+            val opcodeNames = mapOf(
+                0x00 to "nop", 0x01 to "move", 0x02 to "move/from16", 0x03 to "move/16",
+                0x04 to "move-wide", 0x07 to "move-object", 0x0a to "move-result",
+                0x0c to "move-result-object", 0x0d to "move-exception", 0x0e to "return-void",
+                0x0f to "return", 0x10 to "return-wide", 0x11 to "return-object",
+                0x12 to "const/4", 0x13 to "const/16", 0x14 to "const",
+                0x1a to "const-string", 0x1b to "const-string/jumbo", 0x1c to "const-class",
+                0x1f to "check-cast", 0x20 to "instance-of", 0x22 to "new-instance",
+                0x23 to "new-array", 0x27 to "throw", 0x28 to "goto", 0x29 to "goto/16",
+                0x2a to "goto/32", 0x32 to "if-eq", 0x38 to "if-eqz",
+                0x44 to "aget", 0x4b to "aput", 0x52 to "iget", 0x59 to "iput",
+                0x60 to "sget", 0x67 to "sput", 0x6e to "invoke-virtual",
+                0x6f to "invoke-super", 0x70 to "invoke-direct", 0x71 to "invoke-static",
+                0x72 to "invoke-interface", 0x7b to "neg-int", 0x7c to "not-int",
+                0x90 to "add-int", 0x91 to "sub-int", 0x92 to "mul-int", 0x93 to "div-int"
+            )
+            var emittedMethods = 0
+            for (classNumber in 0 until classCount) {
+                if (emittedMethods >= 20) break
+                val classOffset = classOff + classNumber * 32
+                val classIndex = u32(classOffset)
+                val owner = types.getOrNull(classIndex) ?: continue
+                val classDataOffset = u32(classOffset + 24)
+                if (classDataOffset <= 0 || classDataOffset >= data.size) continue
+                var cursor = classDataOffset
+                val (staticFields, c1) = uleb(cursor); cursor = c1
+                val (instanceFields, c2) = uleb(cursor); cursor = c2
+                val (directMethods, c3) = uleb(cursor); cursor = c3
+                val (virtualMethods, c4) = uleb(cursor); cursor = c4
+                repeat((staticFields.coerceAtMost(10000) + instanceFields.coerceAtMost(10000)).coerceAtMost(20000)) {
+                    val (_, nextIndex) = uleb(cursor); cursor = nextIndex
+                    val (_, nextFlags) = uleb(cursor); cursor = nextFlags
+                }
+                val totalMethods = (directMethods.coerceAtMost(10000) + virtualMethods.coerceAtMost(10000)).coerceAtMost(20000)
+                var methodIndex = 0
+                repeat(totalMethods) {
+                    val (delta, nextIndex) = uleb(cursor); cursor = nextIndex
+                    val (accessFlags, nextFlags) = uleb(cursor); cursor = nextFlags
+                    val (codeOffset, nextCode) = uleb(cursor); cursor = nextCode
+                    methodIndex += delta
+                    if (codeOffset <= 0 || codeOffset + 16 > data.size || emittedMethods >= 20) return@repeat
+                    val methodName = strings.getOrNull(u32(methodOff + methodIndex * 8 + 4)) ?: "method_$methodIndex"
+                    val remainingUnits = (data.size - codeOffset - 16) / 2
+                    val codeUnits = u32(codeOffset + 12).coerceIn(0, remainingUnits.coerceAtLeast(0))
+                    out.appendLine(".method ${if ((accessFlags and 0x8) != 0) "static " else ""}$methodName  # $owner")
+                    var pc = 0
+                    var instructions = 0
+                    while (pc < codeUnits && instructions < 40) {
+                        val unit = u16(codeOffset + 16 + pc * 2)
+                        if (unit < 0) break
+                        val opcode = unit and 0xff
+                        val width = when (opcode) {
+                            0x02, 0x05, 0x08, 0x13, 0x15, 0x16, 0x19, 0x1a, 0x1c, 0x1f,
+                            0x20, 0x22, 0x23, 0x29, 0x32, 0x38, in 0x44..0x6d, in 0x7d..0xe2 -> 2
+                            0x03, 0x06, 0x09, 0x14, 0x17, 0x1b, 0x2a, in 0x2b..0x31,
+                            in 0x6e..0x72 -> 3
+                            else -> 1
+                        }
+                        val operands = (1 until width).mapNotNull { delta ->
+                            val value = if (pc + delta < codeUnits) u16(codeOffset + 16 + (pc + delta) * 2) else -1
+                            if (value < 0) null else "0x%04x".format(value)
+                        }
+                        val opname = opcodeNames[opcode] ?: "op_%02x".format(opcode)
+                        out.appendLine("    :%04x  $opname".format(pc) + if (operands.isEmpty()) "" else " " + operands.joinToString(", "))
+                        pc += width.coerceAtMost((codeUnits - pc).coerceAtLeast(1))
+                        instructions++
+                    }
+                    if (pc < codeUnits) out.appendLine("    # … ادامهٔ دستورها کوتاه شده است")
+                    out.appendLine(".end method")
+                    emittedMethods++
+                }
+            }
+            if (emittedMethods == 0) out.appendLine("کد اجرایی برای نمایش پیدا نشد؛ فایل ممکن است فقط شامل تعریف‌ها باشد یا ساختار آن پشتیبانی نشود.")
+            out.appendLine("توجه: این خروجی شبه-Smali برای بررسی اولیه است؛ جایگزین disassembler کامل و آزمون‌شده نیست.")
             out.toString()
         } catch (e: Exception) {
             "خواندن جدول‌های DEX ناموفق بود: ${e.localizedMessage}\\n"
