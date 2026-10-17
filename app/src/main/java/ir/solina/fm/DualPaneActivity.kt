@@ -2,6 +2,7 @@ package ir.solina.fm
 
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.ClipData
 import android.graphics.BitmapFactory
 import android.media.MediaPlayer
 import android.net.Uri
@@ -32,25 +33,29 @@ import java.util.Locale
 /** Optional two-pane file manager with independent navigation and selection. */
 class DualPaneActivity : AppCompatActivity() {
     private enum class LayoutMode { VERTICAL, HORIZONTAL }
+    private enum class SortMode { NAME, SIZE, MODIFIED, TYPE }
     private data class Pane(
         val root: LinearLayout, val path: TextView, val list: RecyclerView,
         val adapter: PaneAdapter, var current: File,
         val selected: LinkedHashSet<File> = linkedSetOf(),
         val backHistory: MutableList<File> = mutableListOf(),
         val forwardHistory: MutableList<File> = mutableListOf(),
-        var query: String = ""
+        var query: String = "",
+        var sortMode: SortMode = SortMode.NAME
     )
     private lateinit var panesHost: LinearLayout
     private lateinit var pathTitle: TextView
     private lateinit var navBack: MaterialButton
     private lateinit var navForward: MaterialButton
     private lateinit var searchInput: EditText
+    private lateinit var bookmarkButton: MaterialButton
+    private lateinit var sortButton: MaterialButton
     private lateinit var selectionActions: LinearLayout
     private lateinit var bottomActions: LinearLayout
     private lateinit var left: Pane
     private lateinit var right: Pane
     private var activePane = 0
-    private var mode = LayoutMode.VERTICAL
+    private var mode = LayoutMode.HORIZONTAL
     private var grid = false
     private var details = true
     private var iconDp = 38
@@ -68,8 +73,12 @@ class DualPaneActivity : AppCompatActivity() {
         searchInput = EditText(this).apply { hint = "جست‌وجوی فایل و پوشه"; setSingleLine(true); textSize = 13f; setPadding(dp(8), 0, dp(8), 0) }
         navigation.addView(navBack, LinearLayout.LayoutParams(dp(40), dp(48)))
         navigation.addView(navForward, LinearLayout.LayoutParams(dp(40), dp(48)))
+        bookmarkButton = MaterialButton(this).apply { text = "☆"; minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "نشانک پوشه"; setOnClickListener { toggleBookmark() }; setOnLongClickListener { showBookmarks(); true } }
+        sortButton = MaterialButton(this).apply { text = "↕"; minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "مرتب‌سازی"; setOnClickListener { showSortOptions(activePane) } }
         navigation.addView(pathTitle, LinearLayout.LayoutParams(0, dp(48), 1f))
-        navigation.addView(searchInput, LinearLayout.LayoutParams(dp(132), dp(42)))
+        navigation.addView(bookmarkButton, LinearLayout.LayoutParams(dp(38), dp(42)))
+        navigation.addView(sortButton, LinearLayout.LayoutParams(dp(38), dp(42)))
+        navigation.addView(searchInput, LinearLayout.LayoutParams(dp(116), dp(42)))
         screen.addView(navigation, LinearLayout.LayoutParams(-1, dp(52)))
         searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -110,6 +119,8 @@ class DualPaneActivity : AppCompatActivity() {
         root.addView(path, LinearLayout.LayoutParams(-1, dp(48)))
         val list = RecyclerView(this)
         root.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.setOnDragListener { _, event -> handleDropEvent(index, event, null) }
+        list.setOnDragListener { _, event -> handleDropEvent(index, event, null) }
         val adapter = PaneAdapter(index)
         list.adapter = adapter
         return Pane(root, path, list, adapter, start)
@@ -134,8 +145,13 @@ class DualPaneActivity : AppCompatActivity() {
     private fun refresh(index: Int) {
         val p = pane(index)
         p.path.text = (if (index == 0) "چپ: " else "راست: ") + p.current.absolutePath
-        val allFiles = p.current.listFiles()?.filter { it.isFile || it.isDirectory }
-            ?.sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) })) ?: emptyList()
+        val unsorted = p.current.listFiles()?.filter { it.isFile || it.isDirectory } ?: emptyList()
+        val allFiles = when (p.sortMode) {
+            SortMode.NAME -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) }))
+            SortMode.SIZE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { if (it.isDirectory) directorySize(it) else it.length() }))
+            SortMode.MODIFIED -> unsorted.sortedByDescending { it.lastModified() }
+            SortMode.TYPE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.extension.lowercase(Locale.ROOT) }, { it.name.lowercase(Locale.ROOT) }))
+        }
         p.selected.retainAll(allFiles.toSet())
         val query = p.query.trim().lowercase(Locale.ROOT)
         val files = allFiles.filter { query.isEmpty() || it.name.lowercase(Locale.ROOT).contains(query) }
@@ -152,6 +168,8 @@ class DualPaneActivity : AppCompatActivity() {
         navBack.isEnabled = p.backHistory.isNotEmpty() || p.current.parentFile != null
         navForward.isEnabled = p.forwardHistory.isNotEmpty()
         searchInput.setTextIfDifferent(p.query)
+        val bookmarks = getBookmarks()
+        bookmarkButton.text = if (p.current.absolutePath in bookmarks) "★" else "☆"
         updateSelectionUi()
     }
 
@@ -187,6 +205,42 @@ class DualPaneActivity : AppCompatActivity() {
         refresh(index)
         updateTopBar()
     }
+
+    private fun getBookmarks(): MutableSet<String> =
+        getSharedPreferences("solina_preferences", MODE_PRIVATE).getStringSet("bookmarks", emptySet())?.toMutableSet() ?: mutableSetOf()
+
+    private fun toggleBookmark() {
+        val p = pane(activePane)
+        val bookmarks = getBookmarks()
+        if (!bookmarks.add(p.current.absolutePath)) bookmarks.remove(p.current.absolutePath)
+        getSharedPreferences("solina_preferences", MODE_PRIVATE).edit().putStringSet("bookmarks", bookmarks).apply()
+        updateTopBar()
+        toast(if (p.current.absolutePath in bookmarks) "پوشه به نشانک‌ها اضافه شد" else "نشانک حذف شد")
+    }
+
+    private fun showBookmarks() {
+        val bookmarks = getBookmarks().map { File(it) }.filter { it.exists() }
+        if (bookmarks.isEmpty()) { toast("هنوز نشانکی ثبت نشده است"); return }
+        AlertDialog.Builder(this).setTitle("نشانک‌ها")
+            .setItems(bookmarks.map { it.absolutePath }.toTypedArray()) { _, which ->
+                navigateTo(activePane, bookmarks[which])
+            }.setNegativeButton("بستن", null).show()
+    }
+
+    private fun showSortOptions(index: Int) {
+        val p = pane(index)
+        val labels = arrayOf("نام", "حجم", "تاریخ تغییر", "نوع فایل")
+        AlertDialog.Builder(this).setTitle("مرتب‌سازی")
+            .setSingleChoiceItems(labels, p.sortMode.ordinal) { dialog, which ->
+                p.sortMode = SortMode.values()[which]
+                dialog.dismiss()
+                refresh(index)
+            }.setNegativeButton("لغو", null).show()
+    }
+
+    private fun directorySize(dir: File): Long = try {
+        dir.walkTopDown().filter { it.isFile }.map { it.length() }.sum()
+    } catch (_: Exception) { 0L }
 
     private fun selectAll(index: Int) {
         val p = pane(index)
@@ -359,6 +413,44 @@ class DualPaneActivity : AppCompatActivity() {
         }
     }
 
+    private fun handleDropEvent(targetPaneIndex: Int, event: android.view.DragEvent, targetFile: File?): Boolean {
+        when (event.action) {
+            android.view.DragEvent.ACTION_DRAG_STARTED -> return event.clipDescription?.label == "solina-file"
+            android.view.DragEvent.ACTION_DRAG_ENTERED, android.view.DragEvent.ACTION_DRAG_EXITED -> {
+                targetFile?.let { if (it.isDirectory) it.setReadable(true) }
+                return true
+            }
+            android.view.DragEvent.ACTION_DROP -> {
+                val sourcePath = event.clipData?.getItemAt(0)?.text?.toString() ?: return false
+                val source = File(sourcePath)
+                val destDir = targetFile?.takeIf { it.isDirectory } ?: pane(targetPaneIndex).current
+                if (!source.exists() || !destDir.isDirectory || destDir.absolutePath == source.absolutePath ||
+                    (source.isDirectory && destDir.absolutePath.startsWith(source.absolutePath + File.separator))) {
+                    toast("مقصد انتخاب‌شده معتبر نیست")
+                    return true
+                }
+                if (source.parentFile?.absolutePath == destDir.absolutePath) return true
+                Thread {
+                    var failed = false
+                    try {
+                        val target = uniqueTarget(destDir, source)
+                        if (!source.renameTo(target)) {
+                            val copied = source.copyRecursively(target, overwrite = false)
+                            if (copied) source.deleteRecursively() else { target.deleteRecursively(); failed = true }
+                        }
+                    } catch (_: Exception) { failed = true }
+                    runOnUiThread {
+                        pane(0).selected.remove(source); pane(1).selected.remove(source)
+                        refresh(0); refresh(1); updateTopBar()
+                        toast(if (failed) "جابه‌جایی ناموفق بود" else "فایل جابه‌جا شد")
+                    }
+                }.start()
+                return true
+            }
+        }
+        return true
+    }
+
     private fun openFile(file: File, paneIndex: Int) {
         when (file.extension.lowercase()) {
             "txt", "md", "log", "json", "xml", "csv", "ini", "kt", "java", "html", "css" -> editTextFile(file)
@@ -529,7 +621,18 @@ class DualPaneActivity : AppCompatActivity() {
                 refresh(paneIndex)
             }
             holder.row.setOnClickListener { activePane = paneIndex; actionOpen(file, false); updateTopBar() }
-            holder.row.setOnLongClickListener { activePane = paneIndex; actionOpen(file, true); true }
+            holder.row.setOnLongClickListener {
+                activePane = paneIndex
+                val selectedAlready = p.selected.contains(file)
+                if (!selectedAlready) {
+                    actionOpen(file, true)
+                } else {
+                    val clip = ClipData.newPlainText("solina-file", file.absolutePath)
+                    holder.row.startDragAndDrop(clip, View.DragShadowBuilder(holder.row), file.absolutePath, 0)
+                }
+                true
+            }
+            holder.row.setOnDragListener { _, event -> handleDropEvent(paneIndex, event, file) }
         }
         private fun actionOpen(file: File, longPress: Boolean) {
             val p = pane(paneIndex)
