@@ -74,6 +74,7 @@ class NetworkStorageActivity : AppCompatActivity() {
         pathInput.setText("/")
         root.addView(hostInput); root.addView(portInput); root.addView(userInput); root.addView(passInput); root.addView(pathInput)
         root.addView(Button(this).apply { text = "اتصال"; setOnClickListener { connect() } })
+        root.addView(Button(this).apply { text = "بارگذاری فایل به سرور"; setOnClickListener { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "*/*" }, 801) } })
         root.addView(Button(this).apply { text = "قطع اتصال"; setOnClickListener { disconnect(); status.text = "اتصال قطع شد"; entries.removeAllViews() } })
         status = TextView(this).apply { text = "اطلاعات سرور را وارد کن."; setPadding(4, 8, 4, 8) }
         root.addView(status)
@@ -235,6 +236,36 @@ class NetworkStorageActivity : AppCompatActivity() {
                 ok = true
             } catch (e: Exception) { target.delete(); runOnUiThread { status.text = "دریافت ناموفق: ${e.message}" } }
             runOnUiThread { if (ok) { status.text = "ذخیره شد: NetworkDownloads/${target.name}"; toast("فایل در پوشه خصوصی برنامه دریافت شد") } }
+        }.start()
+    }
+
+
+    @Deprecated("Legacy callback retained for compatibility with minSdk 30")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 801 || resultCode != RESULT_OK || data?.data == null) return
+        val uri = data.data!!
+        val name = contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+            if (it.moveToFirst()) it.getString(0) else "upload.bin"
+        } ?: "upload.bin"
+        status.text = "در حال بارگذاری $name…"
+        Thread {
+            var error: String? = null
+            try {
+                contentResolver.openInputStream(uri)!!.use { input ->
+                    val target = joinRemote(remotePath, name)
+                    when (protocol) {
+                        Protocol.FTP -> if (!ftp!!.storeFile(target, input)) throw IllegalStateException("سرور FTP فایل را نپذیرفت")
+                        Protocol.SFTP -> sftp!!.put(input, target)
+                        Protocol.SMB -> SmbFile(smbUrl(target), smbContext).outputStream.use { input.copyTo(it) }
+                        Protocol.WEBDAV -> sardine!!.put(webDavUrl(target), input, "application/octet-stream")
+                    }
+                }
+            } catch (e: Exception) { error = e.message ?: "بارگذاری ناموفق بود" }
+            runOnUiThread {
+                if (error == null) { status.text = "بارگذاری انجام شد: $name"; toast("فایل بارگذاری شد"); listRemote() }
+                else { status.text = "بارگذاری ناموفق: $error"; toast("بارگذاری ناموفق بود: $error") }
+            }
         }.start()
     }
 
