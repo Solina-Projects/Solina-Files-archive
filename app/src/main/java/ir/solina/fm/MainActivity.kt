@@ -575,6 +575,8 @@ class MainActivity : AppCompatActivity() {
             R.id.action_recent_files -> startActivity(Intent(this, RecentFilesActivity::class.java))
             R.id.action_advanced_settings -> startActivity(Intent(this, AdvancedSettingsActivity::class.java)
                 .putExtra("current_path", current.absolutePath))
+            R.id.action_wifi_transfer -> startActivity(Intent(this, WifiTransferActivity::class.java)
+                .putExtra("root_path", current.absolutePath))
             R.id.action_hidden -> {
                 showHidden = !item.isChecked
                 item.isChecked = showHidden
