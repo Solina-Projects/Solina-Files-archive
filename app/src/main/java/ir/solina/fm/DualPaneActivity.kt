@@ -105,6 +105,7 @@ class DualPaneActivity : AppCompatActivity() {
         button(selectionActions, "✎ A تغییر نام") { renameSelected(activePane) }
         button(selectionActions, "فشرده‌سازی") { compressSelected(activePane) }
         button(selectionActions, "استخراج") { extractSelectedArchives() }
+        button(selectionActions, "بیشتر") { showSelectedTools() }
         selectionScroll.addView(selectionActions)
         screen.addView(selectionScroll, LinearLayout.LayoutParams(-1, dp(48)))
         panesHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -459,6 +460,90 @@ class DualPaneActivity : AppCompatActivity() {
                 }.start()
             }.setNegativeButton("لغو", null).show()
     }
+    private fun showSelectedTools() {
+        val selectedFiles = pane(activePane).selected.toList()
+        if (selectedFiles.isEmpty()) {
+            toast("ابتدا فایل یا پوشه‌ای را انتخاب کنید")
+            return
+        }
+        val labels = arrayListOf("مشخصات", "کپی مسیر", "اشتراک‌گذاری فایل‌ها", "ابزارهای تکمیلی")
+        val single = selectedFiles.singleOrNull()
+        if (single != null && single.isFile &&
+            single.extension.lowercase(Locale.ROOT) in setOf("zip", "7z", "rar", "tar", "gz", "tgz", "bz2", "xz")) {
+            labels += "مرور و استخراج آرشیو"
+        }
+        AlertDialog.Builder(this)
+            .setTitle(if (selectedFiles.size == 1) selectedFiles.first().name else "${selectedFiles.size} مورد انتخاب‌شده")
+            .setItems(labels.toTypedArray()) { _, which ->
+                when (labels[which]) {
+                    "مشخصات" -> showSelectedProperties(selectedFiles)
+                    "کپی مسیر" -> {
+                        val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("paths", selectedFiles.joinToString("\n") { it.absolutePath }))
+                        toast("مسیرها کپی شدند")
+                    }
+                    "اشتراک‌گذاری فایل‌ها" -> shareSelectedFiles(selectedFiles)
+                    "ابزارهای تکمیلی" -> startActivity(
+                        Intent(this, FileToolsActivity::class.java)
+                            .putExtra("root_path", pane(activePane).current.absolutePath)
+                            .putStringArrayListExtra("selected_paths", ArrayList(selectedFiles.map { it.absolutePath }))
+                    )
+                    "مرور و استخراج آرشیو" -> single?.let {
+                        startActivity(Intent(this, ArchiveToolsActivity::class.java).putExtra("archive_path", it.absolutePath))
+                    }
+                }
+            }
+            .setNegativeButton("بستن", null)
+            .show()
+    }
+
+    private fun showSelectedProperties(files: List<File>) {
+        val detailsText = files.joinToString("\n\n") { file ->
+            val kind = when {
+                file.isDirectory -> "پوشه"
+                file.extension.isNotBlank() -> "فایل • ${file.extension.uppercase(Locale.ROOT)}"
+                else -> "فایل"
+            }
+            val size = if (file.isFile) Formatter.formatFileSize(this, file.length()) else Formatter.formatFileSize(this, directorySize(file))
+            val modified = java.text.DateFormat.getDateTimeInstance().format(java.util.Date(file.lastModified()))
+            "${file.name}\nنوع: $kind\nاندازه: $size\nآخرین تغییر: $modified\nمسیر: ${file.absolutePath}"
+        }
+        val scroll = ScrollView(this)
+        scroll.addView(TextView(this).apply {
+            text = detailsText
+            textSize = 13f
+            setTextIsSelectable(true)
+            setPadding(dp(20), dp(12), dp(20), dp(12))
+        })
+        AlertDialog.Builder(this)
+            .setTitle(if (files.size == 1) "مشخصات فایل" else "مشخصات ${files.size} مورد")
+            .setView(scroll)
+            .setPositiveButton("بستن", null)
+            .show()
+    }
+
+    private fun shareSelectedFiles(files: List<File>) {
+        val shareable = files.filter { it.isFile }
+        if (shareable.isEmpty()) {
+            toast("برای اشتراک‌گذاری، فایل انتخاب کنید")
+            return
+        }
+        try {
+            val uris = ArrayList<Uri>()
+            shareable.forEach { file ->
+                uris += FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            }
+            val shareIntent = if (uris.size == 1) Intent(Intent.ACTION_SEND) else Intent(Intent.ACTION_SEND_MULTIPLE)
+            shareIntent.type = "*/*"
+            if (uris.size == 1) shareIntent.putExtra(Intent.EXTRA_STREAM, uris.first())
+            else shareIntent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(Intent.createChooser(shareIntent, "اشتراک‌گذاری با"))
+        } catch (_: Exception) {
+            toast("اشتراک‌گذاری فایل انجام نشد")
+        }
+    }
+
     private fun toggleMode() {
         mode = if (mode == LayoutMode.VERTICAL) LayoutMode.HORIZONTAL else LayoutMode.VERTICAL
         if (mode == LayoutMode.HORIZONTAL) grid = false
