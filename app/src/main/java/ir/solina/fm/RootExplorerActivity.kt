@@ -1,9 +1,11 @@
 package ir.solina.fm
 
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.IBinder
 import android.os.Environment
 import android.view.Gravity
 import android.view.View
@@ -27,6 +29,26 @@ class RootExplorerActivity : AppCompatActivity() {
     private var currentPath = "/"
     private var rootAvailable = false
     private var shizukuAvailable = false
+    private var shizukuBound = false
+    private var shizukuService: IUserService? = null
+    private val shizukuArgs by lazy {
+        Shizuku.UserServiceArgs(ComponentName(packageName, ShellUserService::class.java.name))
+            .daemon(false).processNameSuffix("shell").debuggable(false)
+    }
+    private val shizukuConnection = object : Shizuku.UserServiceConnection {
+        override fun onServiceConnected(componentName: ComponentName, binder: IBinder) {
+            shizukuService = IUserService.Stub.asInterface(binder)
+            shizukuAvailable = shizukuService != null
+            runOnUiThread {
+                if (shizukuAvailable) loadPath()
+                else toast("اتصال به سرویس Shizuku ناموفق بود")
+            }
+        }
+        override fun onServiceDisconnected(componentName: ComponentName) {
+            shizukuService = null
+            shizukuAvailable = false
+        }
+    }
     private val shizukuPermissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
         if (requestCode == 4102) {
             if (grantResult == PackageManager.PERMISSION_GRANTED) checkAccess()
@@ -61,13 +83,14 @@ class RootExplorerActivity : AppCompatActivity() {
     private fun checkAccess() {
         Thread {
             rootAvailable = runSu("id -u").trim() == "0"
-            shizukuAvailable = !rootAvailable && try {
+            val shizukuGranted = !rootAvailable && try {
                 Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
             } catch (_: Exception) { false }
             runOnUiThread {
                 when {
-                    rootAvailable || shizukuAvailable -> loadPath()
-                    Shizuku.pingBinder() -> AlertDialog.Builder(this)
+                    rootAvailable -> loadPath()
+                    shizukuGranted -> bindShizukuService()
+                    (try { Shizuku.pingBinder() } catch (_: Exception) { false }) -> AlertDialog.Builder(this)
                         .setTitle("اجازهٔ Shizuku لازم است")
                         .setMessage("دسترسی su پیدا نشد. می‌توانی مجوز Shizuku را بدهی؛ این دسترسی معمولاً سطح shell دارد و جایگزین روت کامل نیست.")
                         .setPositiveButton("درخواست مجوز") { _, _ ->
@@ -84,6 +107,15 @@ class RootExplorerActivity : AppCompatActivity() {
         }.start()
     }
 
+    private fun bindShizukuService() {
+        try {
+            shizukuBound = Shizuku.bindUserService(shizukuArgs, shizukuConnection)
+            if (!shizukuBound) toast("اتصال سرویس Shizuku برقرار نشد")
+        } catch (e: Exception) {
+            toast("اتصال Shizuku ناموفق بود: " + (e.message ?: "خطا"))
+        }
+    }
+
     private fun shellQuote(value: String) = "'" + value.replace("'", "'\\''") + "'"
 
     private fun runSu(command: String): String {
@@ -98,15 +130,14 @@ class RootExplorerActivity : AppCompatActivity() {
     private fun runRoot(command: String): String {
         if (rootAvailable || !shizukuAvailable) return runSu(command)
         return try {
-            val process = Shizuku.newProcess(arrayOf("sh", "-c", command), null, null)
-            val text = process.inputStream.bufferedReader().use { it.readText() }
-            val code = process.waitFor()
-            if (code == 0) text else ""
+            val result = shizukuService?.exec(command) ?: return ""
+            if (result.startsWith("__SOLINA_ERROR__:")) "" else result
         } catch (_: Exception) { "" }
     }
 
     override fun onDestroy() {
         try { Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener) } catch (_: Exception) {}
+        try { if (shizukuBound) Shizuku.unbindUserService(shizukuArgs, shizukuConnection, true) } catch (_: Exception) {}
         super.onDestroy()
     }
 
