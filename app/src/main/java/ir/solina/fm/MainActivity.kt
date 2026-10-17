@@ -391,7 +391,7 @@ class MainActivity : AppCompatActivity() {
                     val target = uniqueTarget(dest, src)
                     if (cut) {
                         if (!src.renameTo(target)) {
-                            if (src.copyRecursively(target)) src.deleteRecursively() else failed++
+                            src.copyRecursively(target); if (target.exists()) src.deleteRecursively() else failed++
                         }
                     } else {
                         if (!src.copyRecursively(target)) failed++
