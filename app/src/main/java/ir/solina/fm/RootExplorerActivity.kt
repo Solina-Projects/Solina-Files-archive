@@ -1,6 +1,7 @@
 package ir.solina.fm
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -17,6 +18,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import java.io.File
 import java.util.Base64
+import rikka.shizuku.Shizuku
 
 /** Root-only file browser. All filesystem commands are executed through su after the root manager grants access. */
 class RootExplorerActivity : AppCompatActivity() {
@@ -24,6 +26,13 @@ class RootExplorerActivity : AppCompatActivity() {
     private lateinit var rows: LinearLayout
     private var currentPath = "/"
     private var rootAvailable = false
+    private var shizukuAvailable = false
+    private val shizukuPermissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
+        if (requestCode == 4102) {
+            if (grantResult == PackageManager.PERMISSION_GRANTED) checkAccess()
+            else toast("مجوز Shizuku داده نشد")
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,29 +54,39 @@ class RootExplorerActivity : AppCompatActivity() {
         scroll.addView(rows)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
-        Thread {
-            rootAvailable = runRoot("id -u").trim() == "0"
-            runOnUiThread {
-                if (!rootAvailable) {
-                    AlertDialog.Builder(this).setTitle("دسترسی Root در دسترس نیست")
-                        .setMessage("این قابلیت به دستگاه روت‌شده و برنامهٔ مدیریت روت نیاز دارد. درخواست دسترسی را در پنجرهٔ su تأیید کن.")
-                        .setPositiveButton("تلاش دوباره") { _, _ -> checkRoot() }
-                        .setNegativeButton("بستن") { _, _ -> finish() }.show()
-                } else loadPath()
-            }
-        }.start()
+        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
+        checkAccess()
     }
 
-    private fun checkRoot() {
+    private fun checkAccess() {
         Thread {
-            rootAvailable = runRoot("id -u").trim() == "0"
-            runOnUiThread { if (rootAvailable) loadPath() else toast("دسترسی روت تأیید نشد") }
+            rootAvailable = runSu("id -u").trim() == "0"
+            shizukuAvailable = !rootAvailable && try {
+                Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+            } catch (_: Exception) { false }
+            runOnUiThread {
+                when {
+                    rootAvailable || shizukuAvailable -> loadPath()
+                    Shizuku.pingBinder() -> AlertDialog.Builder(this)
+                        .setTitle("اجازهٔ Shizuku لازم است")
+                        .setMessage("دسترسی su پیدا نشد. می‌توانی مجوز Shizuku را بدهی؛ این دسترسی معمولاً سطح shell دارد و جایگزین روت کامل نیست.")
+                        .setPositiveButton("درخواست مجوز") { _, _ ->
+                            try { Shizuku.requestPermission(4102) } catch (_: Exception) { toast("Shizuku در دسترس نیست") }
+                        }
+                        .setNegativeButton("تلاش دوباره با Root") { _, _ -> checkAccess() }
+                        .setNeutralButton("بستن") { _, _ -> finish() }.show()
+                    else -> AlertDialog.Builder(this).setTitle("دسترسی Root/Shizuku در دسترس نیست")
+                        .setMessage("این قابلیت به دستگاه روت‌شده با مدیر su یا برنامهٔ Shizuku فعال و مجاز نیاز دارد.")
+                        .setPositiveButton("تلاش دوباره") { _, _ -> checkAccess() }
+                        .setNegativeButton("بستن") { _, _ -> finish() }.show()
+                }
+            }
         }.start()
     }
 
     private fun shellQuote(value: String) = "'" + value.replace("'", "'\\''") + "'"
 
-    private fun runRoot(command: String): String {
+    private fun runSu(command: String): String {
         return try {
             val process = ProcessBuilder("su", "-c", command).redirectErrorStream(true).start()
             val text = process.inputStream.bufferedReader().use { it.readText() }
@@ -76,10 +95,26 @@ class RootExplorerActivity : AppCompatActivity() {
         } catch (_: Exception) { "" }
     }
 
+    private fun runRoot(command: String): String {
+        val rootResult = runSu(command)
+        if (rootAvailable || !shizukuAvailable) return rootResult
+        return try {
+            val process = Shizuku.newProcess(arrayOf("sh", "-c", command), null, null)
+            val text = process.inputStream.bufferedReader().use { it.readText() }
+            val code = process.waitFor()
+            if (code == 0) text else ""
+        } catch (_: Exception) { "" }
+    }
+
+    override fun onDestroy() {
+        try { Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener) } catch (_: Exception) {}
+        super.onDestroy()
+    }
+
     private fun loadPath() {
-        pathText.text = currentPath
+        pathText.text = currentPath + "  •  " + if (rootAvailable) "Root" else "Shizuku (سطح shell)"
         rows.removeAllViews()
-        if (!rootAvailable) { rows.addView(TextView(this).apply { text = "Root در دسترس نیست" }); return }
+        if (!rootAvailable && !shizukuAvailable) { rows.addView(TextView(this).apply { text = "Root/Shizuku در دسترس نیست" }); return }
         rows.addView(TextView(this).apply { text = "در حال خواندن فایل‌ها…"; setPadding(8, 16, 8, 16) })
         Thread {
             val p = shellQuote(currentPath)
