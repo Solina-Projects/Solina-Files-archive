@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">SolinaFM</string>
+    <string name="app_name">Solina Files</string>
     <string name="internal_storage">حافظه داخلی</string>
     <string name="sd_card">کارت حافظه</string>
     <string name="usb_drive">حافظه USB</string>
