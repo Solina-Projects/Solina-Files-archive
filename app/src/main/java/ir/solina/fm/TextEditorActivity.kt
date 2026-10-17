@@ -257,12 +257,18 @@ class TextEditorActivity : AppCompatActivity() {
                 }.toList()
                 val linesPerPage = 58
                 val totalPages = ((wrapped.size.coerceAtLeast(1) + linesPerPage - 1) / linesPerPage)
-                for (pageIndex in 0 until totalPages) {
+                val requestedPages = if (pages.isEmpty() || pages.any { it == android.print.PageRange.ALL_PAGES }) {
+                    (0 until totalPages).toList()
+                } else {
+                    pages.flatMap { range -> (range.start..minOf(range.end, totalPages - 1)).toList() }
+                        .filter { it in 0 until totalPages }.distinct().sorted()
+                }
+                for ((outputIndex, pageIndex) in requestedPages.withIndex()) {
                     if (cancellationSignal.isCanceled) {
                         cancelled = true
                         break
                     }
-                    val page = pdf.startPage(PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageIndex + 1).create())
+                    val page = pdf.startPage(PdfDocument.PageInfo.Builder(pageWidth, pageHeight, outputIndex + 1).create())
                     val canvas = page.canvas
                     canvas.drawText(jobName.take(90), 36f, 28f, paint.apply { textSize = 10f })
                     paint.textSize = 9f
@@ -277,9 +283,11 @@ class TextEditorActivity : AppCompatActivity() {
                 }
                 if (cancelled) {
                     callback.onWriteCancelled()
+                } else if (requestedPages.isEmpty()) {
+                    callback.onWriteFinished(emptyArray())
                 } else {
                     FileOutputStream(destination.fileDescriptor).use { pdf.writeTo(it) }
-                    callback.onWriteFinished(arrayOf(android.print.PageRange(0, totalPages - 1)))
+                    callback.onWriteFinished(pages.ifEmpty { arrayOf(android.print.PageRange(0, totalPages - 1)) })
                 }
             } catch (e: Exception) {
                 callback.onWriteFailed(e.localizedMessage)
