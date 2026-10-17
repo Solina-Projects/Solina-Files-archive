@@ -17,6 +17,17 @@
         android:layoutDirection="ltr">
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/drawerButton"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="40dp"
+            android:layout_height="match_parent"
+            android:minWidth="0dp"
+            android:padding="0dp"
+            android:text="☰"
+            android:textSize="21sp"
+            android:contentDescription="منوی کناری" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/navBack"
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="44dp"
@@ -77,6 +88,17 @@
             android:contentDescription="مرتب‌سازی و فیلتر" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/dualPaneButton"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="40dp"
+            android:layout_height="match_parent"
+            android:minWidth="0dp"
+            android:padding="0dp"
+            android:text="▥"
+            android:textSize="20sp"
+            android:contentDescription="حالت دو پنجره‌ای" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/overflowButton"
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="36dp"
@@ -92,7 +114,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:fillViewport="true"
-        android:scrollbars="none">
+        android:scrollbars="none"
+        android:visibility="gone">
 
         <LinearLayout
             android:id="@+id/storageQuickBar"
