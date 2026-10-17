@@ -169,7 +169,7 @@ class DualPaneActivity : AppCompatActivity() {
                     val target = uniqueTarget(dest, src)
                     if (move) {
                         if (!src.renameTo(target)) {
-                            src.copyRecursively(target, overwrite = false); if (target.exists()) src.deleteRecursively() else failed++
+                            val copied = src.copyRecursively(target, overwrite = false); if (copied) src.deleteRecursively() else { target.deleteRecursively(); failed++ }
                         }
                     } else if (!src.copyRecursively(target, overwrite = false)) failed++
                 } catch (_: Exception) { failed++ }
