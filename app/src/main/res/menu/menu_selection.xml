@@ -24,6 +24,10 @@
         android:visible="false"
         app:showAsAction="ifRoom" />
     <item
+        android:id="@+id/action_file_tools"
+        android:title="ابزارهای تکمیلی برای انتخاب‌ها"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_details"
         android:title="@string/details"
         app:showAsAction="never" />
