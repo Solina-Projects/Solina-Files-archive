@@ -96,8 +96,7 @@ class RootExplorerActivity : AppCompatActivity() {
     }
 
     private fun runRoot(command: String): String {
-        val rootResult = runSu(command)
-        if (rootAvailable || !shizukuAvailable) return rootResult
+        if (rootAvailable || !shizukuAvailable) return runSu(command)
         return try {
             val process = Shizuku.newProcess(arrayOf("sh", "-c", command), null, null)
             val text = process.inputStream.bufferedReader().use { it.readText() }
