@@ -17,6 +17,9 @@ import com.github.sardine.SardineFactory
 import com.jcraft.jsch.ChannelSftp
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
+import com.jcraft.jsch.UserInfo
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import jcifs.CIFSContext
 import jcifs.context.SingletonContext
 import jcifs.smb.NtlmPasswordAuthenticator
@@ -117,7 +120,29 @@ class NetworkStorageActivity : AppCompatActivity() {
                     Protocol.SFTP -> {
                         val session = JSch().getSession(user, baseHost, portInput.text.toString().toIntOrNull() ?: 22)
                         session.setPassword(password)
-                        session.setConfig("StrictHostKeyChecking", "no")
+                        session.setConfig("StrictHostKeyChecking", "ask")
+                        session.userInfo = object : UserInfo {
+                            override fun getPassphrase(): String? = null
+                            override fun getPassword(): String = password
+                            override fun promptPassword(message: String): Boolean = false
+                            override fun promptPassphrase(message: String): Boolean = false
+                            override fun promptYesNo(message: String): Boolean {
+                                val latch = CountDownLatch(1)
+                                var accepted = false
+                                runOnUiThread {
+                                    AlertDialog.Builder(this@NetworkStorageActivity)
+                                        .setTitle("تأیید کلید میزبان SFTP")
+                                        .setMessage(message + "\\n\\nفقط اگر اثرانگشت سرور را تأیید می‌کنی ادامه بده.")
+                                        .setNegativeButton("رد") { _, _ -> accepted = false; latch.countDown() }
+                                        .setPositiveButton("اعتماد برای این اتصال") { _, _ -> accepted = true; latch.countDown() }
+                                        .setOnCancelListener { accepted = false; latch.countDown() }
+                                        .show()
+                                }
+                                latch.await(60, TimeUnit.SECONDS)
+                                return accepted
+                            }
+                            override fun showMessage(message: String) { runOnUiThread { toast(message) } }
+                        }
                         session.connect(15000)
                         val channel = session.openChannel("sftp") as ChannelSftp
                         channel.connect(15000)
