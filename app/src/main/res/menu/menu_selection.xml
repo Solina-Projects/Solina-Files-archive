@@ -2,28 +2,27 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
-        android:id="@+id/action_copy"
-        android:icon="@drawable/ic_content_copy"
-        android:title="@string/copy"
+        android:id="@+id/action_select_all"
+        android:title="@string/select_all"
         app:showAsAction="always" />
     <item
-        android:id="@+id/action_cut"
-        android:icon="@drawable/ic_content_cut"
-        android:title="@string/cut"
+        android:id="@+id/action_deselect_all"
+        android:title="برداشتن انتخاب"
         app:showAsAction="always" />
     <item
         android:id="@+id/action_rename"
         android:icon="@drawable/ic_edit"
-        android:title="@string/rename"
-        app:showAsAction="always" />
+        android:title="✎ A"
+        app:showAsAction="ifRoom" />
     <item
-        android:id="@+id/action_select_all"
-        android:title="@string/select_all"
-        app:showAsAction="never" />
+        android:id="@+id/action_compress"
+        android:title="فشرده‌سازی"
+        app:showAsAction="ifRoom" />
     <item
-        android:id="@+id/action_delete"
-        android:title="@string/delete"
-        app:showAsAction="never" />
+        android:id="@+id/action_extract"
+        android:title="استخراج"
+        android:visible="false"
+        app:showAsAction="ifRoom" />
     <item
         android:id="@+id/action_details"
         android:title="@string/details"
