@@ -98,10 +98,10 @@ class RecycleBinActivity : AppCompatActivity() {
                 setOnClickListener {
                     MaterialAlertDialogBuilder(this@RecycleBinActivity).setTitle("حذف دائمی")
                         .setMessage("«${entry.original.name}» برای همیشه حذف شود؟ این کار قابل بازگشت نیست.")
-                        .setPositiveMaterialButton("حذف دائمی") { _, _ ->
+                        .setPositiveButton("حذف دائمی") { _, _ ->
                             if (TrashStore.deletePermanently(this@RecycleBinActivity, entry)) render()
                             else Toast.makeText(this@RecycleBinActivity, "حذف ناموفق بود", Toast.LENGTH_SHORT).show()
-                        }.setNegativeMaterialButton("لغو", null).show()
+                        }.setNegativeButton("لغو", null).show()
                 }
             }, LinearLayout.LayoutParams(0, -2, 1f))
             card.addView(actions)
