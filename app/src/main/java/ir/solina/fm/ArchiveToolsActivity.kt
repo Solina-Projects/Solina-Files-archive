@@ -91,7 +91,7 @@ class ArchiveToolsActivity : AppCompatActivity() {
         val target = File(file.parentFile ?: filesDir, file.nameWithoutExtension + "-extracted")
         if (target.exists()) {
             MaterialAlertDialogBuilder(this).setMessage("پوشه مقصد از قبل وجود دارد. استخراج با نام دیگری انجام شود؟")
-                .setNegativeMaterialButton("لغو", null).setPositiveMaterialButton("ادامه") { _, _ -> extractInto(File(file.parentFile ?: filesDir, file.nameWithoutExtension + "-extracted-" + System.currentTimeMillis())) { extractTo(it) } }.show()
+                .setNegativeButton("لغو", null).setPositiveButton("ادامه") { _, _ -> extractInto(File(file.parentFile ?: filesDir, file.nameWithoutExtension + "-extracted-" + System.currentTimeMillis())) { extractTo(it) } }.show()
         } else extractInto(target) { extractTo(it) }
     }
 
