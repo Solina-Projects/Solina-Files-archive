@@ -790,4 +790,3 @@ class DualPaneActivity : AppCompatActivity() {
         return value.data
     }
 }
-}
