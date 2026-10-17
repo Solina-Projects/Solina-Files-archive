@@ -24,6 +24,11 @@
         android:visible="false"
         app:showAsAction="ifRoom" />
     <item
+        android:id="@+id/action_hex_editor"
+        android:title="نمایش/ویرایش HEX"
+        android:visible="false"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_file_tools"
         android:title="ابزارهای تکمیلی برای انتخاب‌ها"
         app:showAsAction="never" />
