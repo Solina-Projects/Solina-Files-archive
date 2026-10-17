@@ -19,6 +19,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.MimeTypeMap
 import android.widget.ImageView
+import android.widget.SeekBar
+import android.widget.VideoView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -41,6 +43,7 @@ import java.security.MessageDigest
 import java.util.ArrayDeque
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import net.lingala.zip4j.ZipFile
 
 class MainActivity : AppCompatActivity() {
 
@@ -773,23 +776,156 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openFile(file: File) {
-        if (file.extension.lowercase(Locale.ROOT) in setOf("txt", "md", "log", "json", "xml", "csv", "ini", "kt", "java", "html", "css", "gradle", "yml", "yaml", "sh", "properties")) {
-            editTextFile(file)
-            return
+        when (file.extension.lowercase(Locale.ROOT)) {
+            "txt", "md", "log", "json", "xml", "csv", "tsv", "ini", "kt", "java",
+            "html", "htm", "css", "js", "gradle", "kts", "yml", "yaml", "sh",
+            "properties", "conf", "cfg", "sql", "py", "c", "cpp", "h", "rs" -> editTextFile(file)
+            "jpg", "jpeg", "png", "webp", "bmp", "gif" -> viewImage(file)
+            "mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi" -> playAudio(file)
+            "mp4", "m4v", "3gp", "webm", "mkv", "avi", "mov", "mpeg", "mpg" -> playVideo(file)
+            "zip" -> browseArchive(file)
+            else -> openExternal(file)
         }
+    }
+
+    private fun openExternal(file: File) {
         try {
             val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
-            val mime = MimeTypeMap.getSingleton()
-                .getMimeTypeFromExtension(file.extension.lowercase()) ?: "*/*"
-            val intent = Intent(Intent.ACTION_VIEW)
-                .setDataAndType(uri, mime)
+            val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase(Locale.ROOT)) ?: "*/*"
+            val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             startActivity(Intent.createChooser(intent, file.name))
         } catch (e: ActivityNotFoundException) {
-            toast(getString(R.string.no_app))
+            toast("برنامه‌ای برای بازکردن این نوع فایل نصب نیست")
         } catch (e: Exception) {
-            toast(getString(R.string.open_error))
+            toast("بازکردن فایل ناموفق بود؛ فرمت یا مجوز دسترسی را بررسی کنید")
         }
+    }
+
+    private fun viewImage(file: File) {
+        try {
+            val original = BitmapFactory.decodeFile(file.absolutePath)
+            if (original == null) { toast("تصویر خراب است یا قالب آن پشتیبانی نمی‌شود"); return }
+            var edited = original
+            val preview = ImageView(this).apply {
+                setImageBitmap(edited)
+                adjustViewBounds = true
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                setPadding(12, 12, 12, 12)
+            }
+            val dialog = MaterialAlertDialogBuilder(this).setTitle(file.name).setView(preview)
+                .setNeutralButton("چرخش ۹۰°", null)
+                .setPositiveButton("ذخیره نسخه ویرایش‌شده", null)
+                .setNegativeButton("بستن", null).create()
+            dialog.setOnShowListener {
+                dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                    try {
+                        val matrix = Matrix().apply { postRotate(90f) }
+                        val next = android.graphics.Bitmap.createBitmap(edited, 0, 0, edited.width, edited.height, matrix, true)
+                        if (edited !== original) edited.recycle()
+                        edited = next
+                        preview.setImageBitmap(edited)
+                    } catch (_: Exception) { toast("چرخش تصویر ناموفق بود") }
+                }
+                dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                    try {
+                        val target = uniqueTarget(file.parentFile ?: Environment.getExternalStorageDirectory(),
+                            File(file.nameWithoutExtension + "-edited.jpg"))
+                        target.outputStream().buffered().use { edited.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, it) }
+                        toast("نسخه ویرایش‌شده ذخیره شد: ${target.name}")
+                    } catch (_: Exception) { toast("ذخیره تصویر ناموفق بود") }
+                }
+            }
+            dialog.setOnDismissListener { if (edited !== original) edited.recycle(); original.recycle() }
+            dialog.show()
+        } catch (_: Exception) { toast("بازکردن تصویر ناموفق بود") }
+    }
+
+    private fun playAudio(file: File) {
+        try {
+            val player = MediaPlayer()
+            player.setDataSource(file.absolutePath)
+            val controls = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 12, 20, 8) }
+            val status = TextView(this).apply { text = file.name; textSize = 14f }
+            val seek = SeekBar(this)
+            val play = MaterialButton(this).apply { text = "پخش / توقف"; isAllCaps = false }
+            controls.addView(status)
+            controls.addView(seek)
+            controls.addView(play)
+            val dialog = MaterialAlertDialogBuilder(this).setTitle("پخش‌کننده صوتی").setView(controls)
+                .setNegativeButton("بستن", null).create()
+            player.setOnPreparedListener { mp ->
+                seek.max = mp.duration.coerceAtLeast(1)
+                play.setOnClickListener { if (mp.isPlaying) { mp.pause(); play.text = "ادامه پخش" } else { mp.start(); play.text = "توقف" } }
+                seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(s: SeekBar, value: Int, fromUser: Boolean) { if (fromUser) mp.seekTo(value) }
+                    override fun onStartTrackingTouch(s: SeekBar) {}
+                    override fun onStopTrackingTouch(s: SeekBar) {}
+                })
+                mp.start()
+                play.text = "توقف"
+            }
+            player.setOnErrorListener { mp, _, _ -> mp.release(); toast("این قالب صوتی یا فایل پشتیبانی نمی‌شود"); true }
+            dialog.setOnDismissListener { try { player.stop() } catch (_: Exception) {}; player.release() }
+            dialog.show()
+            player.prepareAsync()
+        } catch (_: Exception) { toast("پخش این فایل صوتی ممکن نیست؛ قالب یا سلامت فایل را بررسی کنید") }
+    }
+
+    private fun playVideo(file: File) {
+        try {
+            val video = VideoView(this)
+            video.setVideoPath(file.absolutePath)
+            val controls = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 12, 12, 12) }
+            controls.addView(video, LinearLayout.LayoutParams(-1, dp(260)))
+            val play = MaterialButton(this).apply { text = "پخش / توقف"; isAllCaps = false }
+            controls.addView(play)
+            val dialog = MaterialAlertDialogBuilder(this).setTitle(file.name).setView(controls)
+                .setNegativeButton("بستن", null).create()
+            video.setOnPreparedListener { mp -> mp.isLooping = false; video.start() }
+            play.setOnClickListener { if (video.isPlaying) { video.pause(); play.text = "ادامه پخش" } else { video.start(); play.text = "توقف" } }
+            dialog.setOnDismissListener { video.stopPlayback() }
+            dialog.show()
+        } catch (_: Exception) { toast("پخش این ویدئو ممکن نیست؛ قالب یا سلامت فایل را بررسی کنید") }
+    }
+
+    private fun browseArchive(file: File) {
+        try {
+            val zip = ZipFile(file)
+            val headers = zip.fileHeaders
+            if (headers.isEmpty()) { toast("فایل فشرده خالی است"); return }
+            val labels = headers.map { (if (it.isDirectory) "📁 " else "📄 ") + it.fileName + if (it.isEncrypted) " 🔒" else "" }.toTypedArray()
+            MaterialAlertDialogBuilder(this).setTitle(file.name).setItems(labels) { _, which ->
+                val header = headers[which]
+                if (!header.isDirectory) {
+                    val input = EditText(this).apply { hint = "رمز فایل (در صورت نداشتن خالی بگذارید)" }
+                    MaterialAlertDialogBuilder(this).setTitle("استخراج مورد انتخابی").setView(input)
+                        .setPositiveButton("استخراج") { _, _ ->
+                            Thread {
+                                try {
+                                    val password = input.text?.toString().orEmpty()
+                                    val z = if (password.isNotEmpty()) ZipFile(file, password.toCharArray()) else ZipFile(file)
+                                    z.extractFile(header, current.absolutePath)
+                                    runOnUiThread { refresh(); toast("مورد استخراج شد") }
+                                } catch (_: Exception) { runOnUiThread { toast("استخراج ناموفق؛ رمز یا سلامت ZIP را بررسی کنید") } }
+                            }.start()
+                        }.setNegativeButton(R.string.cancel, null).show()
+                }
+            }.setPositiveButton("استخراج همه") { _, _ ->
+                val input = EditText(this).apply { hint = "رمز فایل (در صورت نداشتن خالی بگذارید)" }
+                MaterialAlertDialogBuilder(this).setTitle("استخراج ZIP").setView(input)
+                    .setPositiveButton("شروع") { _, _ ->
+                        Thread {
+                            try {
+                                val password = input.text?.toString().orEmpty()
+                                val z = if (password.isNotEmpty()) ZipFile(file, password.toCharArray()) else ZipFile(file)
+                                z.extractAll(current.absolutePath)
+                                runOnUiThread { refresh(); toast("استخراج کامل شد") }
+                            } catch (_: Exception) { runOnUiThread { toast("استخراج ناموفق؛ رمز یا سلامت ZIP را بررسی کنید") } }
+                        }.start()
+                    }.setNegativeButton(R.string.cancel, null).show()
+            }.setNegativeButton(R.string.cancel, null).show()
+        } catch (_: Exception) { toast("این فایل ZIP قابل بازکردن نیست؛ فرمت یا سلامت آن را بررسی کنید") }
     }
 
     private fun formatDate(millis: Long): String = dateFmt.format(Date(millis))
