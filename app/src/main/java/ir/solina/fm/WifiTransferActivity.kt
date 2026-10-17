@@ -138,7 +138,7 @@ class WifiTransferActivity : AppCompatActivity() {
                 val output = BufferedOutputStream(client.getOutputStream())
                 val header = "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: " +
                     target.length() + "\r\nContent-Disposition: attachment; filename=\"" +
-                    target.name.replace("\"", "") + "\"\r\nConnection: close\r\n\r\n"
+                    target.name.replace("\r", "").replace("\n", "").replace("\"", "") + "\"\r\nConnection: close\r\n\r\n"
                 output.write(header.toByteArray(Charsets.UTF_8))
                 target.inputStream().use { it.copyTo(output) }
                 output.flush()
