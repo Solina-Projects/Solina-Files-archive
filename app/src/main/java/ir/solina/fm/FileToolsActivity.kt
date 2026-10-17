@@ -163,19 +163,24 @@ class FileToolsActivity : AppCompatActivity() {
                             var out: FileOutputStream? = null
                             try {
                                 while (true) {
-                                    if (out == null || remaining == 0L) {
-                                        out?.close()
-                                        val target = File(file.parentFile, file.name + ".part" + part.toString().padStart(3, '0'))
-                                        if (target.exists()) throw IllegalStateException("فایل مقصد از قبل وجود دارد: ${target.name}")
-                                        out = FileOutputStream(target)
-                                        remaining = chunkSize
-                                        part++
-                                    }
-                                    val count = input.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                                    val count = input.read(buffer)
                                     if (count < 0) break
-                                    out.write(buffer, 0, count)
-                                    remaining -= count
-                                    total += count
+                                    var offset = 0
+                                    while (offset < count) {
+                                        if (out == null || remaining == 0L) {
+                                            out?.close()
+                                            val target = File(file.parentFile, file.name + ".part" + part.toString().padStart(3, '0'))
+                                            if (target.exists()) throw IllegalStateException("فایل مقصد از قبل وجود دارد: ${target.name}")
+                                            out = FileOutputStream(target)
+                                            remaining = chunkSize
+                                            part++
+                                        }
+                                        val writeCount = minOf((count - offset).toLong(), remaining).toInt()
+                                        out.write(buffer, offset, writeCount)
+                                        offset += writeCount
+                                        remaining -= writeCount
+                                        total += writeCount
+                                    }
                                 }
                             } finally { out?.close() }
                         }
