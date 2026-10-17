@@ -1,38 +1,112 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="?attr/colorSurface"
     android:orientation="vertical">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/mainBar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="?attr/colorSurface">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/storageButton"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="start|center_vertical"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="18sp"
+                app:icon="@drawable/ic_arrow_drop_down"
+                app:iconGravity="textEnd"
+                app:iconTint="?attr/colorOnSurface" />
+        </com.google.android.material.appbar.MaterialToolbar>
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/selectionBar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="?attr/colorSurfaceContainerHigh"
+            android:visibility="gone"
+            app:navigationIcon="@drawable/ic_close" />
+    </FrameLayout>
 
     <TextView
         android:id="@+id/pathView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#EEEEEE"
-        android:padding="10dp"
-        android:textColor="#333333"
-        android:textSize="13sp"
-        android:textDirection="ltr"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="8dp"
         android:singleLine="true"
-        android:ellipsize="start" />
+        android:ellipsize="start"
+        android:textAlignment="viewStart"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:textDirection="ltr"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <com.google.android.material.progressindicator.LinearProgressIndicator
+        android:id="@+id/progress"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:indeterminate="true"
+        android:visibility="gone" />
 
     <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="0dp"
+        android:layout_weight="1">
 
-        <ListView
-            android:id="@+id/listView"
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/list"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingBottom="96dp" />
 
-        <TextView
-            android:id="@+id/emptyView"
+        <LinearLayout
+            android:id="@+id/emptyBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:gravity="center"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
             android:padding="24dp"
-            android:textSize="16sp"
-            android:visibility="gone" />
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/emptyText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textSize="16sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/grantButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/grant_access"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            android:id="@+id/pasteFab"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="16dp"
+            android:text="@string/paste_here"
+            android:visibility="gone"
+            app:icon="@drawable/ic_content_paste" />
     </FrameLayout>
 </LinearLayout>

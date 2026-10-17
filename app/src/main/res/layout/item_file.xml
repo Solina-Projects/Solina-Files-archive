@@ -2,21 +2,32 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:layout_marginHorizontal="8dp"
+    android:layout_marginVertical="2dp"
+    android:background="@drawable/item_bg"
+    android:foreground="?attr/selectableItemBackground"
     android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:padding="12dp">
+    android:padding="10dp">
 
-    <TextView
-        android:id="@+id/icon"
-        android:layout_width="40dp"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:textSize="26sp" />
+    <FrameLayout
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:background="@drawable/icon_bg">
+
+        <ImageView
+            android:id="@+id/icon"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            android:importantForAccessibility="no"
+            android:tint="?attr/colorPrimary" />
+    </FrameLayout>
 
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="10dp"
+        android:layout_marginStart="14dp"
         android:layout_weight="1"
         android:orientation="vertical">
 
@@ -24,15 +35,18 @@
             android:id="@+id/name"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:ellipsize="middle"
             android:singleLine="true"
-            android:textColor="#111111"
+            android:textAlignment="viewStart"
+            android:textColor="?attr/colorOnSurface"
             android:textSize="16sp" />
 
         <TextView
             android:id="@+id/info"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="#777777"
+            android:textAlignment="viewStart"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="12sp" />
     </LinearLayout>
 </LinearLayout>

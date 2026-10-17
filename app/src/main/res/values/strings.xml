@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SolinaFM</string>
+    <string name="internal_storage">Internal storage</string>
+    <string name="sd_card">SD card</string>
+    <string name="usb_drive">USB drive</string>
+    <string name="storage">Storage</string>
+    <string name="storage_stats">Used %1$s • Free %2$s • Total %3$s</string>
+    <string name="selected_count">%1$d selected</string>
+    <string name="copy">Copy</string>
+    <string name="cut">Cut</string>
+    <string name="rename">Rename</string>
+    <string name="select_all">Select all</string>
+    <string name="delete">Delete</string>
+    <string name="details">Details</string>
+    <string name="paste_here">Paste here</string>
+    <string name="new_folder">New folder</string>
+    <string name="refresh">Refresh</string>
+    <string name="show_hidden">Show hidden files</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    <string name="permission_needed">SolinaFM needs “All files access” to show your storage.</string>
+    <string name="grant_access">Grant access</string>
+    <string name="empty_folder">This folder is empty</string>
+    <string name="cannot_read">Can’t read this folder</string>
+    <string name="no_app">No app found to open this file</string>
+    <string name="open_error">Couldn’t open the file</string>
+    <string name="name_exists">That name already exists</string>
+    <string name="rename_failed">Rename failed</string>
+    <string name="folder_failed">Couldn’t create the folder</string>
+    <string name="delete_message">Permanently delete %1$d item(s)?</string>
+    <string name="copied">Copied. Open the destination folder and tap “Paste here”.</string>
+    <string name="cut_done">Cut. Open the destination folder and tap “Paste here”.</string>
+    <string name="some_failed">%1$d item(s) failed</string>
+    <string name="details_single">Path:\n%1$s\n\nSize: %2$s\nModified: %3$s</string>
+    <string name="details_multi">%1$d items\nTotal size: %2$s</string>
+</resources>

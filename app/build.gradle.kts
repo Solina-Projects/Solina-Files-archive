@@ -9,10 +9,10 @@ android {
 
     defaultConfig {
         applicationId = "ir.solina.fm"
-        minSdk = 26
+        minSdk = 30
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2"
     }
 
     compileOptions {
@@ -26,4 +26,7 @@ android {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("com.google.android.material:material:1.12.0")
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
 }

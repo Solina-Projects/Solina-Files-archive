@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SolinaFM</string>
+    <string name="internal_storage">حافظه داخلی</string>
+    <string name="sd_card">کارت حافظه</string>
+    <string name="usb_drive">حافظه USB</string>
+    <string name="storage">حافظه‌ها</string>
+    <string name="storage_stats">پر: %1$s • خالی: %2$s • کل: %3$s</string>
+    <string name="selected_count">%1$d مورد انتخاب شد</string>
+    <string name="copy">کپی</string>
+    <string name="cut">برش</string>
+    <string name="rename">تغییر نام</string>
+    <string name="select_all">انتخاب همه</string>
+    <string name="delete">حذف</string>
+    <string name="details">مشخصات</string>
+    <string name="paste_here">چسباندن اینجا</string>
+    <string name="new_folder">پوشه جدید</string>
+    <string name="refresh">بازخوانی</string>
+    <string name="show_hidden">نمایش فایل‌های مخفی</string>
+    <string name="ok">تأیید</string>
+    <string name="cancel">لغو</string>
+    <string name="permission_needed">برای نمایش فایل‌ها، SolinaFM به دسترسی «همه فایل‌ها» نیاز دارد.</string>
+    <string name="grant_access">اعطای دسترسی</string>
+    <string name="empty_folder">این پوشه خالی است</string>
+    <string name="cannot_read">خواندن این پوشه ممکن نیست</string>
+    <string name="no_app">برنامه‌ای برای باز کردن این فایل پیدا نشد</string>
+    <string name="open_error">باز کردن فایل ناموفق بود</string>
+    <string name="name_exists">این نام قبلاً وجود دارد</string>
+    <string name="rename_failed">تغییر نام ناموفق بود</string>
+    <string name="folder_failed">ساخت پوشه ناموفق بود</string>
+    <string name="delete_message">%1$d مورد برای همیشه حذف شود؟</string>
+    <string name="copied">کپی شد. پوشه مقصد را باز کنید و «چسباندن اینجا» را بزنید.</string>
+    <string name="cut_done">برش داده شد. پوشه مقصد را باز کنید و «چسباندن اینجا» را بزنید.</string>
+    <string name="some_failed">%1$d مورد ناموفق بود</string>
+    <string name="details_single">مسیر:\n%1$s\n\nحجم: %2$s\nآخرین تغییر: %3$s</string>
+    <string name="details_multi">%1$d مورد\nحجم کل: %2$s</string>
+</resources>
