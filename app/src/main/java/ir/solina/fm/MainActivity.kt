@@ -148,7 +148,8 @@ class MainActivity : AppCompatActivity() {
             toast(if (showHidden) "نمایش فایل‌های مخفی فعال شد" else "نمایش فایل‌های مخفی غیرفعال شد")
             true
         }
-        overflowButton.setOnClickListener { mainBar.showOverflowMenu() }
+        overflowButton.setOnClickListener { showTopMenu(it) }
+        mainBar.visibility = View.GONE
         navBack.setOnClickListener { navigateHistory(back = true) }
         navForward.setOnClickListener { navigateHistory(back = false) }
         searchInput.addTextChangedListener(object : TextWatcher {
@@ -433,7 +434,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateSelectionUi() {
         val sel = selected.isNotEmpty()
-        mainBar.visibility = if (sel) View.GONE else View.VISIBLE
+        mainBar.visibility = View.GONE
         selectionBar.visibility = if (sel) View.VISIBLE else View.GONE
         bottomActions.visibility = if (sel) View.VISIBLE else View.GONE
         if (sel) {
@@ -468,6 +469,26 @@ class MainActivity : AppCompatActivity() {
             }
         }
         return true
+    }
+
+    private fun showTopMenu(anchor: View) {
+        val popup = android.widget.PopupMenu(this, anchor)
+        for (index in 0 until mainBar.menu.size()) {
+            val original = mainBar.menu.getItem(index)
+            val item = popup.menu.add(original.groupId, original.itemId, original.order, original.title)
+            item.isCheckable = original.isCheckable
+            item.isChecked = if (original.itemId == R.id.action_hidden) showHidden else original.isChecked
+        }
+        popup.setOnMenuItemClickListener { item ->
+            if (item.itemId == R.id.action_hidden) {
+                showHidden = !showHidden
+                item.isChecked = showHidden
+                refresh()
+                toast(if (showHidden) "نمایش فایل‌های مخفی فعال شد" else "نمایش فایل‌های مخفی غیرفعال شد")
+                true
+            } else onMainMenu(item)
+        }
+        popup.show()
     }
 
     private fun toggleTheme() {
