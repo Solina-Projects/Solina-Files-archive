@@ -15,6 +15,8 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.io.File
 import java.security.MessageDigest
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.PBEKeySpec
 
 class AdvancedSettingsActivity : AppCompatActivity() {
     private val prefs by lazy { getSharedPreferences("solina_preferences", MODE_PRIVATE) }
@@ -111,7 +113,8 @@ class AdvancedSettingsActivity : AppCompatActivity() {
     }
 
     private fun pinHash(pin: String, salt: ByteArray): String =
-        MessageDigest.getInstance("SHA-256").digest(salt + pin.toByteArray(Charsets.UTF_8))
+        SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+            .generateSecret(PBEKeySpec(pin.toCharArray(), salt, 120_000, 256)).encoded
             .joinToString("") { "%02x".format(it) }
 
     private fun verifyPin(pin: String): Boolean {
@@ -131,7 +134,7 @@ class AdvancedSettingsActivity : AppCompatActivity() {
             Toast.makeText(this, "لانچر دستگاه ساخت میان‌بر را پشتیبانی نمی‌کند", Toast.LENGTH_LONG).show()
             return
         }
-        val path = prefs.getString("home_folder", null)
+        val path = intent.getStringExtra("current_path") ?: prefs.getString("home_folder", null)
         val intent = Intent(this, MainActivity::class.java).setAction(Intent.ACTION_VIEW)
         if (!path.isNullOrBlank()) intent.putExtra("start_path", path)
         val shortcut = ShortcutInfo.Builder(this, "solina-folder-shortcut")
