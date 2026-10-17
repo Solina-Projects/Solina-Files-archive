@@ -47,6 +47,7 @@ import java.util.ArrayDeque
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import net.lingala.zip4j.ZipFile
+import org.apache.commons.compress.archivers.sevenz.SevenZOutputFile
 
 class MainActivity : AppCompatActivity() {
 
@@ -496,6 +497,7 @@ class MainActivity : AppCompatActivity() {
         if (items.isEmpty()) return
         val input = TextInputEditText(this).apply {
             setText(if (items.size == 1) items.first().nameWithoutExtension + ".zip" else "archive.zip")
+            hint = "برای ساخت 7z پسوند .7z وارد کن"
             setSingleLine(true)
         }
         MaterialAlertDialogBuilder(this)
@@ -507,7 +509,8 @@ class MainActivity : AppCompatActivity() {
                     toast("نام فایل معتبر نیست")
                     return@setPositiveButton
                 }
-                if (!name.endsWith(".zip", true)) name += ".zip"
+                val use7z = name.endsWith(".7z", true)
+                if (!use7z && !name.endsWith(".zip", true)) name += ".zip"
                 val target = File(current, name)
                 if (target.exists()) {
                     toast("فایلی با این نام وجود دارد")
@@ -517,8 +520,14 @@ class MainActivity : AppCompatActivity() {
                 Thread {
                     var failed = false
                     try {
-                        ZipOutputStream(target.outputStream().buffered()).use { zip ->
-                            items.forEach { addToZip(it, it.name, zip) }
+                        if (use7z) {
+                            SevenZOutputFile(target).use { archive ->
+                                items.forEach { addTo7z(it, it.name, archive) }
+                            }
+                        } else {
+                            ZipOutputStream(target.outputStream().buffered()).use { zip ->
+                                items.forEach { addToZip(it, it.name, zip) }
+                            }
                         }
                     } catch (_: Exception) {
                         failed = true
@@ -534,6 +543,25 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
+    }
+
+    private fun addTo7z(file: File, entryName: String, archive: SevenZOutputFile) {
+        val entry = archive.createArchiveEntry(file, entryName)
+        archive.putArchiveEntry(entry)
+        if (file.isFile) {
+            file.inputStream().buffered().use { input ->
+                val buffer = ByteArray(8192)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    archive.write(buffer, 0, count)
+                }
+            }
+        }
+        archive.closeArchiveEntry()
+        if (file.isDirectory) file.listFiles()?.forEach { child ->
+            addTo7z(child, entryName.trimEnd('/') + "/" + child.name, archive)
+        }
     }
 
     private fun addToZip(file: File, entryName: String, zip: ZipOutputStream) {
