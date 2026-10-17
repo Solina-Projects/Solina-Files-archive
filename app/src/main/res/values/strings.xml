@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">SolinaFM</string>
+    <string name="app_name">Solina Files</string>
     <string name="internal_storage">Internal storage</string>
     <string name="sd_card">SD card</string>
     <string name="usb_drive">USB drive</string>
@@ -19,7 +19,7 @@
     <string name="show_hidden">Show hidden files</string>
     <string name="ok">OK</string>
     <string name="cancel">Cancel</string>
-    <string name="permission_needed">SolinaFM needs “All files access” to show your storage.</string>
+    <string name="permission_needed">Solina Files needs “All files access” to show your storage.</string>
     <string name="grant_access">Grant access</string>
     <string name="empty_folder">This folder is empty</string>
     <string name="cannot_read">Can’t read this folder</string>
