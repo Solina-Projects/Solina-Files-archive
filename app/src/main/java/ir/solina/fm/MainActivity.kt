@@ -93,6 +93,7 @@ class MainActivity : AppCompatActivity() {
     private val backHistory = ArrayDeque<File>()
     private val forwardHistory = ArrayDeque<File>()
 
+    private var pendingApkInstallPath: String? = null
     private var clipFiles: List<File> = emptyList()
     private var clipCut = false
     private val selected = LinkedHashSet<File>()
@@ -1050,7 +1051,42 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        val pendingPath = pendingApkInstallPath ?: return
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            if (packageManager.canRequestPackageInstalls()) {
+                pendingApkInstallPath = null
+                installApk(File(pendingPath))
+            } else {
+                pendingApkInstallPath = null
+                toast("برای نصب APK، مجوز «نصب برنامه‌های ناشناس» را برای SolinaFM فعال کنید")
+            }
+        }
+    }
+
     private fun installApk(file: File) {
+        if (!file.isFile || !file.canRead()) {
+            toast("فایل APK وجود ندارد یا قابل خواندن نیست")
+            return
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
+            !packageManager.canRequestPackageInstalls()
+        ) {
+            pendingApkInstallPath = file.absolutePath
+            try {
+                val settingsIntent = Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:$packageName")
+                )
+                startActivity(settingsIntent)
+                toast("اجازهٔ نصب برنامه‌های ناشناس را برای SolinaFM فعال کنید")
+            } catch (e: Exception) {
+                pendingApkInstallPath = null
+                toast("تنظیمات مجوز نصب باز نشد؛ از تنظیمات برنامه، نصب برنامه‌های ناشناس را فعال کنید")
+            }
+            return
+        }
         try {
             val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
             val intent = Intent(Intent.ACTION_VIEW)
@@ -1060,7 +1096,7 @@ class MainActivity : AppCompatActivity() {
         } catch (e: ActivityNotFoundException) {
             toast("نصب‌کنندهٔ بستهٔ اندروید در دستگاه پیدا نشد")
         } catch (e: Exception) {
-            toast("بازکردن نصب‌کننده ناموفق بود؛ مجوز نصب از این منبع و سلامت فایل APK را بررسی کنید")
+            toast("بازکردن نصب‌کننده ناموفق بود: ${e.localizedMessage ?: "خطای نامشخص"}")
         }
     }
 
