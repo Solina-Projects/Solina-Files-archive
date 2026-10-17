@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#006B5F</color>
+    <color name="solina_primary">#81D5C7</color>
+    <color name="solina_on_primary">#003731</color>
+    <color name="solina_primary_container">#005047</color>
+    <color name="solina_on_primary_container">#9DF2E3</color>
+    <color name="solina_secondary">#B1CCC5</color>
+    <color name="solina_on_secondary">#1C3530</color>
+    <color name="solina_secondary_container">#314B47</color>
+    <color name="solina_on_secondary_container">#CCE8E2</color>
+    <color name="solina_tertiary">#B1CBE5</color>
+    <color name="solina_on_tertiary">#1A3347</color>
+    <color name="solina_tertiary_container">#314A60</color>
+    <color name="solina_on_tertiary_container">#CDE5FF</color>
+    <color name="solina_error">#FFB4AB</color>
+    <color name="solina_background">#101412</color>
+    <color name="solina_on_background">#E0E4E1</color>
+    <color name="solina_surface">#101412</color>
+    <color name="solina_on_surface">#E0E4E1</color>
+    <color name="solina_surface_variant">#404945</color>
+    <color name="solina_on_surface_variant">#C0C9C4</color>
+    <color name="solina_outline">#8A938E</color>
+    <color name="solina_surface_container_lowest">#0B0F0D</color>
+    <color name="solina_surface_container_low">#191D1B</color>
+    <color name="solina_surface_container">#1D2220</color>
+    <color name="solina_surface_container_high">#282D2A</color>
+    <color name="solina_surface_container_highest">#333835</color>
+</resources>
