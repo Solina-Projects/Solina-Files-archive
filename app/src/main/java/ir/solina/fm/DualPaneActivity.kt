@@ -20,6 +20,7 @@ import android.widget.*
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -51,6 +52,8 @@ class DualPaneActivity : AppCompatActivity() {
     private lateinit var searchInput: EditText
     private lateinit var bookmarkButton: MaterialButton
     private lateinit var sortButton: MaterialButton
+    private lateinit var layoutButton: MaterialButton
+    private lateinit var overflowButton: MaterialButton
     private lateinit var selectionActions: LinearLayout
     private lateinit var bottomActions: LinearLayout
     private lateinit var left: Pane
@@ -64,6 +67,8 @@ class DualPaneActivity : AppCompatActivity() {
     private var player: MediaPlayer? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val savedNightMode = getSharedPreferences("solina_preferences", MODE_PRIVATE).getInt("night_mode", 0)
+        if (savedNightMode != 0) AppCompatDelegate.setDefaultNightMode(savedNightMode)
         super.onCreate(savedInstanceState)
         val base = Environment.getExternalStorageDirectory()
         val screen = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(4), 0, dp(4), dp(4)) }
@@ -74,12 +79,15 @@ class DualPaneActivity : AppCompatActivity() {
         searchInput = EditText(this).apply { hint = "جست‌وجوی فایل و پوشه"; setSingleLine(true); textSize = 13f; setPadding(dp(8), 0, dp(8), 0) }
         navigation.addView(navBack, LinearLayout.LayoutParams(dp(40), dp(48)))
         navigation.addView(navForward, LinearLayout.LayoutParams(dp(40), dp(48)))
-        bookmarkButton = MaterialButton(this).apply { text = "☆"; minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "نشانک پوشه"; setOnClickListener { toggleBookmark() }; setOnLongClickListener { showBookmarks(); true } }
-        sortButton = MaterialButton(this).apply { text = "↕"; minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "مرتب‌سازی"; setOnClickListener { showSortOptions(activePane) } }
+        bookmarkButton = MaterialButton(this).apply { text = "☆"; minWidth = dp(34); setPadding(0, 0, 0, 0); contentDescription = "نشانک پوشه"; setOnClickListener { toggleBookmark() }; setOnLongClickListener { showBookmarks(); true } }
+        sortButton = MaterialButton(this).apply { text = "☷"; minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "مرتب‌سازی و فیلتر"; setOnClickListener { showSortOptions(activePane) }; setOnLongClickListener { showDisplaySettings(); true } }
+        layoutButton = MaterialButton(this).apply { text = "▥"; minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "تغییر حالت تقسیم صفحه"; setOnClickListener { toggleMode() } }
+        overflowButton = MaterialButton(this).apply { text = "⋮"; minWidth = dp(34); setPadding(0, 0, 0, 0); textSize = 22f; contentDescription = "گزینه‌های بیشتر"; setOnClickListener { showTopMenu(this) } }
         navigation.addView(pathTitle, LinearLayout.LayoutParams(0, dp(48), 1f))
-        navigation.addView(bookmarkButton, LinearLayout.LayoutParams(dp(38), dp(42)))
-        navigation.addView(sortButton, LinearLayout.LayoutParams(dp(38), dp(42)))
-        navigation.addView(searchInput, LinearLayout.LayoutParams(dp(116), dp(42)))
+        navigation.addView(searchInput, LinearLayout.LayoutParams(0, dp(42), 1f))
+        navigation.addView(sortButton, LinearLayout.LayoutParams(dp(36), dp(42)))
+        navigation.addView(layoutButton, LinearLayout.LayoutParams(dp(36), dp(42)))
+        navigation.addView(overflowButton, LinearLayout.LayoutParams(dp(34), dp(42)))
         screen.addView(navigation, LinearLayout.LayoutParams(-1, dp(52)))
         searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -179,6 +187,8 @@ class DualPaneActivity : AppCompatActivity() {
         searchInput.setTextIfDifferent(p.query)
         val bookmarks = getBookmarks()
         bookmarkButton.text = if (p.current.absolutePath in bookmarks) "★" else "☆"
+        layoutButton.text = if (mode == LayoutMode.HORIZONTAL) "▥" else "▤"
+        layoutButton.contentDescription = if (mode == LayoutMode.HORIZONTAL) "تقسیم عمودی پنل‌ها" else "تقسیم افقی پنل‌ها"
         updateSelectionUi()
     }
 
@@ -335,7 +345,28 @@ class DualPaneActivity : AppCompatActivity() {
                 }.start()
             }.setNegativeButton("لغو", null).show()
     }
-    private fun toggleMode() { mode = if (mode == LayoutMode.VERTICAL) LayoutMode.HORIZONTAL else LayoutMode.VERTICAL; renderPanes() }
+    private fun toggleMode() {
+        mode = if (mode == LayoutMode.VERTICAL) LayoutMode.HORIZONTAL else LayoutMode.VERTICAL
+        renderPanes()
+    }
+
+    private fun showTopMenu(anchor: View) {
+        android.widget.PopupMenu(this, anchor).apply {
+            menu.add("نشانک این پوشه").setOnMenuItemClickListener { toggleBookmark(); true }
+            menu.add("پوشه‌های نشانک‌شده").setOnMenuItemClickListener { showBookmarks(); true }
+            menu.add("نمایش فایل‌ها").setOnMenuItemClickListener { showDisplaySettings(); true }
+            menu.add("تعداد ستون‌ها").setOnMenuItemClickListener { showLayoutSettings(); true }
+            menu.add("تم روشن/تیره").setOnMenuItemClickListener { toggleTheme(); true }
+            show()
+        }
+    }
+
+    private fun toggleTheme() {
+        val isNight = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val nextMode = if (isNight) AppCompatDelegate.MODE_NIGHT_NO else AppCompatDelegate.MODE_NIGHT_YES
+        getSharedPreferences("solina_preferences", MODE_PRIVATE).edit().putInt("night_mode", nextMode).apply()
+        AppCompatDelegate.setDefaultNightMode(nextMode)
+    }
 
     private fun showDisplaySettings() {
         val options = arrayOf("جزئیات: " + if (details) "روشن" else "خاموش", "شبکه‌ای: " + if (grid) "روشن" else "خاموش", "اندازه آیکون: " + iconDp + " dp")
@@ -659,31 +690,54 @@ class DualPaneActivity : AppCompatActivity() {
 
     private inner class PaneAdapter(private val paneIndex: Int) : RecyclerView.Adapter<PaneAdapter.Holder>() {
         var items: List<File> = emptyList()
-        inner class Holder(val row: LinearLayout, val check: CheckBox, val icon: TextView, val name: TextView, val info: TextView) : RecyclerView.ViewHolder(row)
+        inner class Holder(val row: LinearLayout, val check: CheckBox, val icon: ImageView, val content: LinearLayout, val name: TextView, val info: TextView) : RecyclerView.ViewHolder(row)
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
             val row = LinearLayout(this@DualPaneActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(4), dp(6), dp(4), dp(6)); isClickable = true; isFocusable = true }
             val check = CheckBox(this@DualPaneActivity)
-            val content = LinearLayout(this@DualPaneActivity).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
-            val icon = TextView(this@DualPaneActivity).apply { gravity = Gravity.CENTER; textSize = iconDp / 2.2f }
-            val name = TextView(this@DualPaneActivity).apply { gravity = Gravity.CENTER; textSize = 13f; maxLines = 2 }
-            val info = TextView(this@DualPaneActivity).apply { gravity = Gravity.CENTER; textSize = 10f }
+            val content = LinearLayout(this@DualPaneActivity).apply {
+                orientation = if (mode == LayoutMode.VERTICAL) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
+            }
+            val icon = ImageView(this@DualPaneActivity).apply {
+                val tv = android.util.TypedValue()
+                theme.resolveAttribute(com.google.android.material.R.attr.colorPrimary, tv, true)
+                imageTintList = android.content.res.ColorStateList.valueOf(tv.data)
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
+                setPadding(dp(3), dp(3), dp(3), dp(3))
+            }
+            val name = TextView(this@DualPaneActivity).apply { gravity = if (mode == LayoutMode.VERTICAL) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER; textSize = 13f; maxLines = 2 }
+            val info = TextView(this@DualPaneActivity).apply { gravity = if (mode == LayoutMode.VERTICAL) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER; textSize = 10f }
             row.addView(check, LinearLayout.LayoutParams(-2, -2))
-            content.addView(icon, LinearLayout.LayoutParams(-1, dp(iconDp + 4))); content.addView(name, LinearLayout.LayoutParams(-1, -2)); content.addView(info, LinearLayout.LayoutParams(-1, -2))
+            if (mode == LayoutMode.VERTICAL) {
+                content.addView(icon, LinearLayout.LayoutParams(dp(42), dp(42)))
+                val textBlock = LinearLayout(this@DualPaneActivity).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
+                textBlock.addView(name, LinearLayout.LayoutParams(-1, -2))
+                textBlock.addView(info, LinearLayout.LayoutParams(-1, -2))
+                content.addView(textBlock)
+            } else {
+                content.addView(icon, LinearLayout.LayoutParams(-1, dp(iconDp + 4)))
+                content.addView(name, LinearLayout.LayoutParams(-1, -2))
+                content.addView(info, LinearLayout.LayoutParams(-1, -2))
+            }
             row.addView(content)
-            return Holder(row, check, icon, name, info)
+            return Holder(row, check, icon, content, name, info)
         }
         override fun getItemCount() = items.size
         override fun onBindViewHolder(holder: Holder, position: Int) {
             val file = items[position]
-            holder.icon.text = when {
-                file.isDirectory -> "📁"
-                file.extension.lowercase() in listOf("zip", "rar", "7z") -> "🗜️"
-                file.extension.lowercase() in listOf("jpg", "jpeg", "png", "webp", "gif") -> "🖼️"
-                file.extension.lowercase() in listOf("mp3", "wav", "m4a", "ogg", "flac") -> "🎵"
-                file.extension.lowercase() in listOf("mp4", "mkv", "webm", "avi") -> "🎬"
-                file.extension.lowercase() in listOf("txt", "md", "log", "json", "xml", "csv") -> "📝"
-                else -> "📄"
+            holder.icon.setImageResource(if (file.isDirectory) R.drawable.ic_folder else R.drawable.ic_file)
+            holder.content.orientation = if (mode == LayoutMode.VERTICAL) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+            val iconParams = holder.icon.layoutParams
+            if (mode == LayoutMode.VERTICAL) {
+                iconParams.width = dp(42); iconParams.height = dp(42)
+            } else {
+                iconParams.width = -1; iconParams.height = dp(iconDp + 4)
             }
+            holder.icon.layoutParams = iconParams
+            val tint = android.util.TypedValue()
+            theme.resolveAttribute(com.google.android.material.R.attr.colorPrimary, tint, true)
+            holder.icon.imageTintList = android.content.res.ColorStateList.valueOf(tint.data)
             holder.name.text = file.name
             holder.info.text = if (!details) "" else if (file.isDirectory) "پوشه" else Formatter.formatFileSize(this@DualPaneActivity, file.length())
             val p = pane(paneIndex)
