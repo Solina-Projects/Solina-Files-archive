@@ -22,7 +22,7 @@ import java.io.File
 import java.util.Base64
 import rikka.shizuku.Shizuku
 
-/** Root-only file browser. All filesystem commands are executed through su after the root manager grants access. */
+/** Root/Shizuku file browser. Root uses su; the optional Shizuku backend runs with shell-level privileges. */
 class RootExplorerActivity : AppCompatActivity() {
     private lateinit var pathText: TextView
     private lateinit var rows: LinearLayout
