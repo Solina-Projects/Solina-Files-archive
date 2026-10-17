@@ -226,10 +226,14 @@ class TextEditorActivity : AppCompatActivity() {
                 callback.onLayoutCancelled()
                 return
             }
+            val lineCount = content.lineSequence().sumOf { line ->
+                if (line.isEmpty()) 1 else (line.length + 93) / 94
+            }.coerceAtLeast(1)
+            val pageCount = (lineCount + 57) / 58
             callback.onLayoutFinished(
                 PrintDocumentInfo.Builder("$jobName.pdf")
                     .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
-                    .setPageCount(PrintDocumentInfo.PAGE_COUNT_UNKNOWN)
+                    .setPageCount(pageCount)
                     .build(),
                 true
             )
