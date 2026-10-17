@@ -21,6 +21,10 @@
         android:id="@+id/action_storage_analysis"
         android:title="تحلیل فضای پوشه"
         app:showAsAction="never" />
+    <item android:id="@+id/action_vault" android:title="خزانه رمزگذاری‌شده" app:showAsAction="never" />
+    <item android:id="@+id/action_root" android:title="Root Explorer" app:showAsAction="never" />
+    <item android:id="@+id/action_network" android:title="اتصال FTP/SFTP/SMB/WebDAV" app:showAsAction="never" />
+    <item android:id="@+id/action_apk_tools" android:title="ابزار APK / DEX" app:showAsAction="never" />
     <item
         android:id="@+id/action_new_folder"
         android:title="@string/new_folder"
