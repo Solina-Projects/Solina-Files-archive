@@ -32,7 +32,7 @@ class VaultActivity : AppCompatActivity() {
     private val prefs by lazy { getSharedPreferences("solina_vault", MODE_PRIVATE) }
     private val keyAlias = "solina_vault_aes_key"
     private var unlocked = false
-    private var pendingImport = false
+    private var pendingRestore: File? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -103,6 +103,13 @@ class VaultActivity : AppCompatActivity() {
     @Deprecated("Legacy callback retained for compatibility with minSdk 30")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 502 && resultCode == RESULT_OK && data?.data != null) {
+            val file = pendingRestore
+            pendingRestore = null
+            if (unlocked && file != null) decryptToUri(file, data.data!!)
+            else authenticate()
+            return
+        }
         if (requestCode != 501 || resultCode != RESULT_OK || data?.data == null) return
         if (!unlocked) { authenticate(); return }
         try {
@@ -166,21 +173,37 @@ class VaultActivity : AppCompatActivity() {
     }
 
     private fun decryptToExport(file: File) {
+        if (!unlocked) { authenticate(); return }
+        pendingRestore = file
+        val name = prefs.getString(file.name, file.nameWithoutExtension) ?: file.nameWithoutExtension
+        startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/octet-stream"
+            putExtra(Intent.EXTRA_TITLE, name)
+        }, 502)
+    }
+
+    private fun decryptToUri(file: File, uri: android.net.Uri) {
         try {
             val input = FileInputStream(file)
-            val magic = ByteArray(4); if (input.read(magic) != 4 || String(magic) != "SVL1") { input.close(); toast("ساختار فایل خزانه معتبر نیست"); return }
+            val magic = ByteArray(4)
+            if (input.read(magic) != 4 || String(magic) != "SVL1") { input.close(); toast("ساختار فایل خزانه معتبر نیست"); return }
             val ivLength = input.read()
             if (ivLength !in 12..16) { input.close(); toast("سرآیند رمزگذاری نامعتبر است"); return }
-            val iv = ByteArray(ivLength); if (input.read(iv) != ivLength) { input.close(); toast("فایل ناقص است"); return }
+            val iv = ByteArray(ivLength)
+            var offset = 0
+            while (offset < ivLength) {
+                val count = input.read(iv, offset, ivLength - offset)
+                if (count <= 0) { input.close(); toast("فایل ناقص است"); return }
+                offset += count
+            }
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, ensureKey(), GCMParameterSpec(128, iv))
-            val name = prefs.getString(file.name, file.nameWithoutExtension) ?: file.nameWithoutExtension
-            val exports = File(getExternalFilesDir(null), "VaultExports").apply { mkdirs() }
-            val output = File(exports, name.replace(Regex("[/\\\\]"), "_"))
+            val output = contentResolver.openOutputStream(uri) ?: throw IllegalStateException("مقصد برای نوشتن باز نشد")
             javax.crypto.CipherInputStream(input, cipher).use { decrypted ->
-                FileOutputStream(output).use { out -> decrypted.copyTo(out) }
+                output.use { out -> decrypted.copyTo(out) }
             }
-            toast("نسخهٔ رمزگشایی‌شده در پوشهٔ خصوصی برنامه ذخیره شد: VaultExports")
+            toast("فایل با موفقیت رمزگشایی و در مقصد انتخابی ذخیره شد")
         } catch (_: Exception) { toast("رمزگشایی ناموفق بود؛ فایل یا کلید ممکن است آسیب دیده باشد") }
     }
 
