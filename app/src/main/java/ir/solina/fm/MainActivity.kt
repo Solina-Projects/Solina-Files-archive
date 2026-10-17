@@ -377,8 +377,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun onSelectionMenu(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.action_copy -> setClip(false)
-            R.id.action_cut -> setClip(true)
             R.id.action_rename -> selected.firstOrNull()?.let { rename(it) }
             R.id.action_select_all -> {
                 selected.addAll(allFiles)
