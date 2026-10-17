@@ -211,6 +211,17 @@ class MainActivity : AppCompatActivity() {
         }
         renderStorageQuickBar()
         refresh()
+
+        val pendingPath = pendingApkInstallPath
+        if (pendingPath != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            if (packageManager.canRequestPackageInstalls()) {
+                pendingApkInstallPath = null
+                installApk(File(pendingPath))
+            } else {
+                pendingApkInstallPath = null
+                toast("برای نصب APK، مجوز «نصب برنامه‌های ناشناس» را برای SolinaFM فعال کنید")
+            }
+        }
     }
 
     // ---------- storage volumes ----------
@@ -1048,20 +1059,6 @@ class MainActivity : AppCompatActivity() {
             "zip" -> browseArchive(file)
             "rar", "7z" -> startActivity(Intent(this, ArchiveToolsActivity::class.java).putExtra("archive_path", file.absolutePath))
             else -> openExternal(file)
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        val pendingPath = pendingApkInstallPath ?: return
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            if (packageManager.canRequestPackageInstalls()) {
-                pendingApkInstallPath = null
-                installApk(File(pendingPath))
-            } else {
-                pendingApkInstallPath = null
-                toast("برای نصب APK، مجوز «نصب برنامه‌های ناشناس» را برای SolinaFM فعال کنید")
-            }
         }
     }
 
