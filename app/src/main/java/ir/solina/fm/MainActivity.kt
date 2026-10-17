@@ -305,6 +305,7 @@ class MainActivity : AppCompatActivity() {
     private fun onMainMenu(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.action_new_folder -> newFolder()
+            R.id.action_dual_pane -> startActivity(Intent(this, DualPaneActivity::class.java))
             R.id.action_refresh -> refresh()
             R.id.action_hidden -> {
                 showHidden = !item.isChecked
