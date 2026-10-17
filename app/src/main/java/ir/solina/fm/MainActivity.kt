@@ -63,6 +63,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var storageQuickBar: LinearLayout
     private lateinit var sortFilterButton: MaterialButton
     private lateinit var overflowButton: MaterialButton
+    private lateinit var drawerButton: MaterialButton
+    private lateinit var dualPaneButton: MaterialButton
     private lateinit var pathView: TextView
     private lateinit var navBack: MaterialButton
     private lateinit var navForward: MaterialButton
@@ -119,6 +121,8 @@ class MainActivity : AppCompatActivity() {
         storageQuickBar = findViewById(R.id.storageQuickBar)
         sortFilterButton = findViewById(R.id.sortFilterButton)
         overflowButton = findViewById(R.id.overflowButton)
+        drawerButton = findViewById(R.id.drawerButton)
+        dualPaneButton = findViewById(R.id.dualPaneButton)
         pathView = findViewById(R.id.pathView)
         navBack = findViewById(R.id.navBack)
         navForward = findViewById(R.id.navForward)
@@ -149,6 +153,8 @@ class MainActivity : AppCompatActivity() {
             true
         }
         overflowButton.setOnClickListener { showTopMenu(it) }
+        drawerButton.setOnClickListener { showRightDrawer() }
+        dualPaneButton.setOnClickListener { startActivity(Intent(this, DualPaneActivity::class.java)) }
         mainBar.visibility = View.GONE
         navBack.setOnClickListener { navigateHistory(back = true) }
         navForward.setOnClickListener { navigateHistory(back = false) }
@@ -477,6 +483,7 @@ class MainActivity : AppCompatActivity() {
         val popup = android.widget.PopupMenu(this, anchor)
         for (index in 0 until mainBar.menu.size()) {
             val original = mainBar.menu.getItem(index)
+            if (original.itemId == R.id.action_dual_pane || original.itemId == R.id.action_theme) continue
             val item = popup.menu.add(original.groupId, original.itemId, original.order, original.title)
             item.isCheckable = original.isCheckable
             item.isChecked = if (original.itemId == R.id.action_hidden) showHidden else original.isChecked
@@ -491,6 +498,101 @@ class MainActivity : AppCompatActivity() {
             } else onMainMenu(item)
         }
         popup.show()
+    }
+
+    private fun showRightDrawer() {
+        loadVolumes()
+        val dialog = android.app.Dialog(this)
+        val night = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val surface = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorSurface, it, true) }.data
+        val onSurface = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurface, it, true) }.data
+        val muted = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurfaceVariant, it, true) }.data
+
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(18), dp(12), dp(12))
+            setBackgroundColor(surface)
+        }
+        root.addView(TextView(this).apply {
+            text = "تنظیمات و حافظه"
+            textSize = 20f
+            setTextColor(onSurface)
+            setPadding(dp(8), dp(4), dp(8), dp(16))
+        }, LinearLayout.LayoutParams(-1, -2))
+
+        val themeRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            isClickable = true
+            isFocusable = true
+            background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@MainActivity, R.drawable.item_bg)
+            contentDescription = if (night) "تغییر به تم روشن" else "تغییر به تم تیره"
+            setOnClickListener { dialog.dismiss(); toggleTheme() }
+        }
+        themeRow.addView(TextView(this).apply {
+            text = if (night) "☀" else "☾"
+            textSize = 24f
+            gravity = android.view.Gravity.CENTER
+            setTextColor(onSurface)
+        }, LinearLayout.LayoutParams(dp(36), dp(36)))
+        themeRow.addView(TextView(this).apply {
+            text = if (night) "تم روشن" else "تم تیره"
+            textSize = 16f
+            setTextColor(onSurface)
+            setPadding(dp(12), 0, 0, 0)
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        root.addView(themeRow, LinearLayout.LayoutParams(-1, -2))
+
+        root.addView(TextView(this).apply {
+            text = "انتخاب حافظه"
+            textSize = 16f
+            setTextColor(onSurface)
+            setPadding(dp(8), dp(20), dp(8), dp(8))
+        }, LinearLayout.LayoutParams(-1, -2))
+
+        val scroll = android.widget.ScrollView(this).apply { isFillViewport = false }
+        val volumeList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scroll.addView(volumeList, android.widget.ScrollView.LayoutParams(-1, -2))
+        for (v in volumes) {
+            val row = layoutInflater.inflate(R.layout.item_volume, volumeList, false)
+            val iconRes = when (v.kind) {
+                Kind.INTERNAL -> R.drawable.ic_hard_drive
+                Kind.SD -> R.drawable.ic_sd_card
+                Kind.USB -> R.drawable.ic_usb
+            }
+            row.findViewById<ImageView>(R.id.volIcon).setImageResource(iconRes)
+            row.findViewById<TextView>(R.id.volName).text = v.name
+            var total = 0L
+            var free = 0L
+            try {
+                val stat = StatFs(v.dir.path)
+                total = stat.totalBytes
+                free = stat.availableBytes
+            } catch (_: Exception) {}
+            val used = (total - free).coerceAtLeast(0L)
+            row.findViewById<LinearProgressIndicator>(R.id.volBar).progress =
+                if (total > 0L) ((used * 100L) / total).toInt() else 0
+            row.findViewById<TextView>(R.id.volStats).text =
+                getString(R.string.storage_stats, fmt(used), fmt(free), fmt(total))
+            row.isActivated = currentVol?.dir?.path == v.dir.path
+            row.setOnClickListener {
+                dialog.dismiss()
+                currentVol = v
+                navigate(v.dir)
+            }
+            volumeList.addView(row)
+        }
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        dialog.setContentView(root)
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        dialog.show()
+        dialog.window?.apply {
+            setLayout(minOf(dp(360), resources.displayMetrics.widthPixels - dp(40)), -1)
+            setGravity(android.view.Gravity.END)
+            addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            attributes = attributes.apply { dimAmount = 0.28f }
+        }
     }
 
     private fun toggleTheme() {
