@@ -534,6 +534,8 @@ class MainActivity : AppCompatActivity() {
             R.id.action_root -> startActivity(Intent(this, RootExplorerActivity::class.java))
             R.id.action_network -> startActivity(Intent(this, NetworkStorageActivity::class.java))
             R.id.action_apk_tools -> startActivity(Intent(this, ApkToolsActivity::class.java))
+            R.id.action_file_tools -> startActivity(Intent(this, FileToolsActivity::class.java)
+                .putExtra("root_path", current.absolutePath))
             R.id.action_hidden -> {
                 showHidden = !item.isChecked
                 item.isChecked = showHidden
@@ -676,6 +678,9 @@ class MainActivity : AppCompatActivity() {
             R.id.action_deselect_all -> clearSelection()
             R.id.action_compress -> compressSelected()
             R.id.action_extract -> extractSelectedArchives()
+            R.id.action_file_tools -> startActivity(Intent(this, FileToolsActivity::class.java)
+                .putExtra("root_path", current.absolutePath)
+                .putStringArrayListExtra("selected_paths", ArrayList(selected.map { it.absolutePath })))
             R.id.action_details -> showDetails()
         }
         return true
