@@ -185,6 +185,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             currentVol = vol
         }
+        renderStorageQuickBar()
         refresh()
     }
 
@@ -274,7 +275,7 @@ class MainActivity : AppCompatActivity() {
                 setTextColor(tv.data)
             }, LinearLayout.LayoutParams(-1, dp(14)))
             item.isSelected = currentVol?.dir?.path == volume.dir.path
-            storageQuickBar.addView(item, LinearLayout.LayoutParams(0, dp(66), 1f))
+            storageQuickBar.addView(item, LinearLayout.LayoutParams(dp(88), dp(66)))
         }
     }
 
