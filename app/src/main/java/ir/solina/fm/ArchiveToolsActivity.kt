@@ -26,7 +26,7 @@ import com.github.junrar.Junrar
 class ArchiveToolsActivity : AppCompatActivity() {
     private lateinit var file: File
     private lateinit var report: TextView
-    private lateinit var extractButton: Button
+    private lateinit var extractButton: MaterialButton
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
