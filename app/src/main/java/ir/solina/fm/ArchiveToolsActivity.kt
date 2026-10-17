@@ -2,12 +2,13 @@ package ir.solina.fm
 
 import android.os.Bundle
 import android.view.View
-import android.widget.Button
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import java.io.File
 import java.io.FileOutputStream
@@ -32,14 +33,21 @@ class ArchiveToolsActivity : AppCompatActivity() {
         val path = intent.getStringExtra("archive_path")
         if (path.isNullOrBlank()) { finish(); return }
         file = File(path)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(16, 12, 16, 12) }
-        root.addView(TextView(this).apply { text = file.name; textSize = 20f })
-        report = TextView(this).apply { text = "در حال بررسی آرشیو…"; setTextIsSelectable(true); setPadding(0, 12, 0, 12) }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(8), dp(16), dp(12))
+        }
+        root.addView(MaterialToolbar(this).apply {
+            title = file.name
+            setNavigationIcon(R.drawable.ic_arrow_back)
+            setNavigationOnClickListener { finish() }
+        }, LinearLayout.LayoutParams(-1, dp(56)))
+        report = TextView(this).apply { text = "در حال بررسی آرشیو…"; setTextIsSelectable(true); setPadding(0, dp(12), 0, dp(12)) }
         val scroll = ScrollView(this); scroll.addView(report)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        extractButton = Button(this).apply { text = "استخراج همه در پوشه جدید"; setOnClickListener { extractAll() } }
+        extractButton = MaterialButton(this).apply { text = "استخراج همه در پوشه جدید"; setOnClickListener { extractAll() } }
         root.addView(extractButton)
-        root.addView(Button(this).apply { text = "بستن"; setOnClickListener { finish() } })
+        root.addView(MaterialButton(this).apply { text = "بستن"; setOnClickListener { finish() } })
         setContentView(root)
         Thread { val summary = inspect(); runOnUiThread { report.text = summary } }.start()
     }
@@ -82,8 +90,8 @@ class ArchiveToolsActivity : AppCompatActivity() {
     private fun extractAll() {
         val target = File(file.parentFile ?: filesDir, file.nameWithoutExtension + "-extracted")
         if (target.exists()) {
-            AlertDialog.Builder(this).setMessage("پوشه مقصد از قبل وجود دارد. استخراج با نام دیگری انجام شود؟")
-                .setNegativeButton("لغو", null).setPositiveButton("ادامه") { _, _ -> extractInto(File(file.parentFile ?: filesDir, file.nameWithoutExtension + "-extracted-" + System.currentTimeMillis())) { extractTo(it) } }.show()
+            MaterialAlertDialogBuilder(this).setMessage("پوشه مقصد از قبل وجود دارد. استخراج با نام دیگری انجام شود؟")
+                .setNegativeMaterialButton("لغو", null).setPositiveMaterialButton("ادامه") { _, _ -> extractInto(File(file.parentFile ?: filesDir, file.nameWithoutExtension + "-extracted-" + System.currentTimeMillis())) { extractTo(it) } }.show()
         } else extractInto(target) { extractTo(it) }
     }
 
@@ -193,6 +201,8 @@ class ArchiveToolsActivity : AppCompatActivity() {
         if (!out.canonicalPath.startsWith(base)) throw SecurityException("مسیر نامعتبر در آرشیو")
         return out
     }
+
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_LONG).show()
 }
