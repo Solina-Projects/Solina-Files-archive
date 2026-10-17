@@ -553,7 +553,7 @@ class MainActivity : AppCompatActivity() {
 
         val scroll = android.widget.ScrollView(this).apply { isFillViewport = false }
         val volumeList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        scroll.addView(volumeList, android.widget.ScrollView.LayoutParams(-1, -2))
+        scroll.addView(volumeList, ViewGroup.LayoutParams(-1, -2))
         for (v in volumes) {
             val row = layoutInflater.inflate(R.layout.item_volume, volumeList, false)
             val iconRes = when (v.kind) {
