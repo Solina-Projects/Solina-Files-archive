@@ -3,23 +3,26 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
         android:id="@+id/action_select_all"
+        android:icon="@drawable/ic_select_all"
         android:title="@string/select_all"
-        app:showAsAction="always" />
+        app:showAsAction="ifRoom" />
     <item
         android:id="@+id/action_deselect_all"
-        android:title="برداشتن انتخاب"
-        app:showAsAction="always" />
+        android:title="لغو انتخاب"
+        app:showAsAction="never" />
     <item
         android:id="@+id/action_rename"
         android:icon="@drawable/ic_edit"
-        android:title="✎ A"
+        android:title="تغییر نام"
         app:showAsAction="ifRoom" />
     <item
         android:id="@+id/action_compress"
+        android:icon="@drawable/ic_archive"
         android:title="فشرده‌سازی"
         app:showAsAction="ifRoom" />
     <item
         android:id="@+id/action_extract"
+        android:icon="@drawable/ic_unarchive"
         android:title="استخراج"
         android:visible="false"
         app:showAsAction="ifRoom" />
