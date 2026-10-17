@@ -215,7 +215,11 @@ class DualPaneActivity : AppCompatActivity() {
 
     private fun updateTopBar() {
         listOf(left, right).forEachIndexed { index, pane ->
-            pane.root.setBackgroundColor(if (activePane == index) 0x143F51B5 else 0x00000000)
+            pane.root.setBackgroundColor(
+                if (activePane == index) androidx.core.graphics.ColorUtils.setAlphaComponent(
+                    resolveThemeColor(com.google.android.material.R.attr.colorSecondaryContainer), 38
+                ) else 0x00000000
+            )
             pane.path.text = (if (index == 0) "پنل چپ  •  " else "پنل راست  •  ") + pane.current.absolutePath
         }
         val p = pane(activePane)
