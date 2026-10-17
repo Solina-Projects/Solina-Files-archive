@@ -137,6 +137,10 @@ class DualPaneActivity : AppCompatActivity() {
             p.root.setBackgroundColor(if (activePane == index) 0x143F51B5 else 0x00000000)
             p.root.setOnClickListener { activePane = index; updateTopBar() }
             panesHost.addView(p.root)
+            if (mode == LayoutMode.HORIZONTAL && index == 0) {
+                panesHost.addView(View(this).apply { setBackgroundColor(0x223F51B5) },
+                    LinearLayout.LayoutParams(dp(1), -1))
+            }
             refresh(index)
         }
         updateTopBar()
