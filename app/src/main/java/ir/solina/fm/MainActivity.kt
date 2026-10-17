@@ -101,6 +101,9 @@ class MainActivity : AppCompatActivity() {
     private var clipFiles: List<File> = emptyList()
     private var clipCut = false
     private val selected = LinkedHashSet<File>()
+    private var initialNavigationApplied = false
+    private var lockPromptShown = false
+    private var pendingRecentOpenPath: String? = null
 
     private val dateFmt: android.icu.text.DateFormat by lazy {
         if (Locale.getDefault().language == "fa") {
@@ -121,6 +124,7 @@ class MainActivity : AppCompatActivity() {
         val savedNightMode = getSharedPreferences("solina_preferences", MODE_PRIVATE).getInt("night_mode", 0)
         if (savedNightMode != 0) AppCompatDelegate.setDefaultNightMode(savedNightMode)
         super.onCreate(savedInstanceState)
+        pendingRecentOpenPath = intent.getStringExtra("open_recent_path")
         setContentView(R.layout.activity_main)
 
         mainBar = findViewById(R.id.mainBar)
@@ -205,16 +209,35 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         loadVolumes()
-        val vol = volumes.firstOrNull { inside(current, it.dir) }
-        if (vol == null || !current.exists()) {
-            currentVol = volumes.first()
-            current = volumes.first().dir
-            selected.clear()
+        if (!initialNavigationApplied) {
+            val requestedPath = intent.getStringExtra("start_path")
+                ?: pendingRecentOpenPath?.let { File(it).parentFile?.absolutePath }
+                ?: getSharedPreferences("solina_preferences", MODE_PRIVATE).getString("home_folder", null)
+            val requested = requestedPath?.let { File(it) }
+            val validRequested = requested?.takeIf { it.exists() && it.isDirectory && volumes.any { v -> inside(it, v.dir) } }
+            current = validRequested ?: volumes.first().dir
+            currentVol = volumes.firstOrNull { inside(current, it.dir) } ?: volumes.first()
+            initialNavigationApplied = true
         } else {
-            currentVol = vol
+            val vol = volumes.firstOrNull { inside(current, it.dir) }
+            if (vol == null || !current.exists()) {
+                currentVol = volumes.first()
+                current = volumes.first().dir
+                selected.clear()
+            } else {
+                currentVol = vol
+            }
         }
         renderStorageQuickBar()
         refresh()
+        pendingRecentOpenPath?.let { path ->
+            pendingRecentOpenPath = null
+            val file = File(path)
+            if (file.exists() && file.isFile) openFile(file)
+        }
+        if (hasPermission() && !lockPromptShown &&
+            getSharedPreferences("solina_preferences", MODE_PRIVATE).getBoolean("app_lock_enabled", false)
+        ) showAppLockGate()
 
         val pendingPath = pendingApkInstallPath
         if (pendingPath != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -539,6 +562,8 @@ class MainActivity : AppCompatActivity() {
             R.id.action_file_tools -> startActivity(Intent(this, FileToolsActivity::class.java)
                 .putExtra("root_path", current.absolutePath))
             R.id.action_recycle_bin -> startActivity(Intent(this, RecycleBinActivity::class.java))
+            R.id.action_recent_files -> startActivity(Intent(this, RecentFilesActivity::class.java))
+            R.id.action_advanced_settings -> startActivity(Intent(this, AdvancedSettingsActivity::class.java))
             R.id.action_hidden -> {
                 showHidden = !item.isChecked
                 item.isChecked = showHidden
@@ -1095,6 +1120,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openFile(file: File) {
+        RecentFilesStore.add(this, file)
         when (file.extension.lowercase(Locale.ROOT)) {
             "apk" -> installApk(file)
             "txt", "md", "log", "json", "xml", "csv", "tsv", "ini", "kt", "java",
@@ -1106,6 +1132,51 @@ class MainActivity : AppCompatActivity() {
             "zip" -> browseArchive(file)
             "rar", "7z" -> startActivity(Intent(this, ArchiveToolsActivity::class.java).putExtra("archive_path", file.absolutePath))
             else -> openExternal(file)
+        }
+    }
+
+    private fun showAppLockGate() {
+        lockPromptShown = true
+        val input = TextInputEditText(this).apply {
+            hint = "رمز برنامه"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            setSingleLine(true)
+        }
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle("قفل SolinaFM")
+            .setMessage("برای ادامه، رمز برنامه را وارد کن.")
+            .setView(input)
+            .setCancelable(false)
+            .setPositiveButton("بازکردن", null)
+            .setNegativeButton("خروج") { _, _ -> finish() }
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                if (verifyAppPin(input.text?.toString().orEmpty())) {
+                    dialog.dismiss()
+                } else {
+                    input.error = "رمز نادرست است"
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun verifyAppPin(pin: String): Boolean = try {
+        val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
+        val saltHex = prefs.getString("app_lock_salt", null) ?: return false
+        val expected = prefs.getString("app_lock_hash", null) ?: return false
+        val salt = saltHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        val actual = MessageDigest.getInstance("SHA-256")
+            .digest(salt + pin.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        MessageDigest.isEqual(expected.toByteArray(), actual.toByteArray())
+    } catch (_: Exception) { false }
+
+    override fun onStop() {
+        super.onStop()
+        if (getSharedPreferences("solina_preferences", MODE_PRIVATE).getBoolean("app_lock_enabled", false)) {
+            lockPromptShown = false
         }
     }
 
