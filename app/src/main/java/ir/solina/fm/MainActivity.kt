@@ -49,6 +49,8 @@ import java.io.File
 import java.util.Date
 import java.util.Locale
 import java.security.MessageDigest
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.PBEKeySpec
 import java.util.ArrayDeque
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -563,7 +565,8 @@ class MainActivity : AppCompatActivity() {
                 .putExtra("root_path", current.absolutePath))
             R.id.action_recycle_bin -> startActivity(Intent(this, RecycleBinActivity::class.java))
             R.id.action_recent_files -> startActivity(Intent(this, RecentFilesActivity::class.java))
-            R.id.action_advanced_settings -> startActivity(Intent(this, AdvancedSettingsActivity::class.java))
+            R.id.action_advanced_settings -> startActivity(Intent(this, AdvancedSettingsActivity::class.java)
+                .putExtra("current_path", current.absolutePath))
             R.id.action_hidden -> {
                 showHidden = !item.isChecked
                 item.isChecked = showHidden
@@ -1167,8 +1170,8 @@ class MainActivity : AppCompatActivity() {
         val saltHex = prefs.getString("app_lock_salt", null) ?: return false
         val expected = prefs.getString("app_lock_hash", null) ?: return false
         val salt = saltHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-        val actual = MessageDigest.getInstance("SHA-256")
-            .digest(salt + pin.toByteArray(Charsets.UTF_8))
+        val actual = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+            .generateSecret(PBEKeySpec(pin.toCharArray(), salt, 120_000, 256)).encoded
             .joinToString("") { "%02x".format(it) }
         MessageDigest.isEqual(expected.toByteArray(), actual.toByteArray())
     } catch (_: Exception) { false }
