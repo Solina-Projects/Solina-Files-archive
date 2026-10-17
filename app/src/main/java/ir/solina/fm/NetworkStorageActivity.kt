@@ -86,7 +86,7 @@ class NetworkStorageActivity : AppCompatActivity() {
     }
 
     private fun field(hintText: String) = EditText(this).apply {
-        hint = hintText; singleLine = true; textSize = 14f
+        hint = hintText; setSingleLine(true); textSize = 14f
         setPadding(8, 4, 8, 4)
     }
 
