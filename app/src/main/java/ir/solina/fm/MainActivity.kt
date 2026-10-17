@@ -10,6 +10,7 @@ import android.os.storage.StorageManager
 import android.provider.Settings
 import android.text.format.Formatter
 import android.text.Editable
+import android.text.InputType
 import android.text.TextWatcher
 import android.widget.CheckBox
 import android.widget.EditText
@@ -36,6 +37,7 @@ import com.google.android.material.textfield.TextInputEditText
 import java.io.File
 import java.util.Date
 import java.util.Locale
+import java.security.MessageDigest
 import java.util.ArrayDeque
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -711,6 +713,7 @@ class MainActivity : AppCompatActivity() {
                     f.length()
                 }
             }
+            val hash = if (items.size == 1 && items[0].isFile) sha256(items[0]) else null
             runOnUiThread {
                 progress.visibility = View.GONE
                 val single = items.size == 1
@@ -721,7 +724,7 @@ class MainActivity : AppCompatActivity() {
                         items[0].absolutePath,
                         fmt(size),
                         formatDate(items[0].lastModified())
-                    )
+                    ) + (hash?.let { "\\nSHA-256: $it" } ?: "")
                 } else {
                     getString(R.string.details_multi, items.size, fmt(size))
                 }
@@ -734,7 +737,46 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
+    private fun sha256(file: File): String? = try {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().buffered().use { input ->
+            val buffer = ByteArray(8192)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        digest.digest().joinToString("") { "%02x".format(it) }
+    } catch (_: Exception) { null }
+
+    private fun editTextFile(file: File) {
+        try {
+            if (file.length() > 2L * 1024L * 1024L) {
+                toast("برای جلوگیری از کندی، ویرایشگر داخلی فایل‌های بزرگ‌تر از ۲ مگابایت را باز نمی‌کند")
+                return
+            }
+            val editor = EditText(this).apply {
+                setText(file.readText(Charsets.UTF_8))
+                gravity = android.view.Gravity.TOP or android.view.Gravity.START
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                minLines = 12
+                setSelection(text.length)
+            }
+            MaterialAlertDialogBuilder(this).setTitle(file.name).setView(editor)
+                .setPositiveButton("ذخیره") { _, _ ->
+                    try { file.writeText(editor.text.toString(), Charsets.UTF_8); toast("فایل ذخیره شد") }
+                    catch (_: Exception) { toast("ذخیره فایل ناموفق بود") }
+                }
+                .setNegativeButton(R.string.cancel, null).show()
+        } catch (_: Exception) { toast("فایل متنی قابل خواندن نیست") }
+    }
+
     private fun openFile(file: File) {
+        if (file.extension.lowercase(Locale.ROOT) in setOf("txt", "md", "log", "json", "xml", "csv", "ini", "kt", "java", "html", "css", "gradle", "yml", "yaml", "sh", "properties")) {
+            editTextFile(file)
+            return
+        }
         try {
             val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
             val mime = MimeTypeMap.getSingleton()
