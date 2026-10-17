@@ -109,7 +109,14 @@ class ArchiveToolsActivity : AppCompatActivity() {
                     val out = safeTarget(target, entry.name)
                     if (entry.isDirectory) out.mkdirs() else {
                         out.parentFile?.mkdirs()
-                        FileOutputStream(out).use { output -> archive.copyTo(output) }
+                        FileOutputStream(out).use { output ->
+                            val buffer = ByteArray(8192)
+                            while (true) {
+                                val count = archive.read(buffer)
+                                if (count < 0) break
+                                output.write(buffer, 0, count)
+                            }
+                        }
                     }
                 }
             }
