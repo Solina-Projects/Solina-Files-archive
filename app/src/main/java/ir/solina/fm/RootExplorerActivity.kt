@@ -174,8 +174,13 @@ class RootExplorerActivity : AppCompatActivity() {
 
     private fun editRootText(path: String) {
         Thread {
-            val raw = runRoot("cat -- ${shellQuote(path)}")
+            val readable = runRoot("[ -f ${shellQuote(path)} ] && [ -r ${shellQuote(path)} ] && echo OK").trim() == "OK"
+            val response = if (readable) runRoot("cat -- ${shellQuote(path)} && printf '__SOLINA_ROOT_READ_OK__'") else ""
+            val marker = "__SOLINA_ROOT_READ_OK__"
+            val valid = readable && response.endsWith(marker)
+            val raw = if (valid) response.removeSuffix(marker) else ""
             runOnUiThread {
+                if (!valid) { toast("فایل قابل خواندن نیست یا دسترسی روت کافی نیست"); return@runOnUiThread }
                 if (raw.length > 2 * 1024 * 1024) { toast("ویرایش فایل‌های بیشتر از ۲ مگابایت پشتیبانی نمی‌شود"); return@runOnUiThread }
                 val input = EditText(this).apply { setText(raw); gravity = Gravity.TOP or Gravity.START; minLines = 12 }
                 AlertDialog.Builder(this).setTitle("ویرایش: ${File(path).name}").setView(input)
@@ -194,8 +199,9 @@ class RootExplorerActivity : AppCompatActivity() {
         Thread {
             val exportDir = File(getExternalFilesDir(null), "RootExports").apply { mkdirs() }
             val target = File(exportDir, File(path).name)
-            val result = runRoot("cat -- ${shellQuote(path)} | base64 | tr -d '\\n'").trim()
-            val decoded = try { Base64.getDecoder().decode(result) } catch (_: Exception) { null }
+            val readable = runRoot("[ -f ${shellQuote(path)} ] && [ -r ${shellQuote(path)} ] && echo OK").trim() == "OK"
+            val result = if (readable) runRoot("base64 < ${shellQuote(path)}") else ""
+            val decoded = if (readable) try { Base64.getMimeDecoder().decode(result) } catch (_: Exception) { null } else null
             val ok = decoded != null && try { target.writeBytes(decoded); true } catch (_: Exception) { false }
             runOnUiThread { toast(if (ok) "نسخه کپی شد: RootExports/${target.name}" else "کپی ناموفق بود") }
         }.start()
