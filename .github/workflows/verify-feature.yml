@@ -26,5 +26,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: SolinaFM-feature-debug-apk
+          name: Solina-Files-v1.0-debug-apk
           path: app/build/outputs/apk/debug/*.apk
