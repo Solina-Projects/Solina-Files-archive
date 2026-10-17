@@ -4,7 +4,12 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.Bundle
+import android.os.CancellationSignal
 import android.os.ParcelFileDescriptor
+import android.print.PrintAttributes
+import android.print.PrintDocumentAdapter
+import android.print.PrintDocumentInfo
+import android.print.PrintManager
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -15,6 +20,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import java.io.File
+import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import java.util.Locale
 
@@ -86,6 +92,11 @@ class DocumentViewerActivity : AppCompatActivity() {
                 setPadding(dp(8), dp(12), dp(8), dp(12))
             })
             body.addView(MaterialButton(this).apply {
+                text = "چاپ سند PDF"
+                isAllCaps = false
+                setOnClickListener { printPdf() }
+            })
+            body.addView(MaterialButton(this).apply {
                 text = "بازکردن با برنامهٔ دیگر"
                 isAllCaps = false
                 setOnClickListener { openExternal() }
@@ -97,6 +108,95 @@ class DocumentViewerActivity : AppCompatActivity() {
                 setOnClickListener { openExternal() }
             })
         }
+    }
+
+    private fun printPdf() {
+        val manager = getSystemService(PRINT_SERVICE) as PrintManager
+        manager.print(file.nameWithoutExtension, object : PrintDocumentAdapter() {
+            override fun onLayout(
+                oldAttributes: PrintAttributes?,
+                newAttributes: PrintAttributes,
+                cancellationSignal: android.os.CancellationSignal,
+                callback: LayoutResultCallback,
+                extras: Bundle?
+            ) {
+                if (cancellationSignal.isCanceled) {
+                    callback.onLayoutCancelled()
+                    return
+                }
+                val count = renderer?.pageCount ?: 0
+                callback.onLayoutFinished(
+                    PrintDocumentInfo.Builder(file.name)
+                        .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                        .setPageCount(count)
+                        .build(),
+                    oldAttributes != newAttributes
+                )
+            }
+
+            override fun onWrite(
+                pages: Array<out android.print.PageRange>,
+                destination: ParcelFileDescriptor,
+                cancellationSignal: android.os.CancellationSignal,
+                callback: WriteResultCallback
+            ) {
+                val output = android.graphics.pdf.PdfDocument()
+                var sourceDescriptor: ParcelFileDescriptor? = null
+                var sourceRenderer: PdfRenderer? = null
+                try {
+                    sourceDescriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+                    sourceRenderer = PdfRenderer(sourceDescriptor)
+                    val count = sourceRenderer.pageCount
+                    val requested = if (pages.isEmpty() || pages.any { it == android.print.PageRange.ALL_PAGES }) {
+                        (0 until count).toList()
+                    } else pages.flatMap { range ->
+                        (range.start..minOf(range.end, count - 1)).toList()
+                    }.filter { it in 0 until count }.distinct().sorted()
+                    val width = 595
+                    val height = 842
+                    for ((outIndex, sourceIndex) in requested.withIndex()) {
+                        if (cancellationSignal.isCanceled) {
+                            callback.onWriteCancelled()
+                            return
+                        }
+                        val sourcePage = sourceRenderer.openPage(sourceIndex)
+                        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                        try {
+                            bitmap.eraseColor(Color.WHITE)
+                            val scale = minOf(width.toFloat() / sourcePage.width, height.toFloat() / sourcePage.height)
+                            val drawWidth = (sourcePage.width * scale).toInt().coerceAtLeast(1)
+                            val drawHeight = (sourcePage.height * scale).toInt().coerceAtLeast(1)
+                            val left = (width - drawWidth) / 2
+                            val top = (height - drawHeight) / 2
+                            sourcePage.render(bitmap, android.graphics.Rect(left, top, left + drawWidth, top + drawHeight),
+                                null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+                            val page = output.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(width, height, outIndex + 1).create())
+                            page.canvas.drawBitmap(bitmap, 0f, 0f, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG))
+                            output.finishPage(page)
+                        } finally {
+                            bitmap.recycle()
+                            sourcePage.close()
+                        }
+                    }
+                    if (requested.isEmpty()) {
+                        callback.onWriteFinished(emptyArray())
+                    } else {
+                        FileOutputStream(destination.fileDescriptor).use { output.writeTo(it) }
+                        callback.onWriteFinished(requested.map { android.print.PageRange(it, it) }.toTypedArray())
+                    }
+                } catch (e: Exception) {
+                    callback.onWriteFailed(e.localizedMessage)
+                } finally {
+                    output.close()
+                    sourceRenderer?.close()
+                    sourceDescriptor?.close()
+                }
+            }
+        }, PrintAttributes.Builder()
+            .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+            .setResolution(PrintAttributes.Resolution("solina-pdf", "Solina PDF", 300, 300))
+            .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+            .build())
     }
 
     private fun renderHex() {
