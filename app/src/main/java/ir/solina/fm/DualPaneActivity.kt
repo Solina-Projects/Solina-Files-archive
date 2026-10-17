@@ -463,6 +463,7 @@ class DualPaneActivity : AppCompatActivity() {
             "html", "htm", "css", "js", "gradle", "kts", "yml", "yaml", "sh",
             "properties", "conf", "cfg", "sql", "py", "c", "cpp", "h", "rs" -> editTextFile(file)
             "zip" -> browseArchive(file, paneIndex)
+            "rar", "7z" -> startActivity(Intent(this, ArchiveToolsActivity::class.java).putExtra("archive_path", file.absolutePath))
             "jpg", "jpeg", "png", "webp", "bmp", "gif" -> viewImage(file)
             "mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi" -> playAudio(file)
             "mp4", "m4v", "3gp", "webm", "mkv", "avi", "mov", "mpeg", "mpg" -> playVideo(file)
