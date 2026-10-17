@@ -3,14 +3,15 @@ package ir.solina.fm
 import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
-import android.widget.Button
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.app.AlertDialog
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -36,10 +37,11 @@ class FileToolsActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(12), dp(16), dp(12))
         }
-        root.addView(TextView(this).apply {
-            text = "ابزارهای تکمیلی فایل"
-            textSize = 21f
-        })
+        root.addView(MaterialToolbar(this).apply {
+            title = "ابزارهای تکمیلی فایل"
+            setNavigationIcon(R.drawable.ic_arrow_back)
+            setNavigationOnClickListener { finish() }
+        }, LinearLayout.LayoutParams(-1, dp(56)))
         root.addView(TextView(this).apply {
             text = "پوشهٔ کاری: ${rootDir.absolutePath}"
             textSize = 12f
@@ -59,12 +61,11 @@ class FileToolsActivity : AppCompatActivity() {
         val scroll = ScrollView(this)
         scroll.addView(output)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(Button(this).apply { text = "بستن"; setOnClickListener { finish() } })
         setContentView(root)
     }
 
     private fun addAction(parent: LinearLayout, title: String, description: String, action: () -> Unit) {
-        parent.addView(Button(this).apply {
+        parent.addView(MaterialButton(this).apply {
             text = "$title\n$description"
             isAllCaps = false
             setOnClickListener { action() }
@@ -86,7 +87,7 @@ class FileToolsActivity : AppCompatActivity() {
         }
         val labels = files.map { it.name }.toTypedArray()
         if (!multiple) {
-            AlertDialog.Builder(this).setTitle(title).setItems(labels) { _, which -> callback(listOf(files[which])) }
+            MaterialAlertDialogBuilder(this).setTitle(title).setItems(labels) { _, which -> callback(listOf(files[which])) }
                 .setNegativeButton("لغو", null).show()
             return
         }
