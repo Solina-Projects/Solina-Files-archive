@@ -136,7 +136,7 @@
             android:layout_marginEnd="8dp"
             android:background="@drawable/search_field_bg"
             android:textColor="?attr/colorOnSurface"
-            android:hintTextColor="?attr/colorOnSurfaceVariant"
+            android:textColorHint="?attr/colorOnSurfaceVariant"
             android:hint="جست‌وجو"
             android:imeOptions="actionSearch"
             android:inputType="text"
