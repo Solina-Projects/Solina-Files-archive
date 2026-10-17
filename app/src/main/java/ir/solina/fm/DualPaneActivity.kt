@@ -8,10 +8,14 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.text.InputType
+import android.text.Editable
+import android.text.TextWatcher
 import android.text.format.Formatter
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.*
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.GridLayoutManager
@@ -30,11 +34,18 @@ class DualPaneActivity : AppCompatActivity() {
     private data class Pane(
         val root: LinearLayout, val path: TextView, val list: RecyclerView,
         val adapter: PaneAdapter, var current: File,
-        val selected: LinkedHashSet<File> = linkedSetOf()
+        val selected: LinkedHashSet<File> = linkedSetOf(),
+        val backHistory: MutableList<File> = mutableListOf(),
+        val forwardHistory: MutableList<File> = mutableListOf(),
+        var query: String = ""
     )
     private lateinit var panesHost: LinearLayout
-    private lateinit var toolbar: MaterialToolbar
-    private lateinit var status: TextView
+    private lateinit var pathTitle: TextView
+    private lateinit var navBack: MaterialButton
+    private lateinit var navForward: MaterialButton
+    private lateinit var searchInput: EditText
+    private lateinit var selectionActions: LinearLayout
+    private lateinit var bottomActions: LinearLayout
     private lateinit var left: Pane
     private lateinit var right: Pane
     private var activePane = 0
@@ -48,24 +59,41 @@ class DualPaneActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val base = Environment.getExternalStorageDirectory()
-        val screen = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 0, 8, 8) }
-        toolbar = MaterialToolbar(this).apply { title = "SolinaFM • دو پنل" }
-        screen.addView(toolbar, LinearLayout.LayoutParams(-1, dp(56)))
-        val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        button(controls, "پنل‌ها") { toggleMode() }
-        button(controls, "نمایش") { showDisplaySettings() }
-        button(controls, "چیدمان") { showLayoutSettings() }
-        button(controls, "بازگشت") { goUp(activePane) }
-        screen.addView(controls, LinearLayout.LayoutParams(-1, dp(48)))
+        val screen = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(4), 0, dp(4), dp(4)) }
+        val navigation = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_LTR }
+        navBack = MaterialButton(this).apply { text = "‹"; textSize = 26f; minWidth = dp(40); setPadding(0, 0, 0, 0); setOnClickListener { navigateHistory(activePane, true) } }
+        navForward = MaterialButton(this).apply { text = "›"; textSize = 26f; minWidth = dp(40); setPadding(0, 0, 0, 0); setOnClickListener { navigateHistory(activePane, false) } }
+        pathTitle = TextView(this).apply { textSize = 13f; maxLines = 1; setPadding(dp(6), dp(4), dp(6), dp(4)) }
+        searchInput = EditText(this).apply { hint = "جست‌وجوی فایل و پوشه"; singleLine = true; textSize = 13f; setPadding(dp(8), 0, dp(8), 0) }
+        navigation.addView(navBack, LinearLayout.LayoutParams(dp(40), dp(48)))
+        navigation.addView(navForward, LinearLayout.LayoutParams(dp(40), dp(48)))
+        navigation.addView(pathTitle, LinearLayout.LayoutParams(0, dp(48), 1f))
+        navigation.addView(searchInput, LinearLayout.LayoutParams(dp(132), dp(42)))
+        screen.addView(navigation, LinearLayout.LayoutParams(-1, dp(52)))
+        searchInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                pane(activePane).query = s?.toString().orEmpty()
+                refresh(activePane)
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+        val selectionScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; visibility = View.GONE }
+        selectionActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        button(selectionActions, "انتخاب همه") { selectAll(activePane) }
+        button(selectionActions, "برداشتن انتخاب") { clearPaneSelection(activePane) }
+        button(selectionActions, "✎ A تغییر نام") { renameSelected(activePane) }
+        button(selectionActions, "فشرده‌سازی") { compressSelected(activePane) }
+        button(selectionActions, "استخراج") { extractSelectedArchives() }
+        selectionScroll.addView(selectionActions)
+        screen.addView(selectionScroll, LinearLayout.LayoutParams(-1, dp(48)))
         panesHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         screen.addView(panesHost, LinearLayout.LayoutParams(-1, 0, 1f))
-        status = TextView(this).apply { text = "برای انتخاب، روی فایل نگه دارید؛ پنل مقصد را در سمت مقابل باز کنید."; setPadding(dp(8), dp(8), dp(8), dp(8)) }
-        screen.addView(status)
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        button(actions, "کپی به مقابل") { transfer(false) }
-        button(actions, "انتقال به مقابل") { transfer(true) }
-        button(actions, "استخراج به مقابل") { extractSelectedArchives() }
-        screen.addView(actions, LinearLayout.LayoutParams(-1, dp(52)))
+        bottomActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; visibility = View.GONE }
+        button(bottomActions, "کپی") { transfer(false) }
+        button(bottomActions, "انتقال") { transfer(true) }
+        button(bottomActions, "حذف") { deleteSelected(activePane) }
+        screen.addView(bottomActions, LinearLayout.LayoutParams(-1, dp(52)))
         setContentView(screen)
         left = createPane(base, 0)
         right = createPane(base, 1)
@@ -105,15 +133,144 @@ class DualPaneActivity : AppCompatActivity() {
     private fun refresh(index: Int) {
         val p = pane(index)
         p.path.text = (if (index == 0) "چپ: " else "راست: ") + p.current.absolutePath
-        val files = p.current.listFiles()?.filter { it.isFile || it.isDirectory }
+        val allFiles = p.current.listFiles()?.filter { it.isFile || it.isDirectory }
             ?.sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) })) ?: emptyList()
-        p.selected.retainAll(files.toSet())
+        p.selected.retainAll(allFiles.toSet())
+        val query = p.query.trim().lowercase(Locale.ROOT)
+        val files = allFiles.filter { query.isEmpty() || it.name.lowercase(Locale.ROOT).contains(query) }
         p.adapter.items = files
         p.adapter.notifyDataSetChanged()
         p.list.layoutManager = if (grid) GridLayoutManager(this, columns) else LinearLayoutManager(this)
+        if (index == activePane) updateTopBar()
     }
 
-    private fun updateTitle() { toolbar.title = "SolinaFM • " + if (activePane == 0) "پنل چپ" else "پنل راست" }
+    private fun updateTopBar() {
+        val p = pane(activePane)
+        pathTitle.text = p.current.name.ifBlank { p.current.absolutePath }
+        pathTitle.contentDescription = p.current.absolutePath
+        navBack.isEnabled = p.backHistory.isNotEmpty() || p.current.parentFile != null
+        navForward.isEnabled = p.forwardHistory.isNotEmpty()
+        searchInput.setTextIfDifferent(p.query)
+        updateSelectionUi()
+    }
+
+    private fun EditText.setTextIfDifferent(value: String) {
+        if (text.toString() != value) {
+            setText(value)
+            setSelection(text.length)
+        }
+    }
+
+    private fun navigateTo(index: Int, dir: File) {
+        val p = pane(index)
+        if (p.current.path == dir.path) return
+        p.backHistory.add(p.current)
+        p.forwardHistory.clear()
+        p.current = dir
+        p.selected.clear()
+        refresh(index)
+        updateTopBar()
+    }
+
+    private fun navigateHistory(index: Int, back: Boolean) {
+        val p = pane(index)
+        val source = if (back) p.backHistory else p.forwardHistory
+        val target = if (back) p.forwardHistory else p.backHistory
+        if (source.isEmpty()) {
+            if (back) goUp(index)
+            return
+        }
+        target.add(p.current)
+        p.current = source.removeAt(source.lastIndex)
+        p.selected.clear()
+        refresh(index)
+        updateTopBar()
+    }
+
+    private fun selectAll(index: Int) {
+        val p = pane(index)
+        p.current.listFiles()?.filter { it.isFile || it.isDirectory }?.let { p.selected.addAll(it) }
+        refresh(index)
+        updateSelectionUi()
+    }
+
+    private fun clearPaneSelection(index: Int) {
+        pane(index).selected.clear()
+        refresh(index)
+        updateSelectionUi()
+    }
+
+    private fun updateSelectionUi() {
+        if (!::selectionActions.isInitialized || !::bottomActions.isInitialized) return
+        val p = pane(activePane)
+        val hasSelection = p.selected.isNotEmpty()
+        (selectionActions.parent as? HorizontalScrollView)?.visibility = if (hasSelection) View.VISIBLE else View.GONE
+        bottomActions.visibility = if (hasSelection) View.VISIBLE else View.GONE
+        selectionActions.getChildAt(2)?.visibility = if (p.selected.size == 1) View.VISIBLE else View.GONE
+        selectionActions.getChildAt(4)?.visibility = if (p.selected.any { it.isFile && it.extension.equals("zip", true) }) View.VISIBLE else View.GONE
+    }
+
+    private fun renameSelected(index: Int) {
+        val p = pane(index)
+        val file = p.selected.singleOrNull() ?: run { toast("برای تغییر نام فقط یک مورد انتخاب کنید"); return }
+        askText("نام جدید", file.name) { name ->
+            if (name.isBlank() || name.contains("/") || File(file.parentFile, name).exists()) {
+                toast("نام نامعتبر است یا قبلاً وجود دارد")
+            } else if (!file.renameTo(File(file.parentFile, name))) toast("تغییر نام انجام نشد")
+            p.selected.clear()
+            refresh(index)
+        }
+    }
+
+    private fun compressSelected(index: Int) {
+        val p = pane(index)
+        val items = p.selected.toList()
+        if (items.isEmpty()) return
+        val target = uniqueTarget(p.current, File(if (items.size == 1) items[0].nameWithoutExtension + ".zip" else "archive.zip"))
+        Thread {
+            var failed = false
+            try {
+                ZipOutputStream(target.outputStream().buffered()).use { zip -> items.forEach { addToZip(it, it.name, zip) } }
+            } catch (_: Exception) { failed = true; target.delete() }
+            runOnUiThread {
+                if (failed) toast("ساخت فایل فشرده ناموفق بود") else toast("فایل فشرده ساخته شد")
+                p.selected.clear()
+                refresh(index)
+            }
+        }.start()
+    }
+
+    private fun addToZip(file: File, entryName: String, zip: ZipOutputStream) {
+        if (file.isDirectory) {
+            val dirName = if (entryName.endsWith("/")) entryName else entryName + "/"
+            zip.putNextEntry(ZipEntry(dirName))
+            zip.closeEntry()
+            file.listFiles()?.forEach { child -> addToZip(child, dirName + child.name, zip) }
+        } else {
+            zip.putNextEntry(ZipEntry(entryName))
+            file.inputStream().buffered().use { it.copyTo(zip) }
+            zip.closeEntry()
+        }
+    }
+
+    private fun deleteSelected(index: Int) {
+        val p = pane(index)
+        val items = p.selected.toList()
+        if (items.isEmpty()) return
+        AlertDialog.Builder(this).setTitle("حذف موارد انتخاب‌شده")
+            .setMessage("آیا از حذف " + items.size + " مورد مطمئن هستید؟")
+            .setPositiveButton("حذف") { _, _ ->
+                Thread {
+                    var failed = 0
+                    items.forEach { if (it.exists() && !it.deleteRecursively()) failed++ }
+                    runOnUiThread {
+                        p.selected.clear()
+                        refresh(index)
+                        toast(if (failed == 0) "حذف انجام شد" else "حذف برخی موارد ناموفق بود")
+                    }
+                }.start()
+            }.setNegativeButton("لغو", null).show()
+    }
     private fun toggleMode() { mode = if (mode == LayoutMode.VERTICAL) LayoutMode.HORIZONTAL else LayoutMode.VERTICAL; renderPanes() }
 
     private fun showDisplaySettings() {
@@ -150,7 +307,7 @@ class DualPaneActivity : AppCompatActivity() {
 
     private fun goUp(index: Int) {
         val p = pane(index)
-        p.current.parentFile?.takeIf { it.exists() }?.let { p.current = it; p.selected.clear(); refresh(index) }
+        p.current.parentFile?.takeIf { it.exists() }?.let { navigateTo(index, it) }
     }
 
     private fun transfer(move: Boolean) {
@@ -176,7 +333,8 @@ class DualPaneActivity : AppCompatActivity() {
             }
             runOnUiThread {
                 source.selected.clear(); refresh(sourceIndex); refresh(1 - sourceIndex)
-                status.text = if (failed == 0) "عملیات با موفقیت انجام شد" else "$failed مورد ناموفق بود"
+                updateSelectionUi()
+                toast(if (failed == 0) "عملیات با موفقیت انجام شد" else "$failed مورد ناموفق بود")
             }
         }.start()
     }
@@ -328,14 +486,18 @@ class DualPaneActivity : AppCompatActivity() {
 
     private inner class PaneAdapter(private val paneIndex: Int) : RecyclerView.Adapter<PaneAdapter.Holder>() {
         var items: List<File> = emptyList()
-        inner class Holder(val row: LinearLayout, val icon: TextView, val name: TextView, val info: TextView) : RecyclerView.ViewHolder(row)
+        inner class Holder(val row: LinearLayout, val check: CheckBox, val icon: TextView, val name: TextView, val info: TextView) : RecyclerView.ViewHolder(row)
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
-            val row = LinearLayout(this@DualPaneActivity).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(6), dp(8), dp(6), dp(8)); isClickable = true; isFocusable = true }
+            val row = LinearLayout(this@DualPaneActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(4), dp(6), dp(4), dp(6)); isClickable = true; isFocusable = true }
+            val check = CheckBox(this@DualPaneActivity)
+            val content = LinearLayout(this@DualPaneActivity).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
             val icon = TextView(this@DualPaneActivity).apply { gravity = Gravity.CENTER; textSize = iconDp / 2.2f }
             val name = TextView(this@DualPaneActivity).apply { gravity = Gravity.CENTER; textSize = 13f; maxLines = 2 }
             val info = TextView(this@DualPaneActivity).apply { gravity = Gravity.CENTER; textSize = 10f }
-            row.addView(icon, LinearLayout.LayoutParams(-1, dp(iconDp + 4))); row.addView(name, LinearLayout.LayoutParams(-1, -2)); row.addView(info, LinearLayout.LayoutParams(-1, -2))
-            return Holder(row, icon, name, info)
+            row.addView(check, LinearLayout.LayoutParams(-2, -2))
+            content.addView(icon, LinearLayout.LayoutParams(-1, dp(iconDp + 4))); content.addView(name, LinearLayout.LayoutParams(-1, -2)); content.addView(info, LinearLayout.LayoutParams(-1, -2))
+            row.addView(content)
+            return Holder(row, check, icon, name, info)
         }
         override fun getItemCount() = items.size
         override fun onBindViewHolder(holder: Holder, position: Int) {
@@ -351,18 +513,29 @@ class DualPaneActivity : AppCompatActivity() {
             }
             holder.name.text = file.name
             holder.info.text = if (!details) "" else if (file.isDirectory) "پوشه" else Formatter.formatFileSize(this@DualPaneActivity, file.length())
-            holder.row.alpha = if (pane(paneIndex).selected.contains(file)) 0.65f else 1f
-            holder.row.setOnClickListener { activePane = paneIndex; actionOpen(file, false); updateTitle() }
+            val p = pane(paneIndex)
+            holder.row.alpha = if (p.selected.contains(file)) 0.85f else 1f
+            holder.check.setOnCheckedChangeListener(null)
+            holder.check.visibility = if (p.selected.isNotEmpty()) View.VISIBLE else View.GONE
+            holder.check.isChecked = p.selected.contains(file)
+            holder.check.setOnCheckedChangeListener { _, checked ->
+                if (checked) p.selected.add(file) else p.selected.remove(file)
+                activePane = paneIndex
+                updateTopBar()
+                refresh(paneIndex)
+            }
+            holder.row.setOnClickListener { activePane = paneIndex; actionOpen(file, false); updateTopBar() }
             holder.row.setOnLongClickListener { activePane = paneIndex; actionOpen(file, true); true }
         }
         private fun actionOpen(file: File, longPress: Boolean) {
             val p = pane(paneIndex)
             if (longPress || p.selected.isNotEmpty()) {
                 if (!p.selected.add(file)) p.selected.remove(file)
-                p.adapter.notifyDataSetChanged()
-                status.text = p.selected.size.toString() + " مورد انتخاب شده"
+                refresh(paneIndex)
+                updateTopBar()
+                toast(p.selected.size.toString() + " مورد انتخاب شده")
             } else if (file.isDirectory) {
-                p.current = file; p.selected.clear(); refresh(paneIndex)
+                navigateTo(paneIndex, file)
             } else openFile(file, paneIndex)
         }
     }
