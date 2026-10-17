@@ -10,15 +10,17 @@ import android.os.IBinder
 import android.os.Environment
 import android.view.Gravity
 import android.view.View
-import android.widget.Button
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
+import androidx.core.content.ContextCompat
 import java.io.File
 import java.util.Base64
 import rikka.shizuku.Shizuku
@@ -59,18 +61,25 @@ class RootExplorerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 10, 12, 10) }
-        root.addView(TextView(this).apply { text = "Root Explorer"; textSize = 22f })
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(8), dp(12), dp(12))
+        }
+        root.addView(MaterialToolbar(this).apply {
+            title = "مدیریت فایل با دسترسی ریشه"
+            setNavigationIcon(R.drawable.ic_arrow_back)
+            setNavigationOnClickListener { finish() }
+        }, LinearLayout.LayoutParams(-1, dp(56)))
         root.addView(TextView(this).apply {
             text = "هشدار: تغییر یا حذف فایل‌های سیستمی ممکن است باعث بوت‌نشدن دستگاه یا ازکارافتادن برنامه‌ها شود."
-            setTextColor(0xFFB3261E.toInt()); setPadding(0, 6, 0, 10)
+            setTextColor(ContextCompat.getColor(this@RootExplorerActivity, R.color.solina_error)); setPadding(0, dp(6), 0, dp(10))
         })
         val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        bar.addView(Button(this).apply { text = "بالا"; setOnClickListener { currentPath = File(currentPath).parent ?: "/"; loadPath() } })
-        bar.addView(Button(this).apply { text = "تازه‌سازی"; setOnClickListener { loadPath() } })
-        bar.addView(Button(this).apply { text = "پوشه جدید"; setOnClickListener { createFolder() } })
+        bar.addView(MaterialButton(this).apply { text = "بالا"; setOnClickListener { currentPath = File(currentPath).parent ?: "/"; loadPath() } })
+        bar.addView(MaterialButton(this).apply { text = "تازه‌سازی"; setOnClickListener { loadPath() } })
+        bar.addView(MaterialButton(this).apply { text = "پوشه جدید"; setOnClickListener { createFolder() } })
         root.addView(bar)
-        pathText = TextView(this).apply { textSize = 12f; setPadding(4, 8, 4, 8) }
+        pathText = TextView(this).apply { textSize = 12f; setPadding(dp(4), dp(8), dp(4), dp(8)) }
         root.addView(pathText)
         val scroll = ScrollView(this)
         rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -91,7 +100,7 @@ class RootExplorerActivity : AppCompatActivity() {
                 when {
                     rootAvailable -> loadPath()
                     shizukuGranted -> bindShizukuService()
-                    (try { Shizuku.pingBinder() } catch (_: Exception) { false }) -> AlertDialog.Builder(this)
+                    (try { Shizuku.pingBinder() } catch (_: Exception) { false }) -> MaterialAlertDialogBuilder(this)
                         .setTitle("اجازهٔ Shizuku لازم است")
                         .setMessage("دسترسی su پیدا نشد. می‌توانی مجوز Shizuku را بدهی؛ این دسترسی معمولاً سطح shell دارد و جایگزین روت کامل نیست.")
                         .setPositiveButton("درخواست مجوز") { _, _ ->
@@ -99,7 +108,7 @@ class RootExplorerActivity : AppCompatActivity() {
                         }
                         .setNegativeButton("تلاش دوباره با Root") { _, _ -> checkAccess() }
                         .setNeutralButton("بستن") { _, _ -> finish() }.show()
-                    else -> AlertDialog.Builder(this).setTitle("دسترسی Root/Shizuku در دسترس نیست")
+                    else -> MaterialAlertDialogBuilder(this).setTitle("دسترسی Root/Shizuku در دسترس نیست")
                         .setMessage("این قابلیت به دستگاه روت‌شده با مدیر su یا برنامهٔ Shizuku فعال و مجاز نیاز دارد.")
                         .setPositiveButton("تلاش دوباره") { _, _ -> checkAccess() }
                         .setNegativeButton("بستن") { _, _ -> finish() }.show()
@@ -146,7 +155,7 @@ class RootExplorerActivity : AppCompatActivity() {
         pathText.text = currentPath + "  •  " + if (rootAvailable) "Root" else "Shizuku (سطح shell)"
         rows.removeAllViews()
         if (!rootAvailable && !shizukuAvailable) { rows.addView(TextView(this).apply { text = "Root/Shizuku در دسترس نیست" }); return }
-        rows.addView(TextView(this).apply { text = "در حال خواندن فایل‌ها…"; setPadding(8, 16, 8, 16) })
+        rows.addView(TextView(this).apply { text = "در حال خواندن فایل‌ها…"; setPadding(dp(8), dp(16), dp(8), dp(16)) })
         Thread {
             val p = shellQuote(currentPath)
             val command = "p=$p; for f in \"\$p\"/* \"\$p\"/.[!.]* \"\$p\"/..?*; do [ -e \"\$f\" ] || [ -L \"\$f\" ] || continue; if [ -d \"\$f\" ]; then t=D; else t=F; fi; printf '%s\\t%s\\n' \"\$t\" \"\$f\"; done"
@@ -157,12 +166,12 @@ class RootExplorerActivity : AppCompatActivity() {
             }.sortedWith(compareByDescending<Pair<Boolean, String>> { it.first }.thenBy { File(it.second).name.lowercase() }).toList()
             runOnUiThread {
                 rows.removeAllViews()
-                if (entries.isEmpty()) rows.addView(TextView(this).apply { text = "پوشه خالی است یا دسترسی خواندن وجود ندارد."; setPadding(8, 18, 8, 18) })
+                if (entries.isEmpty()) rows.addView(TextView(this).apply { text = "پوشه خالی است یا دسترسی خواندن وجود ندارد."; setPadding(dp(8), dp(18), dp(8), dp(18)) })
                 entries.forEach { (isDir, path) ->
                     val file = File(path)
                     val row = TextView(this).apply {
                         text = (if (isDir) "📁  " else "📄  ") + file.name
-                        textSize = 15f; setPadding(10, 13, 10, 13)
+                        textSize = 15f; setPadding(dp(10), dp(13), dp(10), dp(13))
                         setOnClickListener { if (isDir) { currentPath = path; loadPath() } else showFileActions(path) }
                         setOnLongClickListener { showFileActions(path); true }
                     }
@@ -179,14 +188,14 @@ class RootExplorerActivity : AppCompatActivity() {
         val options = if (isDirectory)
             arrayOf("بازکردن پوشه", "کپی/انتقال به مسیر…", "تغییر مجوزها (chmod)", "حذف دائمی")
         else arrayOf("بازکردن/ویرایش متن", "کپی به حافظه مشترک", "کپی/انتقال به مسیر…", "تغییر مجوزها (chmod)", "حذف دائمی")
-        AlertDialog.Builder(this).setTitle(file.name.ifBlank { path }).setItems(options) { _, which ->
+        MaterialAlertDialogBuilder(this).setTitle(file.name.ifBlank { path }).setItems(options) { _, which ->
             when (options[which]) {
                 "بازکردن پوشه" -> { currentPath = path; loadPath() }
                 "بازکردن/ویرایش متن" -> editRootText(path)
                 "کپی به حافظه مشترک" -> exportRootFile(path)
                 "کپی/انتقال به مسیر…" -> askDestination(path)
                 "تغییر مجوزها (chmod)" -> changePermissions(path)
-                "حذف دائمی" -> AlertDialog.Builder(this).setMessage("این مورد به‌صورت دائمی با دسترسی روت حذف شود؟")
+                "حذف دائمی" -> MaterialAlertDialogBuilder(this).setMessage("این مورد به‌صورت دائمی با دسترسی روت حذف شود؟")
                     .setNegativeButton("لغو", null).setPositiveButton("حذف") { _, _ ->
                         Thread {
                             runRoot("rm -rf -- ${shellQuote(path)}")
@@ -200,7 +209,7 @@ class RootExplorerActivity : AppCompatActivity() {
 
     private fun askDestination(source: String) {
         val input = EditText(this).apply { hint = "مسیر مقصد کامل، مانند /sdcard/Download"; setText("/sdcard/Download") }
-        AlertDialog.Builder(this).setTitle("مسیر مقصد").setView(input)
+        MaterialAlertDialogBuilder(this).setTitle("مسیر مقصد").setView(input)
             .setNegativeButton("لغو", null).setNeutralButton("کپی") { _, _ -> transferRoot(source, input.text.toString(), false) }
             .setPositiveButton("انتقال") { _, _ -> transferRoot(source, input.text.toString(), true) }.show()
     }
@@ -216,7 +225,7 @@ class RootExplorerActivity : AppCompatActivity() {
 
     private fun changePermissions(path: String) {
         val input = EditText(this).apply { hint = "حالت عددی، مانند 0644 یا 0755"; setText(if (runRoot("[ -d ${shellQuote(path)} ] && echo D").trim() == "D") "0755" else "0644") }
-        AlertDialog.Builder(this).setTitle("تغییر مجوزها").setMessage("مقدار chmod را به‌شکل عددی وارد کن.")
+        MaterialAlertDialogBuilder(this).setTitle("تغییر مجوزها").setMessage("مقدار chmod را به‌شکل عددی وارد کن.")
             .setView(input).setNegativeButton("لغو", null).setPositiveButton("اعمال") { _, _ ->
                 val mode = input.text.toString().trim()
                 if (!mode.matches(Regex("0?[0-7]{3,4}"))) { toast("مقدار مجوز نامعتبر است"); return@setPositiveButton }
@@ -229,7 +238,7 @@ class RootExplorerActivity : AppCompatActivity() {
 
     private fun createFolder() {
         val input = EditText(this).apply { hint = "نام پوشه" }
-        AlertDialog.Builder(this).setTitle("ساخت پوشه با Root").setView(input)
+        MaterialAlertDialogBuilder(this).setTitle("ساخت پوشه با Root").setView(input)
             .setNegativeButton("لغو", null).setPositiveButton("ساخت") { _, _ ->
                 val target = File(currentPath, input.text.toString()).absolutePath
                 Thread { val result = runRoot("mkdir -- ${shellQuote(target)} && echo OK")
@@ -249,7 +258,7 @@ class RootExplorerActivity : AppCompatActivity() {
                 if (!valid) { toast("فایل قابل خواندن نیست یا دسترسی روت کافی نیست"); return@runOnUiThread }
                 if (raw.length > 2 * 1024 * 1024) { toast("ویرایش فایل‌های بیشتر از ۲ مگابایت پشتیبانی نمی‌شود"); return@runOnUiThread }
                 val input = EditText(this).apply { setText(raw); gravity = Gravity.TOP or Gravity.START; minLines = 12 }
-                AlertDialog.Builder(this).setTitle("ویرایش: ${File(path).name}").setView(input)
+                MaterialAlertDialogBuilder(this).setTitle("ویرایش: ${File(path).name}").setView(input)
                     .setNegativeButton("لغو", null).setPositiveButton("ذخیره با Root") { _, _ ->
                         val encoded = Base64.getEncoder().encodeToString(input.text.toString().toByteArray(Charsets.UTF_8))
                         Thread {
@@ -272,6 +281,8 @@ class RootExplorerActivity : AppCompatActivity() {
             runOnUiThread { toast(if (ok) "نسخه کپی شد: RootExports/${target.name}" else "کپی ناموفق بود") }
         }.start()
     }
+
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 }
