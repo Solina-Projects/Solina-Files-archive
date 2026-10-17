@@ -33,6 +33,9 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.GridLayoutManager
@@ -1146,6 +1149,32 @@ class MainActivity : AppCompatActivity() {
 
     private fun showAppLockGate() {
         lockPromptShown = true
+        val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
+        val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or
+            BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        if (prefs.getBoolean("biometric_lock_enabled", false) &&
+            BiometricManager.from(this).canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS
+        ) {
+            val prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this),
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                        super.onAuthenticationSucceeded(result)
+                    }
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        super.onAuthenticationError(errorCode, errString)
+                        showPinDialog()
+                    }
+                })
+            val info = BiometricPrompt.PromptInfo.Builder()
+                .setTitle("قفل SolinaFM")
+                .setSubtitle("اثر انگشت یا قفل صفحهٔ دستگاه")
+                .setAllowedAuthenticators(authenticators)
+                .build()
+            prompt.authenticate(info)
+        } else showPinDialog()
+    }
+
+    private fun showPinDialog() {
         val input = TextInputEditText(this).apply {
             hint = "رمز برنامه"
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
@@ -1163,9 +1192,7 @@ class MainActivity : AppCompatActivity() {
             dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 if (verifyAppPin(input.text?.toString().orEmpty())) {
                     dialog.dismiss()
-                } else {
-                    input.error = "رمز نادرست است"
-                }
+                } else input.error = "رمز نادرست است"
             }
         }
         dialog.show()
