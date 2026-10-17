@@ -454,33 +454,87 @@ class DualPaneActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Drag-and-drop for one or many selected entries. JSON keeps paths unambiguous,
+     * including file names that contain line breaks. Collisions use uniqueTarget().
+     */
     private fun handleDropEvent(targetPaneIndex: Int, event: android.view.DragEvent, targetFile: File?): Boolean {
         when (event.action) {
-            android.view.DragEvent.ACTION_DRAG_STARTED -> return event.clipDescription?.label == "solina-file"
-            android.view.DragEvent.ACTION_DRAG_ENTERED, android.view.DragEvent.ACTION_DRAG_EXITED -> return true
+            android.view.DragEvent.ACTION_DRAG_STARTED -> {
+                val label = event.clipDescription?.label?.toString()
+                return label == "solina-files-v1" || label == "solina-file"
+            }
+            android.view.DragEvent.ACTION_DRAG_ENTERED -> {
+                pane(targetPaneIndex).root.isActivated = true
+                pane(targetPaneIndex).root.alpha = 0.96f
+                return true
+            }
+            android.view.DragEvent.ACTION_DRAG_EXITED, android.view.DragEvent.ACTION_DRAG_ENDED -> {
+                pane(targetPaneIndex).root.isActivated = false
+                pane(targetPaneIndex).root.alpha = 1f
+                return true
+            }
             android.view.DragEvent.ACTION_DROP -> {
-                val sourcePath = event.clipData?.getItemAt(0)?.text?.toString() ?: return false
-                val source = File(sourcePath)
+                val raw = event.clipData?.getItemAt(0)?.text?.toString() ?: return false
+                val sourcePaths = runCatching {
+                    if (event.clipDescription?.label?.toString() == "solina-files-v1") {
+                        val json = org.json.JSONArray(raw)
+                        (0 until json.length()).mapNotNull { json.optString(it).takeIf(String::isNotBlank) }
+                    } else listOf(raw)
+                }.getOrElse { listOf(raw) }.distinct()
+                val sources = sourcePaths.map(::File).filter { it.exists() }
                 val destDir = targetFile?.takeIf { it.isDirectory } ?: pane(targetPaneIndex).current
-                if (!source.exists() || !destDir.isDirectory || destDir.absolutePath == source.absolutePath ||
-                    (source.isDirectory && destDir.absolutePath.startsWith(source.absolutePath + File.separator))) {
-                    toast("مقصد انتخاب‌شده معتبر نیست")
+                pane(targetPaneIndex).root.isActivated = false
+                pane(targetPaneIndex).root.alpha = 1f
+
+                if (sources.isEmpty() || !destDir.isDirectory) {
+                    toast("فایل مبدأ یا پوشهٔ مقصد در دسترس نیست")
                     return true
                 }
-                if (source.parentFile?.absolutePath == destDir.absolutePath) return true
+                val invalid = sources.any { source ->
+                    source.absoluteFile == destDir.absoluteFile ||
+                        (source.isDirectory && destDir.absolutePath.startsWith(source.absolutePath.trimEnd(File.separatorChar) + File.separator))
+                }
+                if (invalid) {
+                    toast("انتقال پوشه به داخل خودش مجاز نیست")
+                    return true
+                }
+
+                val candidates = sources.filter { it.parentFile?.absolutePath != destDir.absolutePath }
+                if (candidates.isEmpty()) return true
+
                 Thread {
-                    var failed = false
-                    try {
-                        val target = uniqueTarget(destDir, source)
-                        if (!source.renameTo(target)) {
-                            val copied = source.copyRecursively(target, overwrite = false)
-                            if (copied) source.deleteRecursively() else { target.deleteRecursively(); failed = true }
+                    val failed = mutableListOf<File>()
+                    var moved = 0
+                    candidates.forEach { source ->
+                        try {
+                            val target = uniqueTarget(destDir, source)
+                            val success = if (source.renameTo(target)) {
+                                true
+                            } else {
+                                val copied = source.copyRecursively(target, overwrite = false)
+                                if (copied) source.deleteRecursively() else {
+                                    target.deleteRecursively()
+                                    false
+                                }
+                            }
+                            if (success) moved++ else failed += source
+                        } catch (_: Exception) {
+                            failed += source
                         }
-                    } catch (_: Exception) { failed = true }
+                    }
                     runOnUiThread {
-                        pane(0).selected.remove(source); pane(1).selected.remove(source)
-                        refresh(0); refresh(1); updateTopBar()
-                        toast(if (failed) "جابه‌جایی ناموفق بود" else "فایل جابه‌جا شد")
+                        candidates.filter { it !in failed }.forEach { source ->
+                            pane(0).selected.remove(source)
+                            pane(1).selected.remove(source)
+                        }
+                        refresh(0)
+                        refresh(1)
+                        updateTopBar()
+                        val summary = if (failed.isEmpty()) {
+                            if (moved == 1) "۱ مورد جابه‌جا شد" else "$moved مورد جابه‌جا شد"
+                        } else "$moved مورد جابه‌جا شد؛ ${failed.size} مورد ناموفق بود"
+                        toast(summary)
                     }
                 }.start()
                 return true
@@ -764,8 +818,13 @@ class DualPaneActivity : AppCompatActivity() {
                 activePane = paneIndex
                 if (!p.selected.contains(file)) actionOpen(file, true)
                 else {
-                    val clip = ClipData.newPlainText("solina-file", file.absolutePath)
-                    holder.row.startDragAndDrop(clip, View.DragShadowBuilder(holder.row), file.absolutePath, 0)
+                    // Drag every selected item from the active pane, not just the row
+                    // used to start the gesture.
+                    val payload = org.json.JSONArray().apply {
+                        p.selected.forEach { selectedFile -> put(selectedFile.absolutePath) }
+                    }.toString()
+                    val clip = ClipData.newPlainText("solina-files-v1", payload)
+                    holder.row.startDragAndDrop(clip, View.DragShadowBuilder(holder.row), payload, 0)
                 }
                 true
             }
