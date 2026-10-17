@@ -6,6 +6,66 @@
     android:background="?attr/colorSurface"
     android:orientation="vertical">
 
+    <LinearLayout
+        android:id="@+id/navigationBar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:layoutDirection="ltr">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/navBack"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="44dp"
+            android:layout_height="match_parent"
+            android:minWidth="0dp"
+            android:padding="0dp"
+            android:text="‹"
+            android:textSize="28sp"
+            android:contentDescription="Back" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/navForward"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="44dp"
+            android:layout_height="match_parent"
+            android:minWidth="0dp"
+            android:padding="0dp"
+            android:text="›"
+            android:textSize="28sp"
+            android:contentDescription="Forward" />
+
+        <TextView
+            android:id="@+id/pathView"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:ellipsize="start"
+            android:maxLines="1"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:textColor="?attr/colorOnSurface"
+            android:textDirection="ltr"
+            android:textSize="14sp" />
+
+        <EditText
+            android:id="@+id/searchInput"
+            android:layout_width="128dp"
+            android:layout_height="40dp"
+            android:background="@drawable/item_bg"
+            android:hint="جست‌وجو"
+            android:imeOptions="actionSearch"
+            android:inputType="text"
+            android:maxLines="1"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:textSize="14sp" />
+    </LinearLayout>
+
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
@@ -37,21 +97,6 @@
             android:visibility="gone"
             app:navigationIcon="@drawable/ic_close" />
     </FrameLayout>
-
-    <TextView
-        android:id="@+id/pathView"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingBottom="8dp"
-        android:singleLine="true"
-        android:ellipsize="start"
-        android:textAlignment="viewStart"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:textDirection="ltr"
-        android:textSize="13sp"
-        android:visibility="gone" />
 
     <com.google.android.material.progressindicator.LinearProgressIndicator
         android:id="@+id/progress"
@@ -109,4 +154,38 @@
             android:visibility="gone"
             app:icon="@drawable/ic_content_paste" />
     </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/bottomActions"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp"
+        android:visibility="gone">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/bottomCopy"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="کپی" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/bottomMove"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="انتقال" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/bottomDelete"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="حذف" />
+    </LinearLayout>
 </LinearLayout>
