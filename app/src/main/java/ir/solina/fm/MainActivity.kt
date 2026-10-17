@@ -9,6 +9,10 @@ import android.os.StatFs
 import android.os.storage.StorageManager
 import android.provider.Settings
 import android.text.format.Formatter
+import android.text.Editable
+import android.text.TextWatcher
+import android.widget.CheckBox
+import android.widget.EditText
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
@@ -32,6 +36,9 @@ import com.google.android.material.textfield.TextInputEditText
 import java.io.File
 import java.util.Date
 import java.util.Locale
+import java.util.ArrayDeque
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 class MainActivity : AppCompatActivity() {
 
@@ -43,6 +50,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var selectionBar: MaterialToolbar
     private lateinit var storageButton: MaterialButton
     private lateinit var pathView: TextView
+    private lateinit var navBack: MaterialButton
+    private lateinit var navForward: MaterialButton
+    private lateinit var searchInput: EditText
+    private lateinit var bottomActions: LinearLayout
+    private lateinit var bottomCopy: MaterialButton
+    private lateinit var bottomMove: MaterialButton
+    private lateinit var bottomDelete: MaterialButton
     private lateinit var progress: LinearProgressIndicator
     private lateinit var list: RecyclerView
     private lateinit var emptyBox: View
@@ -55,6 +69,9 @@ class MainActivity : AppCompatActivity() {
     private var currentVol: Vol? = null
     private var current: File = Environment.getExternalStorageDirectory()
     private var showHidden = false
+    private var allFiles: List<File> = emptyList()
+    private val backHistory = ArrayDeque<File>()
+    private val forwardHistory = ArrayDeque<File>()
 
     private var clipFiles: List<File> = emptyList()
     private var clipCut = false
@@ -83,6 +100,13 @@ class MainActivity : AppCompatActivity() {
         selectionBar = findViewById(R.id.selectionBar)
         storageButton = findViewById(R.id.storageButton)
         pathView = findViewById(R.id.pathView)
+        navBack = findViewById(R.id.navBack)
+        navForward = findViewById(R.id.navForward)
+        searchInput = findViewById(R.id.searchInput)
+        bottomActions = findViewById(R.id.bottomActions)
+        bottomCopy = findViewById(R.id.bottomCopy)
+        bottomMove = findViewById(R.id.bottomMove)
+        bottomDelete = findViewById(R.id.bottomDelete)
         progress = findViewById(R.id.progress)
         list = findViewById(R.id.list)
         emptyBox = findViewById(R.id.emptyBox)
@@ -97,6 +121,16 @@ class MainActivity : AppCompatActivity() {
         selectionBar.setOnMenuItemClickListener { onSelectionMenu(it) }
 
         storageButton.setOnClickListener { showStorageSheet() }
+        navBack.setOnClickListener { navigateHistory(back = true) }
+        navForward.setOnClickListener { navigateHistory(back = false) }
+        searchInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { refresh() }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+        bottomCopy.setOnClickListener { setClip(false) }
+        bottomMove.setOnClickListener { setClip(true) }
+        bottomDelete.setOnClickListener { confirmDelete() }
         grantButton.setOnClickListener { requestPermission() }
         pasteFab.setOnClickListener { paste() }
 
@@ -224,11 +258,29 @@ class MainActivity : AppCompatActivity() {
 
     // ---------- listing ----------
 
-    private fun navigate(dir: File) {
+    private fun navigate(dir: File, recordHistory: Boolean = true) {
+        if (dir.path == current.path) return
+        if (recordHistory) {
+            backHistory.addLast(current)
+            forwardHistory.clear()
+        }
         current = dir
         selected.clear()
         refresh()
         list.scrollToPosition(0)
+    }
+
+    private fun navigateHistory(back: Boolean) {
+        val source = if (back) backHistory else forwardHistory
+        val targetHistory = if (back) forwardHistory else backHistory
+        if (source.isEmpty()) {
+            if (back) handleBack()
+            return
+        }
+        targetHistory.addLast(current)
+        current = source.removeLast()
+        selected.clear()
+        refresh()
     }
 
     private fun refresh() {
@@ -239,14 +291,16 @@ class MainActivity : AppCompatActivity() {
             updateSelectionUi()
             return
         }
-        val all = current.listFiles()
-        val files = (all ?: emptyArray())
+        val raw = current.listFiles()
+        allFiles = (raw ?: emptyArray())
             .filter { showHidden || !it.name.startsWith(".") }
-            .sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase() }))
-        selected.retainAll(files.toSet())
+            .sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) }))
+        selected.retainAll(allFiles.toSet())
+        val query = searchInput.text?.toString()?.trim()?.lowercase(Locale.ROOT).orEmpty()
+        val files = allFiles.filter { query.isEmpty() || it.name.lowercase(Locale.ROOT).contains(query) }
         adapter.submit(files)
         if (files.isEmpty()) {
-            showEmpty(getString(if (all == null) R.string.cannot_read else R.string.empty_folder), false)
+            showEmpty(getString(if (raw == null) R.string.cannot_read else R.string.empty_folder), false)
         } else {
             emptyBox.visibility = View.GONE
         }
@@ -263,8 +317,10 @@ class MainActivity : AppCompatActivity() {
         storageButton.text = currentVol?.name ?: getString(R.string.internal_storage)
         val base = currentVol?.dir?.path ?: ""
         val rel = current.path.removePrefix(base).trimStart('/')
-        pathView.text = rel
-        pathView.visibility = if (rel.isEmpty()) View.GONE else View.VISIBLE
+        pathView.text = current.name.ifBlank { current.absolutePath }
+        pathView.contentDescription = current.absolutePath
+        navBack.isEnabled = backHistory.isNotEmpty() || (currentVol?.dir?.path != current.path && current.parentFile != null)
+        navForward.isEnabled = forwardHistory.isNotEmpty()
     }
 
     private fun handleBack() {
@@ -293,9 +349,12 @@ class MainActivity : AppCompatActivity() {
         val sel = selected.isNotEmpty()
         mainBar.visibility = if (sel) View.GONE else View.VISIBLE
         selectionBar.visibility = if (sel) View.VISIBLE else View.GONE
+        bottomActions.visibility = if (sel) View.VISIBLE else View.GONE
         if (sel) {
             selectionBar.title = getString(R.string.selected_count, selected.size)
             selectionBar.menu.findItem(R.id.action_rename).isVisible = selected.size == 1
+            selectionBar.menu.findItem(R.id.action_extract).isVisible =
+                selected.any { it.isFile && it.extension.equals("zip", ignoreCase = true) }
         }
         pasteFab.visibility =
             if (clipFiles.isNotEmpty() && !sel) View.VISIBLE else View.GONE
@@ -322,10 +381,12 @@ class MainActivity : AppCompatActivity() {
             R.id.action_cut -> setClip(true)
             R.id.action_rename -> selected.firstOrNull()?.let { rename(it) }
             R.id.action_select_all -> {
-                selected.addAll(adapter.items)
+                selected.addAll(allFiles)
                 updateSelectionUi()
             }
-            R.id.action_delete -> confirmDelete()
+            R.id.action_deselect_all -> clearSelection()
+            R.id.action_compress -> compressSelected()
+            R.id.action_extract -> extractSelectedArchives()
             R.id.action_details -> showDetails()
         }
         return true
@@ -407,6 +468,102 @@ class MainActivity : AppCompatActivity() {
                 refresh()
             }
         }.start()
+    }
+
+
+    private fun compressSelected() {
+        val items = selected.toList()
+        if (items.isEmpty()) return
+        val input = TextInputEditText(this).apply {
+            setText(if (items.size == 1) items.first().nameWithoutExtension + ".zip" else "archive.zip")
+            setSingleLine(true)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle("نام فایل فشرده")
+            .setView(input)
+            .setPositiveButton("ساخت") { _, _ ->
+                var name = input.text?.toString()?.trim().orEmpty()
+                if (name.isBlank() || name.contains("/")) {
+                    toast("نام فایل معتبر نیست")
+                    return@setPositiveButton
+                }
+                if (!name.endsWith(".zip", true)) name += ".zip"
+                val target = File(current, name)
+                if (target.exists()) {
+                    toast("فایلی با این نام وجود دارد")
+                    return@setPositiveButton
+                }
+                progress.visibility = View.VISIBLE
+                Thread {
+                    var failed = false
+                    try {
+                        ZipOutputStream(target.outputStream().buffered()).use { zip ->
+                            items.forEach { addToZip(it, it.name, zip) }
+                        }
+                    } catch (_: Exception) {
+                        failed = true
+                        target.delete()
+                    }
+                    runOnUiThread {
+                        progress.visibility = View.GONE
+                        if (failed) toast("ساخت فایل فشرده ناموفق بود") else toast("فایل فشرده ساخته شد")
+                        selected.clear()
+                        refresh()
+                    }
+                }.start()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun addToZip(file: File, entryName: String, zip: ZipOutputStream) {
+        if (file.isDirectory) {
+            val dirName = if (entryName.endsWith("/")) entryName else entryName + "/"
+            zip.putNextEntry(ZipEntry(dirName))
+            zip.closeEntry()
+            file.listFiles()?.forEach { child -> addToZip(child, dirName + child.name, zip) }
+        } else {
+            zip.putNextEntry(ZipEntry(entryName))
+            file.inputStream().buffered().use { input -> input.copyTo(zip) }
+            zip.closeEntry()
+        }
+    }
+
+    private fun extractSelectedArchives() {
+        val archives = selected.filter { it.isFile && it.extension.equals("zip", true) }
+        if (archives.isEmpty()) {
+            toast("ابتدا فایل ZIP را انتخاب کنید")
+            return
+        }
+        val passwordInput = TextInputEditText(this).apply { hint = "رمز (در صورت نداشتن خالی بگذارید)" }
+        MaterialAlertDialogBuilder(this)
+            .setTitle("استخراج فایل ZIP")
+            .setView(passwordInput)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                val password = passwordInput.text?.toString().orEmpty()
+                progress.visibility = View.VISIBLE
+                Thread {
+                    var failed = 0
+                    archives.forEach { archive ->
+                        try {
+                            val out = uniqueTarget(current, File(archive.nameWithoutExtension))
+                            out.mkdirs()
+                            val zip = if (password.isNotEmpty())
+                                net.lingala.zip4j.ZipFile(archive, password.toCharArray())
+                            else net.lingala.zip4j.ZipFile(archive)
+                            zip.extractAll(out.absolutePath)
+                        } catch (_: Exception) { failed++ }
+                    }
+                    runOnUiThread {
+                        progress.visibility = View.GONE
+                        selected.clear()
+                        refresh()
+                        toast(if (failed == 0) "استخراج انجام شد" else "استخراج برخی فایل‌ها ناموفق بود؛ رمز یا سلامت ZIP را بررسی کنید")
+                    }
+                }.start()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 
     private fun confirmDelete() {
@@ -529,6 +686,7 @@ class MainActivity : AppCompatActivity() {
             val icon: ImageView = view.findViewById(R.id.icon)
             val name: TextView = view.findViewById(R.id.name)
             val info: TextView = view.findViewById(R.id.info)
+            val check: CheckBox = view.findViewById(R.id.fileCheck)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH =
@@ -544,6 +702,13 @@ class MainActivity : AppCompatActivity() {
             holder.info.text =
                 if (file.isDirectory) date else fmt(file.length()) + " • " + date
             holder.itemView.isActivated = selected.contains(file)
+            holder.check.setOnCheckedChangeListener(null)
+            holder.check.visibility = if (selected.isNotEmpty()) View.VISIBLE else View.GONE
+            holder.check.isChecked = selected.contains(file)
+            holder.check.setOnCheckedChangeListener { _, checked ->
+                if (checked) selected.add(file) else selected.remove(file)
+                updateSelectionUi()
+            }
             holder.itemView.setOnClickListener {
                 when {
                     selected.isNotEmpty() -> toggle(file)
