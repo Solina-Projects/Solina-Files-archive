@@ -14,6 +14,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -169,14 +170,30 @@ class RootExplorerActivity : AppCompatActivity() {
                 if (entries.isEmpty()) rows.addView(TextView(this).apply { text = "پوشه خالی است یا دسترسی خواندن وجود ندارد."; setPadding(dp(8), dp(18), dp(8), dp(18)) })
                 entries.forEach { (isDir, path) ->
                     val file = File(path)
-                    val row = TextView(this).apply {
-                        text = (if (isDir) "📁  " else "📄  ") + file.name
-                        textSize = 15f; setPadding(dp(10), dp(13), dp(10), dp(13))
+                    val row = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        setPadding(dp(10), dp(8), dp(10), dp(8))
+                        background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@RootExplorerActivity, R.drawable.item_bg)
+                        isClickable = true
+                        isFocusable = true
                         setOnClickListener { if (isDir) { currentPath = path; loadPath() } else showFileActions(path) }
                         setOnLongClickListener { showFileActions(path); true }
                     }
-                    rows.addView(row)
-                    rows.addView(View(this).apply { setBackgroundColor(0x22333333); layoutParams = LinearLayout.LayoutParams(-1, 1) })
+                    val icon = ImageView(this).apply {
+                        FileTypeVisuals.applyTo(this, file)
+                        background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@RootExplorerActivity, R.drawable.icon_bg)
+                        setPadding(dp(8), dp(8), dp(8), dp(8))
+                        contentDescription = null
+                    }
+                    row.addView(icon, LinearLayout.LayoutParams(dp(42), dp(42)).apply { marginEnd = dp(10) })
+                    row.addView(TextView(this).apply {
+                        text = file.name
+                        textSize = 15f
+                        setTextColor(ContextCompat.getColor(this@RootExplorerActivity, R.color.solina_on_surface))
+                        maxLines = 2
+                    }, LinearLayout.LayoutParams(0, -2, 1f))
+                    rows.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
                 }
             }
         }.start()
