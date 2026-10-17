@@ -31,6 +31,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.FileProvider
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
@@ -65,6 +66,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var overflowButton: MaterialButton
     private lateinit var drawerButton: MaterialButton
     private lateinit var dualPaneButton: MaterialButton
+    private lateinit var layoutModeButton: MaterialButton
     private lateinit var pathView: TextView
     private lateinit var navBack: MaterialButton
     private lateinit var navForward: MaterialButton
@@ -85,6 +87,7 @@ class MainActivity : AppCompatActivity() {
     private var currentVol: Vol? = null
     private var current: File = Environment.getExternalStorageDirectory()
     private var showHidden = false
+    private var gridLayout = false
     private var sortMode = SortMode.NAME
     private var allFiles: List<File> = emptyList()
     private val backHistory = ArrayDeque<File>()
@@ -123,6 +126,7 @@ class MainActivity : AppCompatActivity() {
         overflowButton = findViewById(R.id.overflowButton)
         drawerButton = findViewById(R.id.drawerButton)
         dualPaneButton = findViewById(R.id.dualPaneButton)
+        layoutModeButton = findViewById(R.id.layoutModeButton)
         pathView = findViewById(R.id.pathView)
         navBack = findViewById(R.id.navBack)
         navForward = findViewById(R.id.navForward)
@@ -160,6 +164,13 @@ class MainActivity : AppCompatActivity() {
         overflowButton.setOnClickListener { showTopMenu(it) }
         drawerButton.setOnClickListener { showRightDrawer() }
         dualPaneButton.setOnClickListener { startActivity(Intent(this, DualPaneActivity::class.java)) }
+        gridLayout = getSharedPreferences("solina_preferences", MODE_PRIVATE).getBoolean("grid_layout", false)
+        layoutModeButton.setOnClickListener {
+            gridLayout = !gridLayout
+            getSharedPreferences("solina_preferences", MODE_PRIVATE).edit().putBoolean("grid_layout", gridLayout).apply()
+            applyFileLayout()
+            adapter.notifyDataSetChanged()
+        }
         mainBar.visibility = View.GONE
         navBack.setOnClickListener { navigateHistory(back = true) }
         navForward.setOnClickListener { navigateHistory(back = false) }
@@ -174,8 +185,8 @@ class MainActivity : AppCompatActivity() {
         grantButton.setOnClickListener { requestPermission() }
         pasteFab.setOnClickListener { paste() }
 
-        list.layoutManager = LinearLayoutManager(this)
         list.adapter = adapter
+        applyFileLayout()
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -292,6 +303,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private fun applyFileLayout() {
+        list.layoutManager = if (gridLayout) GridLayoutManager(this, 2) else LinearLayoutManager(this)
+        layoutModeButton.text = if (gridLayout) "☷" else "▦"
+        layoutModeButton.contentDescription = if (gridLayout) "تغییر به چیدمان فهرستی" else "تغییر به چیدمان شبکه‌ای"
+    }
 
     private fun fmt(bytes: Long): String = Formatter.formatFileSize(this, bytes)
 
@@ -1020,6 +1037,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun openFile(file: File) {
         when (file.extension.lowercase(Locale.ROOT)) {
+            "apk" -> installApk(file)
             "txt", "md", "log", "json", "xml", "csv", "tsv", "ini", "kt", "java",
             "html", "htm", "css", "js", "gradle", "kts", "yml", "yaml", "sh",
             "properties", "conf", "cfg", "sql", "py", "c", "cpp", "h", "rs" -> editTextFile(file)
@@ -1029,6 +1047,20 @@ class MainActivity : AppCompatActivity() {
             "zip" -> browseArchive(file)
             "rar", "7z" -> startActivity(Intent(this, ArchiveToolsActivity::class.java).putExtra("archive_path", file.absolutePath))
             else -> openExternal(file)
+        }
+    }
+
+    private fun installApk(file: File) {
+        try {
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            val intent = Intent(Intent.ACTION_VIEW)
+                .setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(intent)
+        } catch (e: ActivityNotFoundException) {
+            toast("نصب‌کنندهٔ بستهٔ اندروید در دستگاه پیدا نشد")
+        } catch (e: Exception) {
+            toast("بازکردن نصب‌کننده ناموفق بود؛ مجوز نصب از این منبع و سلامت فایل APK را بررسی کنید")
         }
     }
 
@@ -1207,6 +1239,32 @@ class MainActivity : AppCompatActivity() {
             val date = formatDate(file.lastModified())
             holder.info.text =
                 if (file.isDirectory) date else fmt(file.length()) + " • " + date
+            val root = holder.itemView as? LinearLayout
+            val iconFrame = (0 until (root?.childCount ?: 0)).mapNotNull { root?.getChildAt(it) }.firstOrNull { it is android.widget.FrameLayout } as? android.widget.FrameLayout
+            val details = (0 until (root?.childCount ?: 0)).mapNotNull { root?.getChildAt(it) }.firstOrNull { it is LinearLayout } as? LinearLayout
+            if (root != null && iconFrame != null && details != null) {
+                if (gridLayout) {
+                    root.orientation = LinearLayout.VERTICAL
+                    root.gravity = android.view.Gravity.CENTER_HORIZONTAL
+                    root.minimumHeight = dp(116)
+                    root.setPadding(dp(8), dp(8), dp(8), dp(8))
+                    iconFrame.layoutParams = LinearLayout.LayoutParams(dp(44), dp(44)).apply { gravity = android.view.Gravity.CENTER }
+                    details.layoutParams = LinearLayout.LayoutParams(-1, -2).apply { gravity = android.view.Gravity.CENTER_HORIZONTAL }
+                    details.gravity = android.view.Gravity.CENTER_HORIZONTAL
+                    holder.name.textAlignment = View.TEXT_ALIGNMENT_CENTER
+                    holder.info.textAlignment = View.TEXT_ALIGNMENT_CENTER
+                } else {
+                    root.orientation = LinearLayout.HORIZONTAL
+                    root.gravity = android.view.Gravity.CENTER_VERTICAL
+                    root.minimumHeight = 0
+                    root.setPadding(dp(10), dp(10), dp(10), dp(10))
+                    iconFrame.layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
+                    details.layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(14) }
+                    details.gravity = android.view.Gravity.START
+                    holder.name.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+                    holder.info.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+                }
+            }
             holder.itemView.isActivated = selected.contains(file)
             holder.check.setOnCheckedChangeListener(null)
             holder.check.visibility = if (selected.isNotEmpty()) View.VISIBLE else View.GONE
