@@ -280,10 +280,12 @@
     <LinearLayout
         android:id="@+id/bottomActions"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
+        android:layout_height="64dp"
         android:gravity="center"
         android:orientation="horizontal"
         android:paddingHorizontal="8dp"
+        android:background="?attr/colorSurfaceContainer"
+        android:elevation="4dp"
         android:visibility="gone">
 
         <com.google.android.material.button.MaterialButton
