@@ -85,7 +85,7 @@ class TextEditorActivity : AppCompatActivity() {
             setPadding(dp(8), dp(8), dp(8), dp(8))
         }
         val scroll = ScrollView(this)
-        scroll.addView(editor, ScrollView.LayoutParams(-1, -2))
+        scroll.addView(editor, LinearLayout.LayoutParams(-1, -2))
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
         editor.addTextChangedListener(object : android.text.TextWatcher {
