@@ -181,7 +181,10 @@ class RootExplorerActivity : AppCompatActivity() {
                         setOnLongClickListener { showFileActions(path); true }
                     }
                     val icon = ImageView(this).apply {
-                        FileTypeVisuals.applyTo(this, file)
+                        if (isDir) {
+                            setImageResource(R.drawable.ic_folder)
+                            imageTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this@RootExplorerActivity, R.color.solina_primary))
+                        } else FileTypeVisuals.applyTo(this, file)
                         background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@RootExplorerActivity, R.drawable.icon_bg)
                         setPadding(dp(8), dp(8), dp(8), dp(8))
                         contentDescription = null
