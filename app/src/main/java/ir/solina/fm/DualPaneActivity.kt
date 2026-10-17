@@ -416,10 +416,7 @@ class DualPaneActivity : AppCompatActivity() {
     private fun handleDropEvent(targetPaneIndex: Int, event: android.view.DragEvent, targetFile: File?): Boolean {
         when (event.action) {
             android.view.DragEvent.ACTION_DRAG_STARTED -> return event.clipDescription?.label == "solina-file"
-            android.view.DragEvent.ACTION_DRAG_ENTERED, android.view.DragEvent.ACTION_DRAG_EXITED -> {
-                targetFile?.let { if (it.isDirectory) it.setReadable(true) }
-                return true
-            }
+            android.view.DragEvent.ACTION_DRAG_ENTERED, android.view.DragEvent.ACTION_DRAG_EXITED -> return true
             android.view.DragEvent.ACTION_DROP -> {
                 val sourcePath = event.clipData?.getItemAt(0)?.text?.toString() ?: return false
                 val source = File(sourcePath)
