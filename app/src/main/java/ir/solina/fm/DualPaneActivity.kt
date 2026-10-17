@@ -322,13 +322,84 @@ class DualPaneActivity : AppCompatActivity() {
 
     private fun renameSelected(index: Int) {
         val p = pane(index)
-        val file = p.selected.singleOrNull() ?: run { toast("برای تغییر نام فقط یک مورد انتخاب کنید"); return }
-        askText("نام جدید", file.name) { name ->
-            if (name.isBlank() || name.contains("/") || File(file.parentFile, name).exists()) {
-                toast("نام نامعتبر است یا قبلاً وجود دارد")
-            } else if (!file.renameTo(File(file.parentFile, name))) toast("تغییر نام انجام نشد")
-            p.selected.clear()
-            refresh(index)
+        val files = p.selected.sortedBy { it.name.lowercase(Locale.ROOT) }
+        if (files.isEmpty()) {
+            toast("ابتدا فایل یا پوشه‌ای را انتخاب کنید")
+            return
+        }
+        if (files.size == 1) {
+            val file = files.single()
+            askText("نام جدید", file.name) { name ->
+                if (name.isBlank() || name == "." || name == ".." || name.contains("/") ||
+                    File(file.parentFile, name).exists()) {
+                    toast("نام نامعتبر است یا قبلاً وجود دارد")
+                } else if (!file.renameTo(File(file.parentFile, name))) {
+                    toast("تغییر نام انجام نشد")
+                }
+                p.selected.clear()
+                refresh(index)
+            }
+            return
+        }
+
+        askText("الگوی تغییر نام گروهی", "{name}_{n}.{ext}") { pattern ->
+            if (pattern.isBlank() || pattern.contains("/")) {
+                toast("الگوی نامعتبر است")
+                return@askText
+            }
+            val targets = files.mapIndexed { i, file ->
+                val ext = file.extension
+                pattern.replace("{name}", file.nameWithoutExtension)
+                    .replace("{ext}", ext)
+                    .replace("{n}", (i + 1).toString())
+                    .let { if ("{ext}" !in pattern && ext.isNotEmpty()) "$it.$ext" else it }
+            }
+            val sourcePaths = files.map { it.absoluteFile.normalize().path }.toSet()
+            val targetFiles = files.zip(targets).map { (file, name) -> File(file.parentFile, name) }
+            val duplicateNames = targets.map { it.lowercase(Locale.ROOT) }.toSet().size != targets.size
+            val invalidNames = targets.any {
+                it.isBlank() || it == "." || it == ".." || it.contains("/") ||
+                    it.toByteArray(Charsets.UTF_8).size > 255
+            }
+            val collides = targetFiles.any { target ->
+                target.exists() && target.absoluteFile.normalize().path !in sourcePaths
+            }
+            if (duplicateNames || invalidNames || collides) {
+                toast("الگو نام تکراری، نامعتبر یا مقصد موجود ایجاد می‌کند")
+                return@askText
+            }
+
+            Thread {
+                val temporary = mutableListOf<Pair<File, File>>()
+                val finalized = mutableListOf<Pair<File, File>>()
+                var failed = false
+                try {
+                    files.forEachIndexed { i, source ->
+                        val temp = File(source.parentFile, ".solina-rename-${System.nanoTime()}-$i")
+                        if (!source.renameTo(temp)) throw IllegalStateException("temporary rename failed")
+                        temporary += source to temp
+                    }
+                    temporary.forEachIndexed { i, (original, temp) ->
+                        val target = targetFiles[i]
+                        if (!temp.renameTo(target)) throw IllegalStateException("final rename failed")
+                        finalized += original to target
+                    }
+                } catch (_: Exception) {
+                    failed = true
+                    finalized.asReversed().forEach { (original, target) ->
+                        if (target.exists()) target.renameTo(original)
+                    }
+                    temporary.filter { (_, temp) -> temp.exists() }.asReversed().forEach { (original, temp) ->
+                        if (temp.exists()) temp.renameTo(original)
+                    }
+                }
+                runOnUiThread {
+                    if (!failed) p.selected.clear()
+                    refresh(index)
+                    updateSelectionUi()
+                    toast(if (failed) "تغییر نام گروهی کامل نشد؛ بازگردانی تا حد امکان انجام شد" else "${files.size} مورد تغییر نام یافت")
+                }
+            }.start()
         }
     }
 
