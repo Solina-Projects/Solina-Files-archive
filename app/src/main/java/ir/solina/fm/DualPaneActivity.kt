@@ -143,11 +143,11 @@ class DualPaneActivity : AppCompatActivity() {
         panesHost.orientation = if (mode == LayoutMode.VERTICAL) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
         listOf(left, right).forEachIndexed { index, p ->
             p.root.layoutParams = if (mode == LayoutMode.VERTICAL) LinearLayout.LayoutParams(-1, 0, 1f) else LinearLayout.LayoutParams(0, -1, 1f)
-            p.root.setBackgroundColor(if (activePane == index) 0x143F51B5 else 0x00000000)
+            p.root.setBackgroundColor(if (activePane == index) androidx.core.graphics.ColorUtils.setAlphaComponent(resolveThemeColor(com.google.android.material.R.attr.colorSecondaryContainer), 38) else 0x00000000)
             p.root.setOnClickListener { activePane = index; updateTopBar() }
             panesHost.addView(p.root)
             if (mode == LayoutMode.HORIZONTAL && index == 0) {
-                panesHost.addView(View(this).apply { setBackgroundColor(0x223F51B5) },
+                panesHost.addView(View(this).apply { setBackgroundColor(androidx.core.graphics.ColorUtils.setAlphaComponent(resolveThemeColor(com.google.android.material.R.attr.colorOutline), 100)) },
                     LinearLayout.LayoutParams(dp(1), -1))
             }
             refresh(index)
@@ -744,7 +744,7 @@ class DualPaneActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: Holder, position: Int) {
             val file = items[position]
-            holder.icon.setImageResource(if (file.isDirectory) R.drawable.ic_folder else R.drawable.ic_file)
+            FileTypeVisuals.applyTo(holder.icon, file)
             holder.name.text = file.name
             holder.info.text = if (!details) "" else if (file.isDirectory) "پوشه" else Formatter.formatFileSize(this@DualPaneActivity, file.length())
             val p = pane(paneIndex)
