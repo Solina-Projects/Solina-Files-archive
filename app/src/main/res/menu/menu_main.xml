@@ -27,6 +27,7 @@
     <item android:id="@+id/action_network" android:title="اتصال FTP/SFTP/SMB/WebDAV" app:showAsAction="never" />
     <item android:id="@+id/action_apk_tools" android:title="ابزار APK / DEX" app:showAsAction="never" />
     <item android:id="@+id/action_file_tools" android:title="ابزارهای تکمیلی فایل" app:showAsAction="never" />
+    <item android:id="@+id/action_recycle_bin" android:title="سطل بازیافت" app:showAsAction="never" />
     <item
         android:id="@+id/action_new_folder"
         android:title="@string/new_folder"
