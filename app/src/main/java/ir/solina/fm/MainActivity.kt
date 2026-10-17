@@ -13,6 +13,10 @@ import android.os.storage.StorageManager
 import android.provider.Settings
 import android.text.format.Formatter
 import android.text.Editable
+import android.text.SpannableStringBuilder
+import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
+import android.graphics.Typeface
 import android.text.InputType
 import android.text.TextWatcher
 import android.widget.CheckBox
@@ -444,9 +448,36 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateBars() {
         storageButton.text = currentVol?.name ?: getString(R.string.internal_storage)
-        // Show the complete absolute path only; the single-line view scrolls horizontally.
-        pathView.text = current.absolutePath
-        pathView.contentDescription = "مسیر کامل: ${current.absolutePath}"
+        // Show only the current folder and two ancestors: current is prominent,
+        // parent stays complete, and grandparent is abbreviated.
+        val segments = current.absolutePath.split(File.separatorChar).filter { it.isNotBlank() }
+        val shown = segments.takeLast(3).toMutableList()
+        if (shown.isNotEmpty()) {
+            val currentName = shown.last()
+            val pathText = SpannableStringBuilder()
+            if (shown.size == 3) {
+                val grandparent = shown[0]
+                val abbreviated = if (grandparent.length > 10) grandparent.take(8) + "…" else grandparent
+                pathText.append(abbreviated)
+                pathText.setSpan(RelativeSizeSpan(0.78f), 0, pathText.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                pathText.append("  ›  ")
+                val parentStart = pathText.length
+                pathText.append(shown[1])
+                pathText.setSpan(RelativeSizeSpan(0.9f), parentStart, pathText.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                pathText.append("  ›  ")
+            } else if (shown.size == 2) {
+                pathText.append(shown[0])
+                pathText.append("  ›  ")
+            }
+            val currentStart = pathText.length
+            pathText.append(currentName)
+            pathText.setSpan(RelativeSizeSpan(1.15f), currentStart, pathText.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            pathText.setSpan(StyleSpan(Typeface.BOLD), currentStart, pathText.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            pathView.text = pathText
+        } else {
+            pathView.text = current.absolutePath
+        }
+        pathView.contentDescription = "پوشهٔ فعلی: ${current.name.ifBlank { current.absolutePath }}؛ مسیر کامل: ${current.absolutePath}"
         navBack.isEnabled = backHistory.isNotEmpty() || (currentVol?.dir?.path != current.path && current.parentFile != null)
         navForward.isEnabled = forwardHistory.isNotEmpty()
     }
