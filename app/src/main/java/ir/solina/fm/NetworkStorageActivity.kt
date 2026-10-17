@@ -4,13 +4,14 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
-import android.widget.Button
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.github.sardine.DavResource
 import com.github.sardine.Sardine
@@ -56,11 +57,18 @@ class NetworkStorageActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         protocol = Protocol.FTP
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 10, 12, 10) }
-        root.addView(TextView(this).apply { text = "اتصال به فضای شبکه"; textSize = 22f })
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(8), dp(12), dp(12))
+        }
+        root.addView(MaterialToolbar(this).apply {
+            title = "اتصال به فضای شبکه"
+            setNavigationIcon(R.drawable.ic_arrow_back)
+            setNavigationOnClickListener { finish() }
+        }, LinearLayout.LayoutParams(-1, dp(56)))
         val protocols = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         Protocol.values().forEach { p ->
-            protocols.addView(Button(this@NetworkStorageActivity).apply {
+            protocols.addView(MaterialButton(this@NetworkStorageActivity).apply {
                 text = p.name
                 setOnClickListener { protocol = p; portInput.setText(defaultPort(p)); hostInput.hint = hostHint(p); status.text = "پروتکل انتخاب‌شده: ${p.name}" }
             }, LinearLayout.LayoutParams(0, -2, 1f))
@@ -74,10 +82,10 @@ class NetworkStorageActivity : AppCompatActivity() {
         pathInput = field("مسیر راه دور (معمولاً /)")
         pathInput.setText("/")
         root.addView(hostInput); root.addView(portInput); root.addView(userInput); root.addView(passInput); root.addView(pathInput)
-        root.addView(Button(this).apply { text = "اتصال"; setOnClickListener { connect() } })
-        root.addView(Button(this).apply { text = "بارگذاری فایل به سرور"; setOnClickListener { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "*/*" }, 801) } })
-        root.addView(Button(this).apply { text = "قطع اتصال"; setOnClickListener { disconnect(); status.text = "اتصال قطع شد"; entries.removeAllViews() } })
-        status = TextView(this).apply { text = "اطلاعات سرور را وارد کن."; setPadding(4, 8, 4, 8) }
+        root.addView(MaterialButton(this).apply { text = "اتصال"; setOnClickListener { connect() } })
+        root.addView(MaterialButton(this).apply { text = "بارگذاری فایل به سرور"; setOnClickListener { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "*/*" }, 801) } })
+        root.addView(MaterialButton(this).apply { text = "قطع اتصال"; setOnClickListener { disconnect(); status.text = "اتصال قطع شد"; entries.removeAllViews() } })
+        status = TextView(this).apply { text = "اطلاعات سرور را وارد کن."; setPadding(dp(4), dp(8), dp(4), dp(8)) }
         root.addView(status)
         val scroll = ScrollView(this)
         entries = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -88,7 +96,7 @@ class NetworkStorageActivity : AppCompatActivity() {
 
     private fun field(hintText: String) = EditText(this).apply {
         hint = hintText; setSingleLine(true); textSize = 14f
-        setPadding(8, 4, 8, 4)
+        setPadding(dp(8), dp(4), dp(8), dp(4))
     }
 
     private fun defaultPort(p: Protocol) = when (p) { Protocol.FTP -> "21"; Protocol.SFTP -> "22"; Protocol.SMB -> "445"; Protocol.WEBDAV -> "443" }
@@ -135,8 +143,8 @@ class NetworkStorageActivity : AppCompatActivity() {
                                     AlertDialog.Builder(this@NetworkStorageActivity)
                                         .setTitle("تأیید کلید میزبان SFTP")
                                         .setMessage(message + "\\n\\nفقط اگر اثرانگشت سرور را تأیید می‌کنی ادامه بده.")
-                                        .setNegativeButton("رد") { _, _ -> accepted = false; latch.countDown() }
-                                        .setPositiveButton("اعتماد برای این اتصال") { _, _ -> accepted = true; latch.countDown() }
+                                        .setNegativeMaterialButton("رد") { _, _ -> accepted = false; latch.countDown() }
+                                        .setPositiveMaterialButton("اعتماد برای این اتصال") { _, _ -> accepted = true; latch.countDown() }
                                         .setOnCancelListener { accepted = false; latch.countDown() }
                                         .show()
                                 }
@@ -196,14 +204,14 @@ class NetworkStorageActivity : AppCompatActivity() {
             }
             runOnUiThread {
                 entries.removeAllViews()
-                entries.addView(Button(this).apply { text = "رفتن به پوشه والد"; setOnClickListener {
+                entries.addView(MaterialButton(this).apply { text = "رفتن به پوشه والد"; setOnClickListener {
                     remotePath = remotePath.trimEnd('/').substringBeforeLast('/', "").ifBlank { "/" }
                     pathInput.setText(remotePath); listRemote()
                 } })
                 result.forEach { entry ->
                     val row = TextView(this).apply {
                         text = (if (entry.directory) "📁  " else "📄  ") + entry.name
-                        textSize = 15f; setPadding(10, 14, 10, 14)
+                        textSize = 15f; setPadding(dp(10), dp(14), dp(10), dp(14))
                         setOnClickListener {
                             if (entry.directory) { remotePath = entry.path; pathInput.setText(remotePath); listRemote() }
                             else download(entry)
@@ -211,7 +219,7 @@ class NetworkStorageActivity : AppCompatActivity() {
                         setOnLongClickListener { if (!entry.directory) download(entry); true }
                     }
                     entries.addView(row)
-                    entries.addView(View(this).apply { setBackgroundColor(0x22333333); layoutParams = LinearLayout.LayoutParams(-1, 1) })
+                    entries.addView(View(this).apply { setBackgroundColor(androidx.core.graphics.ColorUtils.setAlphaComponent(androidx.core.content.ContextCompat.getColor(this@NetworkStorageActivity, R.color.solina_outline), 90)); layoutParams = LinearLayout.LayoutParams(-1, dp(1)) })
                 }
             }
         }.start()
@@ -289,5 +297,7 @@ class NetworkStorageActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() { disconnect(); super.onDestroy() }
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 }
