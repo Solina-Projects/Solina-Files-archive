@@ -127,6 +127,11 @@ class MainActivity : AppCompatActivity() {
         navBack = findViewById(R.id.navBack)
         navForward = findViewById(R.id.navForward)
         searchInput = findViewById(R.id.searchInput)
+        findViewById<MaterialButton>(R.id.searchIconButton).setOnClickListener {
+            searchInput.requestFocus()
+            val keyboard = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            keyboard.showSoftInput(searchInput, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+        }
         bottomActions = findViewById(R.id.bottomActions)
         bottomCopy = findViewById(R.id.bottomCopy)
         bottomMove = findViewById(R.id.bottomMove)
@@ -410,21 +415,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateBars() {
         storageButton.text = currentVol?.name ?: getString(R.string.internal_storage)
-        val base = currentVol?.dir?.path ?: ""
-        val rel = current.path.removePrefix(base).trimStart('/')
-        val folderName = if (current.path == currentVol?.dir?.path) {
-            currentVol?.name ?: current.name.ifBlank { current.absolutePath }
-        } else {
-            current.name.ifBlank { current.absolutePath }
-        }
-        val pathParts = rel.split('/').filter { it.isNotBlank() }
-        val shortPath = when {
-            pathParts.isEmpty() -> "/"
-            pathParts.size > 2 -> "…/" + pathParts.takeLast(2).joinToString("/")
-            else -> "/" + pathParts.joinToString("/")
-        }
-        pathView.text = "$folderName\n$shortPath"
-        pathView.contentDescription = current.absolutePath
+        // Show the complete absolute path only; the single-line view scrolls horizontally.
+        pathView.text = current.absolutePath
+        pathView.contentDescription = "مسیر کامل: ${current.absolutePath}"
         navBack.isEnabled = backHistory.isNotEmpty() || (currentVol?.dir?.path != current.path && current.parentFile != null)
         navForward.isEnabled = forwardHistory.isNotEmpty()
     }
