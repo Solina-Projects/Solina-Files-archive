@@ -59,11 +59,11 @@ class DocumentViewerActivity : AppCompatActivity() {
                 textSize = 14f
                 setPadding(dp(8), dp(8), dp(8), dp(8))
             })
-            val maxPages = minOf(pdf.pageCount, 80)
+            val maxPages = minOf(pdf.pageCount, 12)
             for (index in 0 until maxPages) {
                 val page = pdf.openPage(index)
                 try {
-                    val targetWidth = minOf(resources.displayMetrics.widthPixels - dp(36), 1400).coerceAtLeast(320)
+                    val targetWidth = minOf(resources.displayMetrics.widthPixels - dp(36), 1000).coerceAtLeast(320)
                     val ratio = targetWidth.toFloat() / page.width.toFloat()
                     val bitmap = Bitmap.createBitmap(targetWidth, (page.height * ratio).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
                     bitmap.eraseColor(Color.WHITE)
