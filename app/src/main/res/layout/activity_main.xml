@@ -10,46 +10,50 @@
     <LinearLayout
         android:id="@+id/navigationBar"
         android:layout_width="match_parent"
-        android:layout_height="64dp"
+        android:layout_height="60dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="6dp"
+        android:paddingStart="8dp"
         android:paddingEnd="8dp"
-        android:layoutDirection="ltr"
+        android:layoutDirection="rtl"
+        android:elevation="2dp"
         android:background="?attr/colorSurface">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/drawerButton"
             style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="40dp"
+            android:layout_width="44dp"
             android:layout_height="match_parent"
             android:minWidth="0dp"
             android:padding="0dp"
-            android:text="☰"
-            android:textSize="21sp"
-            android:contentDescription="منوی کناری" />
+            android:contentDescription="منوی کناری"
+            app:icon="@drawable/ic_menu"
+            app:iconTint="?attr/colorOnSurface"
+            app:iconPadding="0dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/navBack"
             style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="40dp"
+            android:layout_width="44dp"
             android:layout_height="match_parent"
             android:minWidth="0dp"
             android:padding="0dp"
-            android:text="‹"
-            android:textSize="28sp"
-            android:contentDescription="بازگشت" />
+            android:contentDescription="بازگشت"
+            app:icon="@drawable/ic_arrow_back"
+            app:iconTint="?attr/colorOnSurface"
+            app:iconPadding="0dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/navForward"
             style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="40dp"
+            android:layout_width="44dp"
             android:layout_height="match_parent"
             android:minWidth="0dp"
             android:padding="0dp"
-            android:text="›"
-            android:textSize="28sp"
-            android:contentDescription="جلو رفتن" />
+            android:contentDescription="جلو رفتن"
+            app:icon="@drawable/ic_arrow_forward"
+            app:iconTint="?attr/colorOnSurface"
+            app:iconPadding="0dp" />
 
         <TextView
             android:id="@+id/pathView"
@@ -71,14 +75,14 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/overflowButton"
             style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="36dp"
+            android:layout_width="44dp"
             android:layout_height="match_parent"
             android:minWidth="0dp"
             android:padding="0dp"
-            android:text="⋮"
-            android:textColor="?attr/colorOnSurface"
-            android:textSize="24sp"
-            android:contentDescription="گزینه‌های بیشتر" />
+            android:contentDescription="گزینه‌های بیشتر"
+            app:icon="@drawable/ic_more_vert"
+            app:iconTint="?attr/colorOnSurface"
+            app:iconPadding="0dp" />
     </LinearLayout>
 
     <HorizontalScrollView
@@ -102,34 +106,37 @@
     <LinearLayout
         android:id="@+id/actionBar"
         android:layout_width="match_parent"
-        android:layout_height="50dp"
+        android:layout_height="56dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="8dp"
-        android:paddingEnd="6dp"
-        android:background="?attr/colorSecondaryContainer">
+        android:paddingEnd="8dp"
+        android:background="?attr/colorSurfaceContainer"
+        android:elevation="1dp">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/searchIconButton"
             style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="40dp"
-            android:layout_height="38dp"
+            android:layout_width="44dp"
+            android:layout_height="40dp"
             android:layout_marginEnd="4dp"
             android:minWidth="0dp"
             android:padding="0dp"
             android:backgroundTint="?attr/colorPrimaryContainer"
-            android:text="⌕"
-            android:textColor="?attr/colorOnPrimaryContainer"
-            android:textSize="27sp"
-            android:contentDescription="رفتن به جست‌وجو" />
+            android:contentDescription="رفتن به جست‌وجو"
+            app:icon="@drawable/ic_search"
+            app:iconTint="?attr/colorOnPrimaryContainer"
+            app:iconPadding="0dp" />
 
         <EditText
             android:id="@+id/searchInput"
             android:layout_width="0dp"
-            android:layout_height="38dp"
+            android:layout_height="40dp"
             android:layout_weight="1"
-            android:layout_marginEnd="6dp"
-            android:background="?attr/colorSurface"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/search_field_bg"
+            android:textColor="?attr/colorOnSurface"
+            android:hintTextColor="?attr/colorOnSurfaceVariant"
             android:hint="جست‌وجو"
             android:imeOptions="actionSearch"
             android:inputType="text"
@@ -141,38 +148,38 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/sortFilterButton"
             style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="40dp"
+            android:layout_width="44dp"
             android:layout_height="match_parent"
             android:minWidth="0dp"
             android:padding="0dp"
-            android:text="☷"
-            android:textColor="?attr/colorOnSecondaryContainer"
-            android:textSize="21sp"
-            android:contentDescription="مرتب‌سازی و فیلتر" />
+            android:contentDescription="مرتب‌سازی و فیلتر"
+            app:icon="@drawable/ic_sort"
+            app:iconTint="?attr/colorOnSecondaryContainer"
+            app:iconPadding="0dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/layoutModeButton"
             style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="40dp"
+            android:layout_width="44dp"
             android:layout_height="match_parent"
             android:minWidth="0dp"
             android:padding="0dp"
-            android:text="▦"
-            android:textColor="?attr/colorOnSecondaryContainer"
-            android:textSize="20sp"
-            android:contentDescription="چیدمان پوشه‌ها و فایل‌ها" />
+            android:contentDescription="چیدمان پوشه‌ها و فایل‌ها"
+            app:icon="@drawable/ic_grid_view"
+            app:iconTint="?attr/colorOnSecondaryContainer"
+            app:iconPadding="0dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/dualPaneButton"
             style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="40dp"
+            android:layout_width="44dp"
             android:layout_height="match_parent"
             android:minWidth="0dp"
             android:padding="0dp"
-            android:text="▥"
-            android:textColor="?attr/colorOnSecondaryContainer"
-            android:textSize="20sp"
-            android:contentDescription="حالت دو پنجره‌ای" />
+            android:contentDescription="حالت دو پنجره‌ای"
+            app:icon="@drawable/ic_splitscreen"
+            app:iconTint="?attr/colorOnSecondaryContainer"
+            app:iconPadding="0dp" />
 
     </LinearLayout>
 
@@ -227,7 +234,10 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipToPadding="false"
-            android:paddingBottom="96dp" />
+            android:paddingStart="8dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="104dp" />
 
         <LinearLayout
             android:id="@+id/emptyBox"
