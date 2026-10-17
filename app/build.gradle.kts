@@ -37,6 +37,7 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("net.lingala.zip4j:zip4j:2.11.5")
     implementation("androidx.biometric:biometric:1.1.0")
+    implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("org.tukaani:xz:1.10")
     implementation("com.github.junrar:junrar:7.5.5")
