@@ -121,11 +121,47 @@ class DualPaneActivity : AppCompatActivity() {
 
     private fun createPane(start: File, index: Int): Pane {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(4), dp(4), dp(4), dp(4)) }
-        val path = TextView(this).apply {
-            textSize = 12f; maxLines = 2; setPadding(dp(6), dp(6), dp(6), dp(6))
-            setOnClickListener { showPathActions(index) }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), 0, dp(2), 0)
         }
-        root.addView(path, LinearLayout.LayoutParams(-1, dp(48)))
+        val path = TextView(this).apply {
+            textSize = 12f
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+            setOnClickListener {
+                activePane = index
+                updateTopBar()
+                showPathActions(index)
+            }
+            setOnLongClickListener {
+                activePane = index
+                updateTopBar()
+                val clipboard = android.content.ClipData.newPlainText("path", pane(index).current.absolutePath)
+                val manager = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                manager.setPrimaryClip(clipboard)
+                toast("مسیر پوشه کپی شد")
+                true
+            }
+        }
+        val upButton = MaterialButton(this).apply {
+            text = "↑"
+            textSize = 18f
+            minWidth = dp(36)
+            minimumWidth = dp(36)
+            setPadding(0, 0, 0, 0)
+            contentDescription = "رفتن به پوشه والد"
+            setOnClickListener {
+                activePane = index
+                goUp(index)
+                updateTopBar()
+            }
+        }
+        header.addView(path, LinearLayout.LayoutParams(0, dp(48), 1f))
+        header.addView(upButton, LinearLayout.LayoutParams(dp(38), dp(40)))
+        root.addView(header, LinearLayout.LayoutParams(-1, dp(48)))
         val list = RecyclerView(this)
         root.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
         root.setOnDragListener { _, event -> handleDropEvent(index, event, null) }
@@ -513,8 +549,11 @@ class DualPaneActivity : AppCompatActivity() {
                                 true
                             } else {
                                 val copied = source.copyRecursively(target, overwrite = false)
-                                if (copied) source.deleteRecursively() else {
-                                    target.deleteRecursively()
+                                if (copied && source.deleteRecursively()) {
+                                    true
+                                } else {
+                                    // If the copy itself failed, remove its partial destination.
+                                    if (!copied) target.deleteRecursively()
                                     false
                                 }
                             }
