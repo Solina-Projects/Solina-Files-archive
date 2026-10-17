@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.LinearLayout
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -23,7 +24,7 @@ class RecentFilesActivity : AppCompatActivity() {
         }
         val toolbar = MaterialToolbar(this).apply {
             title = "فایل‌های اخیر"
-            setNavigationIcon(android.R.drawable.ic_media_previous)
+            setNavigationIcon(R.drawable.ic_arrow_back)
             setNavigationOnClickListener { finish() }
         }
         root.addView(toolbar, LinearLayout.LayoutParams(-1, dp(56)))
@@ -59,6 +60,13 @@ class RecentFilesActivity : AppCompatActivity() {
                 setPadding(dp(8), dp(8), dp(8), dp(8))
                 background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@RecentFilesActivity, R.drawable.item_bg)
             }
+            val icon = ImageView(this).apply {
+                FileTypeVisuals.applyTo(this, file)
+                background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@RecentFilesActivity, R.drawable.icon_bg)
+                setPadding(dp(9), dp(9), dp(9), dp(9))
+                contentDescription = null
+            }
+            row.addView(icon, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(8) })
             val label = TextView(this).apply {
                 text = file.name + "\n" + file.parent
                 textSize = 14f
