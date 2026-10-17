@@ -148,7 +148,7 @@ class DualPaneActivity : AppCompatActivity() {
         val unsorted = p.current.listFiles()?.filter { it.isFile || it.isDirectory } ?: emptyList()
         val allFiles = when (p.sortMode) {
             SortMode.NAME -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) }))
-            SortMode.SIZE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { if (it.isDirectory) directorySize(it) else it.length() }))
+            SortMode.SIZE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.length() }))
             SortMode.MODIFIED -> unsorted.sortedByDescending { it.lastModified() }
             SortMode.TYPE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.extension.lowercase(Locale.ROOT) }, { it.name.lowercase(Locale.ROOT) }))
         }
@@ -162,6 +162,10 @@ class DualPaneActivity : AppCompatActivity() {
     }
 
     private fun updateTopBar() {
+        listOf(left, right).forEachIndexed { index, pane ->
+            pane.root.setBackgroundColor(if (activePane == index) 0x143F51B5 else 0x00000000)
+            pane.path.text = (if (index == 0) "پنل چپ  •  " else "پنل راست  •  ") + pane.current.absolutePath
+        }
         val p = pane(activePane)
         pathTitle.text = p.current.name.ifBlank { p.current.absolutePath }
         pathTitle.contentDescription = p.current.absolutePath
