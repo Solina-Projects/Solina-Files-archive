@@ -109,22 +109,56 @@ class RootExplorerActivity : AppCompatActivity() {
 
     private fun showFileActions(path: String) {
         val file = File(path)
-        val options = if (runRoot("[ -d ${shellQuote(path)} ] && echo D").trim() == "D")
-            arrayOf("بازکردن پوشه", "حذف دائمی")
-        else arrayOf("بازکردن/ویرایش متن", "کپی به حافظه مشترک", "حذف دائمی")
-        AlertDialog.Builder(this).setTitle(file.name).setItems(options) { _, which ->
+        val isDirectory = runRoot("[ -d ${shellQuote(path)} ] && echo D").trim() == "D"
+        val options = if (isDirectory)
+            arrayOf("بازکردن پوشه", "کپی/انتقال به مسیر…", "تغییر مجوزها (chmod)", "حذف دائمی")
+        else arrayOf("بازکردن/ویرایش متن", "کپی به حافظه مشترک", "کپی/انتقال به مسیر…", "تغییر مجوزها (chmod)", "حذف دائمی")
+        AlertDialog.Builder(this).setTitle(file.name.ifBlank { path }).setItems(options) { _, which ->
             when (options[which]) {
                 "بازکردن پوشه" -> { currentPath = path; loadPath() }
                 "بازکردن/ویرایش متن" -> editRootText(path)
                 "کپی به حافظه مشترک" -> exportRootFile(path)
+                "کپی/انتقال به مسیر…" -> askDestination(path)
+                "تغییر مجوزها (chmod)" -> changePermissions(path)
                 "حذف دائمی" -> AlertDialog.Builder(this).setMessage("این مورد به‌صورت دائمی با دسترسی روت حذف شود؟")
                     .setNegativeButton("لغو", null).setPositiveButton("حذف") { _, _ ->
-                        Thread { val ok = runRoot("rm -rf -- ${shellQuote(path)}").isNotEmpty() || runRoot("[ ! -e ${shellQuote(path)} ] && echo OK").trim() == "OK"
+                        Thread {
+                            runRoot("rm -rf -- ${shellQuote(path)}")
+                            val ok = runRoot("[ ! -e ${shellQuote(path)} ] && echo OK").trim() == "OK"
                             runOnUiThread { toast(if (ok) "حذف شد" else "حذف ناموفق بود"); loadPath() }
                         }.start()
                     }.show()
             }
         }.show()
+    }
+
+    private fun askDestination(source: String) {
+        val input = EditText(this).apply { hint = "مسیر مقصد کامل، مانند /sdcard/Download"; setText("/sdcard/Download") }
+        AlertDialog.Builder(this).setTitle("مسیر مقصد").setView(input)
+            .setNegativeButton("لغو", null).setNeutralButton("کپی") { _, _ -> transferRoot(source, input.text.toString(), false) }
+            .setPositiveButton("انتقال") { _, _ -> transferRoot(source, input.text.toString(), true) }.show()
+    }
+
+    private fun transferRoot(source: String, destination: String, move: Boolean) {
+        if (destination.isBlank()) { toast("مسیر مقصد خالی است"); return }
+        Thread {
+            val command = (if (move) "mv" else "cp -a") + " -- ${shellQuote(source)} ${shellQuote(destination)} && echo OK"
+            val ok = runRoot(command).trim() == "OK"
+            runOnUiThread { toast(if (ok) if (move) "انتقال انجام شد" else "کپی انجام شد" else "عملیات ناموفق بود؛ مسیر و مجوزها را بررسی کن"); loadPath() }
+        }.start()
+    }
+
+    private fun changePermissions(path: String) {
+        val input = EditText(this).apply { hint = "حالت عددی، مانند 0644 یا 0755"; setText(if (runRoot("[ -d ${shellQuote(path)} ] && echo D").trim() == "D") "0755" else "0644") }
+        AlertDialog.Builder(this).setTitle("تغییر مجوزها").setMessage("مقدار chmod را به‌شکل عددی وارد کن.")
+            .setView(input).setNegativeButton("لغو", null).setPositiveButton("اعمال") { _, _ ->
+                val mode = input.text.toString().trim()
+                if (!mode.matches(Regex("0?[0-7]{3,4}"))) { toast("مقدار مجوز نامعتبر است"); return@setPositiveButton }
+                Thread {
+                    val ok = runRoot("chmod $mode -- ${shellQuote(path)} && echo OK").trim() == "OK"
+                    runOnUiThread { toast(if (ok) "مجوزها تغییر کرد" else "تغییر مجوزها ناموفق بود") }
+                }.start()
+            }.show()
     }
 
     private fun createFolder() {
