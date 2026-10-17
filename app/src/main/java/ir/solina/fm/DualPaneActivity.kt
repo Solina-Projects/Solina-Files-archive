@@ -342,7 +342,7 @@ class DualPaneActivity : AppCompatActivity() {
             return
         }
 
-        askText("الگوی تغییر نام گروهی", "{name}_{n}.{ext}") { pattern ->
+        askText("الگوی تغییر نام گروهی", "{name}_{n}") { pattern ->
             if (pattern.isBlank() || pattern.contains("/")) {
                 toast("الگوی نامعتبر است")
                 return@askText
@@ -354,7 +354,7 @@ class DualPaneActivity : AppCompatActivity() {
                     .replace("{n}", (i + 1).toString())
                     .let { if ("{ext}" !in pattern && ext.isNotEmpty()) "$it.$ext" else it }
             }
-            val sourcePaths = files.map { it.absoluteFile.normalize().path }.toSet()
+            val sourcePaths = files.map { it.absoluteFile.toPath().normalize().toString() }.toSet()
             val targetFiles = files.zip(targets).map { (file, name) -> File(file.parentFile, name) }
             val duplicateNames = targets.map { it.lowercase(Locale.ROOT) }.toSet().size != targets.size
             val invalidNames = targets.any {
@@ -362,7 +362,7 @@ class DualPaneActivity : AppCompatActivity() {
                     it.toByteArray(Charsets.UTF_8).size > 255
             }
             val collides = targetFiles.any { target ->
-                target.exists() && target.absoluteFile.normalize().path !in sourcePaths
+                target.exists() && target.absoluteFile.toPath().normalize().toString() !in sourcePaths
             }
             if (duplicateNames || invalidNames || collides) {
                 toast("الگو نام تکراری، نامعتبر یا مقصد موجود ایجاد می‌کند")
