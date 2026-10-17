@@ -6,15 +6,17 @@
     android:background="?attr/colorSurface"
     android:orientation="vertical">
 
+    <!-- Top navigation row: drawer, history and current folder/path -->
     <LinearLayout
         android:id="@+id/navigationBar"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
+        android:layout_height="64dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="8dp"
+        android:paddingStart="6dp"
         android:paddingEnd="8dp"
-        android:layoutDirection="ltr">
+        android:layoutDirection="ltr"
+        android:background="?attr/colorSurface">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/drawerButton"
@@ -30,24 +32,24 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/navBack"
             style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="44dp"
+            android:layout_width="40dp"
             android:layout_height="match_parent"
             android:minWidth="0dp"
             android:padding="0dp"
             android:text="‹"
             android:textSize="28sp"
-            android:contentDescription="Back" />
+            android:contentDescription="بازگشت" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/navForward"
             style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="44dp"
+            android:layout_width="40dp"
             android:layout_height="match_parent"
             android:minWidth="0dp"
             android:padding="0dp"
             android:text="›"
             android:textSize="28sp"
-            android:contentDescription="Forward" />
+            android:contentDescription="جلو رفتن" />
 
         <TextView
             android:id="@+id/pathView"
@@ -56,58 +58,13 @@
             android:layout_weight="1"
             android:gravity="center_vertical"
             android:ellipsize="start"
-            android:maxLines="1"
+            android:maxLines="2"
+            android:lineSpacingExtra="1dp"
             android:paddingStart="8dp"
             android:paddingEnd="8dp"
             android:textColor="?attr/colorOnSurface"
             android:textDirection="ltr"
-            android:textSize="14sp" />
-
-        <EditText
-            android:id="@+id/searchInput"
-            android:layout_width="128dp"
-            android:layout_height="40dp"
-            android:background="@drawable/item_bg"
-            android:hint="جست‌وجو"
-            android:imeOptions="actionSearch"
-            android:inputType="text"
-            android:maxLines="1"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:textSize="14sp" />
-        
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/sortFilterButton"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="40dp"
-            android:layout_height="match_parent"
-            android:minWidth="0dp"
-            android:padding="0dp"
-            android:text="☷"
-            android:textSize="21sp"
-            android:contentDescription="مرتب‌سازی و فیلتر" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/dualPaneButton"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="40dp"
-            android:layout_height="match_parent"
-            android:minWidth="0dp"
-            android:padding="0dp"
-            android:text="▥"
-            android:textSize="20sp"
-            android:contentDescription="حالت دو پنجره‌ای" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/overflowButton"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="36dp"
-            android:layout_height="match_parent"
-            android:minWidth="0dp"
-            android:padding="0dp"
-            android:text="⋮"
-            android:textSize="24sp"
-            android:contentDescription="گزینه‌های بیشتر" />
+            android:textSize="13sp" />
     </LinearLayout>
 
     <HorizontalScrollView
@@ -126,6 +83,71 @@
             android:paddingHorizontal="8dp"
             android:paddingVertical="2dp" />
     </HorizontalScrollView>
+
+    <!-- Second toolbar row: actions on a contrasting surface -->
+    <LinearLayout
+        android:id="@+id/actionBar"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="6dp"
+        android:background="?attr/colorSecondaryContainer">
+
+        <EditText
+            android:id="@+id/searchInput"
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/item_bg"
+            android:hint="جست‌وجو"
+            android:imeOptions="actionSearch"
+            android:inputType="text"
+            android:maxLines="1"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:textSize="14sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/sortFilterButton"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="40dp"
+            android:layout_height="match_parent"
+            android:minWidth="0dp"
+            android:padding="0dp"
+            android:text="☷"
+            android:textColor="?attr/colorOnSecondaryContainer"
+            android:textSize="21sp"
+            android:contentDescription="مرتب‌سازی و فیلتر" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/dualPaneButton"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="40dp"
+            android:layout_height="match_parent"
+            android:minWidth="0dp"
+            android:padding="0dp"
+            android:text="▥"
+            android:textColor="?attr/colorOnSecondaryContainer"
+            android:textSize="20sp"
+            android:contentDescription="حالت دو پنجره‌ای" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/overflowButton"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="36dp"
+            android:layout_height="match_parent"
+            android:minWidth="0dp"
+            android:padding="0dp"
+            android:text="⋮"
+            android:textColor="?attr/colorOnSecondaryContainer"
+            android:textSize="24sp"
+            android:contentDescription="گزینه‌های بیشتر" />
+    </LinearLayout>
+
+
 
     <FrameLayout
         android:layout_width="match_parent"
