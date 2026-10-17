@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item android:id="@+id/action_theme" android:title="تغییر تم روشن/تیره" app:showAsAction="never" />
     <item
         android:id="@+id/action_dual_pane"
         android:title="Dual pane"
