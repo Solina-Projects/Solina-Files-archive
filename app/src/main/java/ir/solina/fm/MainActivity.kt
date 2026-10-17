@@ -43,6 +43,7 @@ import java.util.zip.ZipOutputStream
 class MainActivity : AppCompatActivity() {
 
     private enum class Kind { INTERNAL, SD, USB }
+    private enum class SortMode { NAME, SIZE, MODIFIED, TYPE }
 
     private class Vol(val name: String, val dir: File, val kind: Kind)
 
@@ -69,6 +70,7 @@ class MainActivity : AppCompatActivity() {
     private var currentVol: Vol? = null
     private var current: File = Environment.getExternalStorageDirectory()
     private var showHidden = false
+    private var sortMode = SortMode.NAME
     private var allFiles: List<File> = emptyList()
     private val backHistory = ArrayDeque<File>()
     private val forwardHistory = ArrayDeque<File>()
@@ -292,9 +294,13 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val raw = current.listFiles()
-        allFiles = (raw ?: emptyArray())
-            .filter { showHidden || !it.name.startsWith(".") }
-            .sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) }))
+        val unsorted = (raw ?: emptyArray()).filter { showHidden || !it.name.startsWith(".") }
+        allFiles = when (sortMode) {
+            SortMode.NAME -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) }))
+            SortMode.SIZE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { if (it.isDirectory) directorySize(it) else it.length() }))
+            SortMode.MODIFIED -> unsorted.sortedByDescending { it.lastModified() }
+            SortMode.TYPE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.extension.lowercase(Locale.ROOT) }, { it.name.lowercase(Locale.ROOT) }))
+        }
         selected.retainAll(allFiles.toSet())
         val query = searchInput.text?.toString()?.trim()?.lowercase(Locale.ROOT).orEmpty()
         val files = allFiles.filter { query.isEmpty() || it.name.lowercase(Locale.ROOT).contains(query) }
@@ -366,6 +372,10 @@ class MainActivity : AppCompatActivity() {
             R.id.action_new_folder -> newFolder()
             R.id.action_dual_pane -> startActivity(Intent(this, DualPaneActivity::class.java))
             R.id.action_refresh -> refresh()
+            R.id.action_bookmark -> toggleBookmark()
+            R.id.action_bookmarks -> showBookmarks()
+            R.id.action_sort -> showSortOptions()
+            R.id.action_storage_analysis -> analyzeStorage()
             R.id.action_hidden -> {
                 showHidden = !item.isChecked
                 item.isChecked = showHidden
@@ -611,6 +621,82 @@ class MainActivity : AppCompatActivity() {
             selected.clear()
             refresh()
         }
+    }
+
+    private fun getBookmarks(): MutableSet<String> =
+        getSharedPreferences("solina_preferences", MODE_PRIVATE).getStringSet("bookmarks", emptySet())?.toMutableSet() ?: mutableSetOf()
+
+    private fun toggleBookmark() {
+        val bookmarks = getBookmarks()
+        val path = current.absolutePath
+        val added = if (bookmarks.contains(path)) { bookmarks.remove(path); false } else { bookmarks.add(path); true }
+        getSharedPreferences("solina_preferences", MODE_PRIVATE).edit().putStringSet("bookmarks", bookmarks).apply()
+        toast(if (added) "پوشه به نشانک‌ها اضافه شد" else "نشانک پوشه حذف شد")
+    }
+
+    private fun showBookmarks() {
+        val folders = getBookmarks().map { File(it) }.filter { it.exists() && it.isDirectory }
+        if (folders.isEmpty()) { toast("هنوز نشانکی ثبت نشده است"); return }
+        MaterialAlertDialogBuilder(this).setTitle("نشانک‌های پوشه")
+            .setItems(folders.map { it.absolutePath }.toTypedArray()) { _, which ->
+                val target = folders[which]
+                currentVol = volumes.firstOrNull { inside(target, it.dir) }
+                navigate(target)
+            }
+            .setNeutralButton("مدیریت") { _, _ -> manageBookmarks(folders) }
+            .setNegativeButton(R.string.cancel, null).show()
+    }
+
+    private fun manageBookmarks(folders: List<File>) {
+        if (folders.isEmpty()) return
+        MaterialAlertDialogBuilder(this).setTitle("حذف نشانک")
+            .setItems(folders.map { it.name.ifBlank { it.absolutePath } }.toTypedArray()) { _, which ->
+                val bookmarks = getBookmarks()
+                bookmarks.remove(folders[which].absolutePath)
+                getSharedPreferences("solina_preferences", MODE_PRIVATE).edit().putStringSet("bookmarks", bookmarks).apply()
+                toast("نشانک حذف شد")
+            }.setNegativeButton(R.string.cancel, null).show()
+    }
+
+    private fun showSortOptions() {
+        val labels = arrayOf("نام", "حجم", "تاریخ تغییر", "نوع فایل")
+        MaterialAlertDialogBuilder(this).setTitle("مرتب‌سازی")
+            .setSingleChoiceItems(labels, sortMode.ordinal) { dialog, which ->
+                sortMode = SortMode.values()[which]
+                dialog.dismiss()
+                refresh()
+            }.setNegativeButton(R.string.cancel, null).show()
+    }
+
+    private fun directorySize(dir: File): Long = try {
+        dir.walkTopDown().filter { it.isFile }.map { it.length() }.sum()
+    } catch (_: Exception) { 0L }
+
+    private fun analyzeStorage() {
+        val root = current
+        progress.visibility = View.VISIBLE
+        Thread {
+            val results = root.listFiles()?.map { file ->
+                val size = if (file.isDirectory) directorySize(file) else file.length()
+                file to size
+            }?.sortedByDescending { it.second } ?: emptyList()
+            runOnUiThread {
+                progress.visibility = View.GONE
+                if (results.isEmpty()) {
+                    toast("موردی برای تحلیل وجود ندارد")
+                } else {
+                    val total = results.sumOf { it.second }
+                    val lines = results.take(30).map { (file, size) ->
+                        val percent = if (total > 0) (size * 100 / total).toInt() else 0
+                        "${file.name}  •  ${fmt(size)}  •  $percent%"
+                    }
+                    MaterialAlertDialogBuilder(this)
+                        .setTitle("تحلیل فضا: ${root.name.ifBlank { root.absolutePath }}")
+                        .setMessage("حجم موارد سطح فعلی: ${fmt(total)}\n\n" + lines.joinToString("\n"))
+                        .setPositiveButton(R.string.ok, null).show()
+                }
+            }
+        }.start()
     }
 
     private fun showDetails() {
