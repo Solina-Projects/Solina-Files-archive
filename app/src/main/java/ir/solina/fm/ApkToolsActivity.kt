@@ -173,7 +173,7 @@ class ApkToolsActivity : AppCompatActivity() {
             }
             val out = StringBuilder()
             out.appendLine("تحلیل ساختاری DEX")
-            out.appendLine("نسخه: " + data.getOrNull(4)?.toInt()?.let { it.toChar() } + data.getOrNull(5)?.toInt()?.let { it.toChar() } + data.getOrNull(6)?.toInt()?.let { it.toChar() })
+            out.appendLine("نسخه: " + String(data, 4, 3, Charsets.US_ASCII))
             out.appendLine("اندازهٔ ثبت‌شده: $fileSize بایت؛ اندازهٔ واقعی: ${data.size} بایت")
             out.appendLine("جدول‌ها: رشته‌ها=$stringCount، نوع‌ها=$typeCount، پروتوتایپ‌ها=$protoCount، فیلدها=$fieldCount، متدها=$methodCount، کلاس‌ها=$classCount")
             out.appendLine("کلاس‌ها (حداکثر 80 مورد):")
