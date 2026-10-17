@@ -1,5 +1,6 @@
 package ir.solina.fm
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -255,7 +256,7 @@ class NetworkStorageActivity : AppCompatActivity() {
                 contentResolver.openInputStream(uri)!!.use { input ->
                     val target = joinRemote(remotePath, name)
                     when (protocol) {
-                        Protocol.FTP -> if (!ftp!!.storeFile(target, input)) throw IllegalStateException("سرور FTP فایل را نپذیرفت")
+                        Protocol.FTP -> { if (!ftp!!.storeFile(target, input)) throw IllegalStateException("سرور FTP فایل را نپذیرفت"); Unit }
                         Protocol.SFTP -> sftp!!.put(input, target)
                         Protocol.SMB -> SmbFile(smbUrl(target), smbContext).outputStream.use { input.copyTo(it) }
                         Protocol.WEBDAV -> sardine!!.put(webDavUrl(target), input, "application/octet-stream")
