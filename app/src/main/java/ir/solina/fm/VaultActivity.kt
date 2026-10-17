@@ -171,7 +171,7 @@ class VaultActivity : AppCompatActivity() {
             buttons.addView(MaterialButton(this@VaultActivity).apply { text = "بازیابی"; setOnClickListener { if (unlocked) decryptToExport(file) } }, LinearLayout.LayoutParams(0, -2, 1f))
             buttons.addView(MaterialButton(this@VaultActivity).apply { text = "حذف"; setOnClickListener {
                 MaterialAlertDialogBuilder(this@VaultActivity).setMessage("فایل رمزگذاری‌شده حذف شود؟")
-                    .setNegativeMaterialButton("لغو", null).setPositiveMaterialButton("حذف") { _, _ ->
+                    .setNegativeButton("لغو", null).setPositiveButton("حذف") { _, _ ->
                         file.delete(); prefs.edit().remove(file.name).apply(); renderFiles()
                     }.show()
             } }, LinearLayout.LayoutParams(0, -2, 1f))
