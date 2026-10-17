@@ -110,8 +110,24 @@ class TextEditorActivity : AppCompatActivity() {
     @Deprecated("Legacy callback is used for compatibility with the current project")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != 810 || resultCode != RESULT_OK || data?.data == null) return
+        if (resultCode != RESULT_OK || data?.data == null) return
         val uri = data.data!!
+        if (requestCode == 811) {
+            try {
+                contentResolver.openOutputStream(uri, "wt")?.use { it.write(editor.text.toString().toByteArray(Charsets.UTF_8)) }
+                    ?: throw IllegalStateException("ذخیره‌سازی پشتیبانی نمی‌شود")
+                documentUri = uri
+                file = null
+                originalText = editor.text.toString()
+                dirty = false
+                updateTitle()
+                toast("فایل ذخیره شد")
+            } catch (e: Exception) {
+                toast("ذخیره ناموفق بود: ${e.localizedMessage}")
+            }
+            return
+        }
+        if (requestCode != 810) return
         try {
             val bytes = contentResolver.openInputStream(uri)?.use { it.readNBytes(2 * 1024 * 1024 + 1) }
                 ?: throw IllegalStateException("فایل قابل‌خواندن نیست")
