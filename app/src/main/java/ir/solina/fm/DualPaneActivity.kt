@@ -12,6 +12,7 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.text.format.Formatter
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import java.util.zip.ZipEntry
@@ -123,7 +124,7 @@ class DualPaneActivity : AppCompatActivity() {
         listOf(left, right).forEachIndexed { index, p ->
             p.root.layoutParams = if (mode == LayoutMode.VERTICAL) LinearLayout.LayoutParams(-1, 0, 1f) else LinearLayout.LayoutParams(0, -1, 1f)
             p.root.setBackgroundColor(if (activePane == index) 0x143F51B5 else 0x00000000)
-            p.root.setOnClickListener { activePane = index; updateTitle() }
+            p.root.setOnClickListener { activePane = index; updateTopBar() }
             panesHost.addView(p.root)
             refresh(index)
         }
@@ -353,7 +354,7 @@ class DualPaneActivity : AppCompatActivity() {
                         zip.extractAll(out.absolutePath)
                     } catch (_: Exception) { failed++ }
                 }
-                runOnUiThread { refresh(1 - sourceIndex); status.text = if (failed == 0) "استخراج تمام شد" else "استخراج ناموفق؛ رمز یا سلامت فایل را بررسی کنید" }
+                runOnUiThread { refresh(1 - sourceIndex); toast(if (failed == 0) "استخراج تمام شد" else "استخراج ناموفق؛ رمز یا سلامت فایل را بررسی کنید") }
             }.start()
         }
     }
@@ -477,7 +478,10 @@ class DualPaneActivity : AppCompatActivity() {
 
     private fun button(parent: LinearLayout, text: String, action: () -> Unit) {
         val b = MaterialButton(this).apply { this.text = text; isAllCaps = false; setOnClickListener { action() } }
-        parent.addView(b, LinearLayout.LayoutParams(0, -1, 1f))
+        val params = if (::selectionActions.isInitialized && parent === selectionActions)
+            LinearLayout.LayoutParams(-2, -1)
+        else LinearLayout.LayoutParams(0, -1, 1f)
+        parent.addView(b, params)
     }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
