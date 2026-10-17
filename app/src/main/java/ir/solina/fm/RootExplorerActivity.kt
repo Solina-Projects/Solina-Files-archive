@@ -86,7 +86,7 @@ class RootExplorerActivity : AppCompatActivity() {
             val command = "p=$p; for f in \"\$p\"/* \"\$p\"/.[!.]* \"\$p\"/..?*; do [ -e \"\$f\" ] || [ -L \"\$f\" ] || continue; if [ -d \"\$f\" ]; then t=D; else t=F; fi; printf '%s\\t%s\\n' \"\$t\" \"\$f\"; done"
             val output = runRoot(command)
             val entries = output.lineSequence().mapNotNull { line ->
-                val split = line.split("\\t", limit = 2)
+                val split = line.split("\t", limit = 2)
                 if (split.size == 2) Pair(split[0] == "D", split[1]) else null
             }.sortedWith(compareByDescending<Pair<Boolean, String>> { it.first }.thenBy { File(it.second).name.lowercase() }).toList()
             runOnUiThread {
