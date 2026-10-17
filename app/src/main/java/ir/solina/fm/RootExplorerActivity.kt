@@ -1,6 +1,7 @@
 package ir.solina.fm
 
 import android.content.ComponentName
+import android.content.ServiceConnection
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -35,7 +36,7 @@ class RootExplorerActivity : AppCompatActivity() {
         Shizuku.UserServiceArgs(ComponentName(packageName, ShellUserService::class.java.name))
             .daemon(false).processNameSuffix("shell").debuggable(false)
     }
-    private val shizukuConnection = object : Shizuku.UserServiceConnection {
+    private val shizukuConnection = object : ServiceConnection {
         override fun onServiceConnected(componentName: ComponentName, binder: IBinder) {
             shizukuService = IUserService.Stub.asInterface(binder)
             shizukuAvailable = shizukuService != null
@@ -109,8 +110,8 @@ class RootExplorerActivity : AppCompatActivity() {
 
     private fun bindShizukuService() {
         try {
-            shizukuBound = Shizuku.bindUserService(shizukuArgs, shizukuConnection)
-            if (!shizukuBound) toast("اتصال سرویس Shizuku برقرار نشد")
+            Shizuku.bindUserService(shizukuArgs, shizukuConnection)
+            shizukuBound = true
         } catch (e: Exception) {
             toast("اتصال Shizuku ناموفق بود: " + (e.message ?: "خطا"))
         }
