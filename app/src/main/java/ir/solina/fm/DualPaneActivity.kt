@@ -504,7 +504,7 @@ class DualPaneActivity : AppCompatActivity() {
                 file.extension.isNotBlank() -> "فایل • ${file.extension.uppercase(Locale.ROOT)}"
                 else -> "فایل"
             }
-            val size = if (file.isFile) Formatter.formatFileSize(this, file.length()) else Formatter.formatFileSize(this, directorySize(file))
+            val size = if (file.isFile) Formatter.formatFileSize(this, file.length()) else "${file.listFiles()?.size ?: 0} مورد داخل پوشه"
             val modified = java.text.DateFormat.getDateTimeInstance().format(java.util.Date(file.lastModified()))
             "${file.name}\nنوع: $kind\nاندازه: $size\nآخرین تغییر: $modified\nمسیر: ${file.absolutePath}"
         }
