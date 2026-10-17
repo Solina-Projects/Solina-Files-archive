@@ -67,7 +67,7 @@ class FileToolsActivity : AppCompatActivity() {
         parent.addView(Button(this).apply {
             text = "$title\n$description"
             isAllCaps = false
-            setOnClickListener(action)
+            setOnClickListener { action() }
         }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(5) })
     }
 
