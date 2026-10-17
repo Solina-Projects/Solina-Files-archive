@@ -1,0 +1,55 @@
+name: Publish Solina Files v1.0 Release
+
+on:
+  push:
+    branches:
+      - feature/advanced-file-manager
+    paths:
+      - .github/workflows/publish-v1.0-release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/advanced-file-manager
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build APK
+        run: gradle assembleDebug --no-daemon
+
+      - name: Publish v1.0 and attach APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0
+          target_commitish: feature/advanced-file-manager
+          name: Solina Files v1.0
+          body: |
+            Solina Files v1.0 — Android debug APK for testing.
+
+            - Display name: Solina Files
+            - Build source: feature/advanced-file-manager
+            - APK type: debug build; not a production-signed release.
+
+            The main branch was not changed for this release.
+          files: app/build/outputs/apk/debug/*.apk
+          fail_on_unmatched_files: true
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
