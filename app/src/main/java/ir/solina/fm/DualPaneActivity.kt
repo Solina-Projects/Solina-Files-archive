@@ -4,6 +4,7 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.content.ClipData
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
@@ -457,11 +458,14 @@ class DualPaneActivity : AppCompatActivity() {
     }
 
     private fun openFile(file: File, paneIndex: Int) {
-        when (file.extension.lowercase()) {
-            "txt", "md", "log", "json", "xml", "csv", "ini", "kt", "java", "html", "css" -> editTextFile(file)
+        when (file.extension.lowercase(Locale.ROOT)) {
+            "txt", "md", "log", "json", "xml", "csv", "tsv", "ini", "kt", "java",
+            "html", "htm", "css", "js", "gradle", "kts", "yml", "yaml", "sh",
+            "properties", "conf", "cfg", "sql", "py", "c", "cpp", "h", "rs" -> editTextFile(file)
             "zip" -> browseArchive(file, paneIndex)
             "jpg", "jpeg", "png", "webp", "bmp", "gif" -> viewImage(file)
-            "mp3", "m4a", "aac", "wav", "ogg", "flac" -> playAudio(file)
+            "mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi" -> playAudio(file)
+            "mp4", "m4v", "3gp", "webm", "mkv", "avi", "mov", "mpeg", "mpg" -> playVideo(file)
             else -> openExternal(file)
         }
     }
@@ -513,40 +517,107 @@ class DualPaneActivity : AppCompatActivity() {
     }
 
     private fun viewImage(file: File) {
-        val bitmap = BitmapFactory.decodeFile(file.absolutePath)
-        if (bitmap == null) { openExternal(file); return }
-        val image = ImageView(this).apply { setImageBitmap(bitmap); adjustViewBounds = true; scaleType = ImageView.ScaleType.FIT_CENTER; setPadding(dp(8), dp(8), dp(8), dp(8)) }
-        AlertDialog.Builder(this).setTitle(file.name).setView(image)
-            .setNeutralButton("ذخیره نسخه JPEG") { _, _ ->
-                try {
-                    val out = uniqueTarget(file.parentFile ?: Environment.getExternalStorageDirectory(), File(file.nameWithoutExtension + "-edited.jpg"))
-                    FileOutputStream(out).use { bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, it) }
-                    toast("نسخه ذخیره شد: " + out.name)
-                } catch (_: Exception) { toast("ذخیره تصویر ناموفق بود") }
-            }.setPositiveButton("بستن", null).show()
+        try {
+            val original = BitmapFactory.decodeFile(file.absolutePath)
+            if (original == null) { toast("تصویر خراب است یا قالب آن پشتیبانی نمی‌شود"); return }
+            var edited = original
+            val image = ImageView(this).apply {
+                setImageBitmap(edited); adjustViewBounds = true
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                setPadding(dp(8), dp(8), dp(8), dp(8))
+            }
+            val dialog = AlertDialog.Builder(this).setTitle(file.name).setView(image)
+                .setNeutralButton("چرخش ۹۰°", null)
+                .setPositiveButton("ذخیره نسخه ویرایش‌شده", null)
+                .setNegativeButton("بستن", null).create()
+            dialog.setOnShowListener {
+                dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                    try {
+                        val matrix = Matrix().apply { postRotate(90f) }
+                        val next = android.graphics.Bitmap.createBitmap(edited, 0, 0, edited.width, edited.height, matrix, true)
+                        if (edited !== original) edited.recycle()
+                        edited = next
+                        image.setImageBitmap(edited)
+                    } catch (_: Exception) { toast("چرخش تصویر ناموفق بود") }
+                }
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                    try {
+                        val out = uniqueTarget(file.parentFile ?: Environment.getExternalStorageDirectory(),
+                            File(file.nameWithoutExtension + "-edited.jpg"))
+                        FileOutputStream(out).use { edited.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, it) }
+                        toast("نسخه ویرایش‌شده ذخیره شد: " + out.name)
+                    } catch (_: Exception) { toast("ذخیره تصویر ناموفق بود") }
+                }
+            }
+            dialog.setOnDismissListener { if (edited !== original) edited.recycle(); original.recycle() }
+            dialog.show()
+        } catch (_: Exception) { toast("بازکردن تصویر ناموفق بود") }
     }
 
     private fun playAudio(file: File) {
         try {
             player?.release()
-            player = MediaPlayer().apply {
-                setDataSource(file.absolutePath)
-                setOnPreparedListener { mp ->
-                    val seek = SeekBar(this@DualPaneActivity).apply { max = mp.duration.coerceAtLeast(1) }
-                    val layout = LinearLayout(this@DualPaneActivity).apply { orientation = LinearLayout.VERTICAL; addView(TextView(this@DualPaneActivity).apply { text = file.name; setPadding(dp(12), dp(8), dp(12), dp(8)) }); addView(seek) }
-                    seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                        override fun onProgressChanged(s: SeekBar, progress: Int, fromUser: Boolean) { if (fromUser) mp.seekTo(progress) }
-                        override fun onStartTrackingTouch(s: SeekBar) {}
-                        override fun onStopTrackingTouch(s: SeekBar) {}
-                    })
-                    AlertDialog.Builder(this@DualPaneActivity).setTitle("مشغل صوتی").setView(layout)
-                        .setPositiveButton("پخش / توقف") { _, _ -> if (mp.isPlaying) mp.pause() else mp.start() }
-                        .setNegativeButton("بستن") { _, _ -> mp.stop(); mp.release(); if (player === mp) player = null }.show()
-                    mp.start()
-                }
-                prepareAsync()
+            val mp = MediaPlayer()
+            player = mp
+            mp.setDataSource(file.absolutePath)
+            val seek = SeekBar(this)
+            val play = Button(this).apply { text = "پخش / توقف" }
+            val layout = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(12), dp(8), dp(12), dp(8))
+                addView(TextView(this@DualPaneActivity).apply { text = file.name; setPadding(dp(4), dp(8), dp(4), dp(8)) })
+                addView(seek)
+                addView(play)
             }
-        } catch (_: Exception) { toast("پخش این فایل صوتی ممکن نیست") }
+            val dialog = AlertDialog.Builder(this).setTitle("پخش‌کننده صوتی").setView(layout)
+                .setNegativeButton("بستن", null).create()
+            mp.setOnPreparedListener { prepared ->
+                seek.max = prepared.duration.coerceAtLeast(1)
+                play.setOnClickListener {
+                    if (prepared.isPlaying) { prepared.pause(); play.text = "ادامه پخش" }
+                    else { prepared.start(); play.text = "توقف" }
+                }
+                seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(s: SeekBar, progress: Int, fromUser: Boolean) { if (fromUser) prepared.seekTo(progress) }
+                    override fun onStartTrackingTouch(s: SeekBar) {}
+                    override fun onStopTrackingTouch(s: SeekBar) {}
+                })
+                prepared.start()
+                play.text = "توقف"
+            }
+            mp.setOnErrorListener { _, _, _ -> toast("این قالب صوتی پشتیبانی نمی‌شود"); true }
+            dialog.setOnDismissListener {
+                try { if (mp.isPlaying) mp.stop() } catch (_: Exception) {}
+                mp.release()
+                if (player === mp) player = null
+            }
+            dialog.show()
+            mp.prepareAsync()
+        } catch (_: Exception) { toast("پخش این فایل صوتی ممکن نیست؛ قالب یا سلامت فایل را بررسی کنید") }
+    }
+
+    private fun playVideo(file: File) {
+        try {
+            val video = VideoView(this)
+            video.setVideoPath(file.absolutePath)
+            val play = Button(this).apply { text = "پخش / توقف" }
+            val layout = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(8), dp(8), dp(8), dp(8))
+                addView(video, LinearLayout.LayoutParams(-1, dp(260)))
+                addView(play)
+            }
+            val dialog = AlertDialog.Builder(this).setTitle(file.name).setView(layout)
+                .setNegativeButton("بستن", null).create()
+            video.setOnPreparedListener { video.start() }
+            video.setOnErrorListener { _, _, _ -> toast("این قالب ویدئویی پشتیبانی نمی‌شود"); true }
+            play.setOnClickListener {
+                if (video.isPlaying) { video.pause(); play.text = "ادامه پخش" }
+                else { video.start(); play.text = "توقف" }
+            }
+            dialog.setOnDismissListener { video.stopPlayback() }
+            dialog.show()
+        } catch (_: Exception) { toast("پخش این ویدئو ممکن نیست؛ قالب یا سلامت فایل را بررسی کنید") }
     }
 
     private fun openExternal(file: File) {
