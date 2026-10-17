@@ -17,6 +17,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SolinaFM">
 
+        <activity android:name=".TextEditorActivity" android:exported="false" />
         <activity android:name=".WifiTransferActivity" android:exported="false" />
         <activity android:name=".DocumentViewerActivity" android:exported="false" />
         <activity android:name=".AdvancedSettingsActivity" android:exported="false" />
