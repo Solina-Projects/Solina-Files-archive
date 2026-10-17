@@ -287,7 +287,7 @@ class TextEditorActivity : AppCompatActivity() {
                     callback.onWriteFinished(emptyArray())
                 } else {
                     FileOutputStream(destination.fileDescriptor).use { pdf.writeTo(it) }
-                    callback.onWriteFinished(pages.ifEmpty { arrayOf(android.print.PageRange(0, totalPages - 1)) })
+                    callback.onWriteFinished(requestedPages.map { android.print.PageRange(it, it) }.toTypedArray())
                 }
             } catch (e: Exception) {
                 callback.onWriteFailed(e.localizedMessage)
