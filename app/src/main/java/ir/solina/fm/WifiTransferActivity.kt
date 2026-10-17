@@ -14,6 +14,7 @@ import java.io.InputStream
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.ServerSocket
+import java.net.Socket
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.security.SecureRandom
@@ -24,6 +25,7 @@ class WifiTransferActivity : AppCompatActivity() {
     private lateinit var rootFolder: File
     private lateinit var status: TextView
     private lateinit var toggle: MaterialButton
+    private lateinit var selfTest: MaterialButton
     @Volatile private var running = false
     @Volatile private var server: ServerSocket? = null
     private val port = 8765
@@ -62,6 +64,13 @@ class WifiTransferActivity : AppCompatActivity() {
             setOnClickListener { if (running) stopServer() else startServer() }
         }
         root.addView(toggle, LinearLayout.LayoutParams(-1, -2))
+        selfTest = MaterialButton(this).apply {
+            text = "آزمون انتقال محلی"
+            isAllCaps = false
+            isEnabled = false
+            setOnClickListener { runLocalTransferTest() }
+        }
+        root.addView(selfTest, LinearLayout.LayoutParams(-1, -2))
         val scroll = ScrollView(this)
         scroll.addView(TextView(this).apply {
             text = "فایل‌ها از مرورگر دستگاه دیگر قابل دانلود هستند و می‌توان فایل بارگذاری کرد. از شبکهٔ مورداعتماد استفاده کن؛ حداکثر حجم بارگذاری ۲۰ مگابایت است."
@@ -77,6 +86,7 @@ class WifiTransferActivity : AppCompatActivity() {
             server = socket
             running = true
             toggle.text = "توقف انتقال"
+            selfTest.isEnabled = true
             val addresses = localAddresses()
             status.text = "سرور فعال است روی پورت " + port + "\nرمز موقت: " + token + "\n" +
                 addresses.joinToString("\n") { "http://" + it + ":" + port + "/?token=" + token } +
@@ -105,7 +115,97 @@ class WifiTransferActivity : AppCompatActivity() {
         try { server?.close() } catch (_: Exception) {}
         server = null
         toggle.text = "شروع انتقال"
+        selfTest.isEnabled = false
         status.text = "سرور خاموش است"
+    }
+
+    /**
+     * Exercises the real HTTP handlers through loopback: authenticated upload, download,
+     * byte-for-byte comparison, and cleanup. This does not replace a second-device Wi-Fi test.
+     */
+    private fun runLocalTransferTest() {
+        if (!running) {
+            Toast.makeText(this, "ابتدا سرور انتقال را روشن کن", Toast.LENGTH_SHORT).show()
+            return
+        }
+        selfTest.isEnabled = false
+        status.text = "آزمون محلی در حال اجراست: بارگذاری و دانلود فایل آزمایشی…"
+        thread(name = "SolinaWifiSelfTest") {
+            val name = "solinafm-selftest-${System.currentTimeMillis()}.txt"
+            val expected = "SolinaFM local Wi-Fi transfer self-test".toByteArray(Charsets.UTF_8)
+            val testFile = File(rootFolder, name)
+            val result = try {
+                if (testFile.exists()) throw IllegalStateException("فایل آزمایشی از قبل وجود دارد")
+                val upload = rawHttp(
+                    "PUT",
+                    "/?token=$token",
+                    mapOf("X-Filename" to URLEncoder.encode(name, "UTF-8")),
+                    expected
+                )
+                val uploadHeader = responseHeader(upload)
+                if (!uploadHeader.startsWith("HTTP/1.1 200")) {
+                    throw IllegalStateException("بارگذاری ناموفق بود: ${uploadHeader.lineSequence().firstOrNull()}")
+                }
+                val downloadPath = "/?token=$token&download=" + URLEncoder.encode(name, "UTF-8")
+                val download = rawHttp("GET", downloadPath)
+                val downloadHeader = responseHeader(download)
+                if (!downloadHeader.startsWith("HTTP/1.1 200")) {
+                    throw IllegalStateException("دانلود ناموفق بود: ${downloadHeader.lineSequence().firstOrNull()}")
+                }
+                val actual = responseBody(download)
+                if (!actual.contentEquals(expected)) {
+                    throw IllegalStateException("محتوای فایل دانلودشده با فایل اصلی یکسان نیست")
+                }
+                "آزمون محلی موفق شد: بارگذاری، احراز توکن، دانلود و مقایسهٔ بایت‌به‌بایت تأیید شد."
+            } catch (e: Exception) {
+                "آزمون محلی ناموفق بود: ${e.localizedMessage ?: e.javaClass.simpleName}"
+            } finally {
+                try { testFile.delete() } catch (_: Exception) {}
+            }
+            runOnUiThread {
+                status.text = result + "\n\nبرای اطمینان از دسترسی واقعی شبکه، هنوز باید از یک دستگاه دوم روی همان Wi-Fi آزمایش شود."
+                selfTest.isEnabled = running
+            }
+        }
+    }
+
+    private fun rawHttp(
+        method: String,
+        target: String,
+        extraHeaders: Map<String, String> = emptyMap(),
+        body: ByteArray = ByteArray(0)
+    ): ByteArray {
+        Socket("127.0.0.1", port).use { socket ->
+            socket.soTimeout = 15000
+            val headers = StringBuilder()
+                .append(method).append(' ').append(target).append(" HTTP/1.1\r\n")
+                .append("Host: 127.0.0.1\r\n")
+                .append("Connection: close\r\n")
+            if (method == "PUT") headers.append("Content-Length: ").append(body.size).append("\r\n")
+            extraHeaders.forEach { (key, value) -> headers.append(key).append(": ").append(value).append("\r\n") }
+            headers.append("\r\n")
+            socket.getOutputStream().apply {
+                write(headers.toString().toByteArray(Charsets.ISO_8859_1))
+                if (body.isNotEmpty()) write(body)
+                flush()
+            }
+            return socket.getInputStream().use { it.readBytes() }
+        }
+    }
+
+    private fun responseHeader(response: ByteArray): String {
+        val text = response.toString(Charsets.ISO_8859_1)
+        val split = text.indexOf("\r\n\r\n")
+        return if (split < 0) text else text.substring(0, split)
+    }
+
+    private fun responseBody(response: ByteArray): ByteArray {
+        val marker = "\r\n\r\n".toByteArray(Charsets.ISO_8859_1)
+        val index = response.indices.firstOrNull { start ->
+            start + marker.size <= response.size &&
+                response.copyOfRange(start, start + marker.size).contentEquals(marker)
+        } ?: throw IllegalStateException("پاسخ HTTP ناقص است")
+        return response.copyOfRange(index + marker.size, response.size)
     }
 
     private fun handleClient(socket: java.net.Socket) {
