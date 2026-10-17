@@ -30,6 +30,7 @@
     <item android:id="@+id/action_recycle_bin" android:title="سطل بازیافت" app:showAsAction="never" />
     <item android:id="@+id/action_recent_files" android:title="فایل‌های اخیر" app:showAsAction="never" />
     <item android:id="@+id/action_advanced_settings" android:title="تنظیمات تکمیلی" app:showAsAction="never" />
+    <item android:id="@+id/action_wifi_transfer" android:title="انتقال فایل با Wi-Fi" app:showAsAction="never" />
     <item
         android:id="@+id/action_new_folder"
         android:title="@string/new_folder"
