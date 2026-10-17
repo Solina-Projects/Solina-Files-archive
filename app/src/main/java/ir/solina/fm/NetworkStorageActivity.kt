@@ -140,11 +140,11 @@ class NetworkStorageActivity : AppCompatActivity() {
                                 val latch = CountDownLatch(1)
                                 var accepted = false
                                 runOnUiThread {
-                                    AlertDialog.Builder(this@NetworkStorageActivity)
+                                    MaterialAlertDialogBuilder(this@NetworkStorageActivity)
                                         .setTitle("تأیید کلید میزبان SFTP")
                                         .setMessage(message + "\\n\\nفقط اگر اثرانگشت سرور را تأیید می‌کنی ادامه بده.")
-                                        .setNegativeMaterialButton("رد") { _, _ -> accepted = false; latch.countDown() }
-                                        .setPositiveMaterialButton("اعتماد برای این اتصال") { _, _ -> accepted = true; latch.countDown() }
+                                        .setNegativeButton("رد") { _, _ -> accepted = false; latch.countDown() }
+                                        .setPositiveButton("اعتماد برای این اتصال") { _, _ -> accepted = true; latch.countDown() }
                                         .setOnCancelListener { accepted = false; latch.countDown() }
                                         .show()
                                 }
