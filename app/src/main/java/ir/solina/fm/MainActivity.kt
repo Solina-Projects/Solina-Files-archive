@@ -783,7 +783,7 @@ class MainActivity : AppCompatActivity() {
             val used = (total - free).coerceAtLeast(0L)
             row.findViewById<LinearProgressIndicator>(R.id.volBar).apply {
                 progress = if (total > 0L) ((used * 100L) / total).toInt() else 0
-                layoutParams = layoutParams.apply { height = dp(4) }
+                visibility = View.GONE
             }
             row.findViewById<TextView>(R.id.volStats).text =
                 getString(R.string.storage_stats, fmt(used), fmt(free), fmt(total))
@@ -1271,6 +1271,7 @@ class MainActivity : AppCompatActivity() {
             else -> "پین موارد انتخاب‌شده برداشته شد"
         })
         refresh()
+        list.scrollToPosition(0)
         clearSelection()
     }
 
