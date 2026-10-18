@@ -99,15 +99,22 @@ class DualPaneActivity : AppCompatActivity() {
             setPadding(dp(8), 0, dp(8), 0)
             setTextColor(onSurfaceColor)
             setHintTextColor(surfaceVariantColor)
-            background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@DualPaneActivity, R.drawable.search_field_bg)
+            background = null
             contentDescription = "جست‌وجوی فایل و پوشه"
         }
-        navigation.addView(searchIconButton, LinearLayout.LayoutParams(dp(34), dp(38)))
         bookmarkButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_pin); minWidth = dp(34); setPadding(0, 0, 0, 0); contentDescription = "نشانک پوشه"; setOnClickListener { toggleBookmark() }; setOnLongClickListener { showBookmarks(); true } }
         sortButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_sort); minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "مرتب‌سازی و فیلتر"; setOnClickListener { showSortOptions(activePane) }; setOnLongClickListener { showDisplaySettings(); true } }
         layoutButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_splitscreen); minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "تغییر حالت تقسیم صفحه"; setOnClickListener { toggleMode() } }
         overflowButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_more_vert); minWidth = dp(34); setPadding(0, 0, 0, 0); contentDescription = "گزینه‌های بیشتر"; setOnClickListener { showTopMenu(this) } }
-        navigation.addView(searchInput, LinearLayout.LayoutParams(0, dp(38), 1f))
+        val searchContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@DualPaneActivity, R.drawable.search_field_bg)
+            setPadding(dp(4), 0, dp(4), 0)
+        }
+        searchContainer.addView(searchIconButton, LinearLayout.LayoutParams(dp(32), dp(36)))
+        searchContainer.addView(searchInput, LinearLayout.LayoutParams(0, dp(36), 1f))
+        navigation.addView(searchContainer, LinearLayout.LayoutParams(0, dp(38), 1f))
         navigation.addView(sortButton, LinearLayout.LayoutParams(dp(42), dp(40)))
         navigation.addView(layoutButton, LinearLayout.LayoutParams(dp(42), dp(40)))
         navigation.addView(overflowButton, LinearLayout.LayoutParams(dp(42), dp(40)))
