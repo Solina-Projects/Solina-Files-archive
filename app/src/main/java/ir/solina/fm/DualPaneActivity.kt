@@ -9,6 +9,7 @@ import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
+import android.provider.Settings
 import android.text.InputType
 import android.text.Editable
 import android.text.TextWatcher
@@ -66,6 +67,7 @@ class DualPaneActivity : AppCompatActivity() {
     private var iconDp = 38
     private var columns = 2
     private var player: MediaPlayer? = null
+    private var pendingInstallApk: File? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val savedNightMode = getSharedPreferences("solina_preferences", MODE_PRIVATE).getInt("night_mode", 0)
@@ -809,6 +811,7 @@ class DualPaneActivity : AppCompatActivity() {
             "txt", "md", "log", "json", "xml", "csv", "tsv", "ini", "kt", "java",
             "html", "htm", "css", "js", "gradle", "kts", "yml", "yaml", "sh",
             "properties", "conf", "cfg", "sql", "py", "c", "cpp", "h", "rs" -> editTextFile(file)
+            "apk" -> installApk(file)
             "zip" -> browseArchive(file, paneIndex)
             "rar", "7z" -> startActivity(Intent(this, ArchiveToolsActivity::class.java).putExtra("archive_path", file.absolutePath))
             "jpg", "jpeg", "png", "webp", "bmp", "gif" -> viewImage(file)
@@ -816,6 +819,54 @@ class DualPaneActivity : AppCompatActivity() {
             "mp4", "m4v", "3gp", "webm", "mkv", "avi", "mov", "mpeg", "mpg" -> playVideo(file)
             else -> openExternal(file)
         }
+    }
+
+    /**
+     * Starts Android's package installer for a single APK after checking the
+     * per-app "install unknown apps" permission. Installation is always confirmed
+     * by Android; this activity never silently installs or bypasses system security.
+     */
+    private fun installApk(file: File) {
+        if (!file.isFile || !file.canRead()) {
+            toast("فایل APK قابل خواندن نیست")
+            return
+        }
+        if (!packageManager.canRequestPackageInstalls()) {
+            pendingInstallApk = file
+            try {
+                startActivityForResult(
+                    Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")),
+                    9102
+                )
+            } catch (_: Exception) {
+                pendingInstallApk = null
+                toast("برای نصب APK، مجوز نصب برنامه‌های ناشناس را در تنظیمات فعال کنید")
+            }
+            return
+        }
+        try {
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(intent)
+        } catch (_: android.content.ActivityNotFoundException) {
+            toast("نصب‌کنندهٔ بستهٔ اندروید پیدا نشد")
+        } catch (_: Exception) {
+            toast("بازکردن نصب‌کنندهٔ APK ناموفق بود")
+        }
+    }
+
+    @Deprecated("Legacy callback retained for compatibility with minSdk 30")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 9102) return
+        val pending = pendingInstallApk
+        pendingInstallApk = null
+        if (pending == null) return
+        if (packageManager.canRequestPackageInstalls()) installApk(pending)
+        else toast("مجوز نصب برنامه‌های ناشناس فعال نشد")
     }
 
     private fun editTextFile(file: File) {
