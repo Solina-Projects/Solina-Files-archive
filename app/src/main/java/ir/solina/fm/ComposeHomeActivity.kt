@@ -32,6 +32,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
@@ -44,6 +45,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -206,8 +208,8 @@ private fun SolinaHomeScreen(
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         QuickTool("دوپنجره", Icons.Default.GridView, Modifier.weight(1f), onDualPane)
-                        QuickTool("پاک‌سازی", Icons.Default.Refresh, Modifier.weight(1f), onCleanTools)
-                        QuickTool("انتقال", Icons.Default.Share, Modifier.weight(1f), onShare)
+                        QuickTool("پاک‌سازی", Icons.Default.CleaningServices, Modifier.weight(1f), onCleanTools)
+                        QuickTool("انتقال", Icons.Default.Wifi, Modifier.weight(1f), onShare)
                         QuickTool("خزانه", Icons.Default.Lock, Modifier.weight(1f), onVault)
                         QuickTool("تنظیمات", Icons.Default.Settings, Modifier.weight(1f), onSettings)
                     }
@@ -313,11 +315,11 @@ private fun CategoryTile(
             }
             Spacer(Modifier.width(6.dp))
             Column(Modifier.weight(1f)) {
-                Text(category.title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                Text(category.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(3.dp))
-                Text(category.subtitle, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 11.sp)
+                Text(category.subtitle, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 12.sp)
             }
             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(12.dp))
@@ -335,7 +337,7 @@ private fun QuickTool(label: String, icon: ImageVector, modifier: Modifier, onCl
         verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
         Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-        Text(label, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(label, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
