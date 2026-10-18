@@ -821,7 +821,7 @@ class MainActivity : AppCompatActivity() {
             Triple(R.id.action_text_editor, "ویرایشگر متن و Smali", R.drawable.ic_edit)
         )
         toolItems.forEach { (id, label, iconRes) ->
-            val action = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonTextButtonStyle).apply {
+            val action = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
                 text = label
                 isAllCaps = false
                 textSize = 13f
@@ -1123,6 +1123,22 @@ class MainActivity : AppCompatActivity() {
         input.setSelection(0, initial.substringBeforeLast('.', initial).length)
         MaterialAlertDialogBuilder(this)
             .setTitle(titleRes)
+            .setView(view)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                val text = input.text.toString().trim()
+                if (text.isNotEmpty() && !text.contains('/')) onOk(text)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun askText(title: String, initial: String, onOk: (String) -> Unit) {
+        val view = layoutInflater.inflate(R.layout.dialog_input, null)
+        val input = view.findViewById<TextInputEditText>(R.id.input)
+        input.setText(initial)
+        input.setSelection(0, initial.substringBeforeLast('.', initial).length)
+        MaterialAlertDialogBuilder(this)
+            .setTitle(title)
             .setView(view)
             .setPositiveButton(R.string.ok) { _, _ ->
                 val text = input.text.toString().trim()
