@@ -84,7 +84,7 @@
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/selectionBar"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
+        android:layout_height="44dp"
         android:background="?attr/colorPrimaryContainer"
         android:visibility="gone"
         app:navigationIcon="@drawable/ic_close" />
@@ -183,6 +183,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/navBack"
+            android:visibility="gone"
             style="@style/Widget.Material3.Button.IconButton"
             android:layout_width="36dp"
             android:layout_height="36dp"
@@ -192,6 +193,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/navForward"
+            android:visibility="gone"
             style="@style/Widget.Material3.Button.IconButton"
             android:layout_width="36dp"
             android:layout_height="36dp"
@@ -274,17 +276,27 @@
                 app:cornerRadius="16dp" />
         </LinearLayout>
 
-        <!-- Extended FAB (Paste / Add) -->
+        <!-- Paste remains separate from the fixed circular create action. -->
         <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
             android:id="@+id/pasteFab"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="bottom|end"
+            android:layout_gravity="bottom|start"
             android:layout_margin="16dp"
             android:text="@string/paste_here"
             android:visibility="gone"
             app:cornerRadius="16dp"
             app:icon="@drawable/ic_content_paste" />
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/createFab"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="16dp"
+            android:contentDescription="ایجاد فایل یا پوشه"
+            app:backgroundTint="?attr/colorPrimary"
+            app:srcCompat="@android:drawable/ic_input_add"
+            app:tint="?attr/colorOnPrimary" />
     </FrameLayout>
 
     <!-- Bottom Contextual Selection Actions -->
