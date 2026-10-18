@@ -318,7 +318,6 @@ class MainActivity : AppCompatActivity() {
         // through the "حافظه دستگاه" selector and the storage sheet.
         storageQuickBar.removeAllViews()
         storageQuickBar.visibility = View.GONE
-        return
         volumes.forEach { volume ->
             val item = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
