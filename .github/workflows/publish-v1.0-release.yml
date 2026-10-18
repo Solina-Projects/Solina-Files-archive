@@ -58,7 +58,8 @@ jobs:
             Solina Files ${{ steps.version.outputs.tag }} — Android debug APK for testing.
 
             - Source: main branch
-            - Includes the searchable installed-app screen and safer APK/DEX inspection.
+            - Includes searchable installed-app management and safer APK/DEX inspection.
+            - Improves file transfer reporting and removes incomplete vault files after encryption errors.
             - Minimum Android version: Android 11 (API 30).
             - APK type: debug build; not signed with a production release key.
           files: app/build/outputs/apk/debug/*.apk
