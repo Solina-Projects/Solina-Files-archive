@@ -262,7 +262,7 @@ private fun SolinaHomeScreen(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    start = 18.dp, end = 18.dp,
+                    start = 12.dp, end = 12.dp,
                     top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 10.dp,
                     bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 20.dp
                 ),
@@ -282,6 +282,18 @@ private fun SolinaHomeScreen(
                                     modifier = Modifier.size(25.dp))
                             }
                         }
+                    }
+                }
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("ابزارها", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        QuickTool("دوپنجره", Icons.Default.GridView, Modifier.weight(1f), onDualPane)
+                        QuickTool("پاک‌سازی", Icons.Default.Refresh, Modifier.weight(1f), onCleanTools)
+                        QuickTool("انتقال", Icons.Default.Share, Modifier.weight(1f), onShare)
+                        QuickTool("خزانه", Icons.Default.Lock, Modifier.weight(1f), onVault)
+                        QuickTool("تنظیمات", Icons.Default.Settings, Modifier.weight(1f), onSettings)
                     }
                 }
                 item {
@@ -362,7 +374,7 @@ private fun SolinaHomeScreen(
                     }
                 }
                 items(categories.chunked(2)) { rowCategories ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         rowCategories.forEach { category ->
                             CategoryTile(
                                 category = category,
@@ -408,20 +420,6 @@ private fun SolinaHomeScreen(
                         RecentFileRow(file = file, onClick = { onOpenFile(file.absolutePath) })
                     }
                 }
-                item {
-                    Text("ابزارها", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        QuickTool("دو پنجره‌ای", Icons.Default.GridView, Modifier.weight(1f), onDualPane)
-                        QuickTool("پاک‌سازی", Icons.Default.Refresh, Modifier.weight(1f), onCleanTools)
-                        QuickTool("انتقال فایل", Icons.Default.Share, Modifier.weight(1f), onShare)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        QuickTool("گاوصندوق", Icons.Default.Lock, Modifier.weight(1f), onVault)
-                        QuickTool("تنظیمات", Icons.Default.Settings, Modifier.weight(1f), onSettings)
-                        Spacer(Modifier.weight(1f))
-                    }
-                }
             }
         }
     }
@@ -440,14 +438,14 @@ private fun CategoryTile(
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 15.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(shape = RoundedCornerShape(13.dp), color = category.tint.copy(alpha = 0.12f)) {
                 Icon(category.icon, contentDescription = null, tint = category.tint,
-                    modifier = Modifier.padding(9.dp).size(23.dp))
+                    modifier = Modifier.padding(7.dp).size(20.dp))
             }
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(7.dp))
             Column(Modifier.weight(1f)) {
                 Text(category.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -456,7 +454,7 @@ private fun CategoryTile(
                     maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 13.sp)
             }
             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp))
+                modifier = Modifier.size(14.dp))
         }
     }
 }
