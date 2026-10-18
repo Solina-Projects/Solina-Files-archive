@@ -474,6 +474,10 @@ class DualPaneActivity : AppCompatActivity() {
             single.extension.lowercase(Locale.ROOT) in setOf("zip", "7z", "rar", "tar", "gz", "tgz", "bz2", "xz")) {
             labels += "مرور و استخراج آرشیو"
         }
+        if (single != null && single.isFile && single.extension.equals("apk", ignoreCase = true)) {
+            labels += "نصب APK"
+            labels += "تحلیل APK و DEX"
+        }
         AlertDialog.Builder(this)
             .setTitle(if (selectedFiles.size == 1) selectedFiles.first().name else "${selectedFiles.size} مورد انتخاب‌شده")
             .setItems(labels.toTypedArray()) { _, which ->
@@ -493,6 +497,8 @@ class DualPaneActivity : AppCompatActivity() {
                     "مرور و استخراج آرشیو" -> single?.let {
                         startActivity(Intent(this, ArchiveToolsActivity::class.java).putExtra("archive_path", it.absolutePath))
                     }
+                    "نصب APK" -> single?.let { installApk(it) }
+                    "تحلیل APK و DEX" -> startActivity(Intent(this, ApkToolsActivity::class.java))
                 }
             }
             .setNegativeButton("بستن", null)
