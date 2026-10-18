@@ -1,24 +1,29 @@
-name: Publish Solina Files v1.0 Release
+name: Publish Solina Files Release
 
 on:
+  # Publish whenever the app version is bumped on main.
   push:
-    branches:
-      - feature/advanced-file-manager
+    branches: [main]
     paths:
-      - .github/workflows/publish-v1.0-release.yml
+      - app/build.gradle.kts
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: solina-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out feature branch
+      - name: Check out main
         uses: actions/checkout@v4
         with:
-          ref: feature/advanced-file-manager
+          ref: main
+          fetch-depth: 0
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -31,23 +36,31 @@ jobs:
         with:
           gradle-version: '8.7'
 
+      - name: Read version
+        id: version
+        shell: bash
+        run: |
+          VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          test -n "$VERSION_NAME" || { echo "Could not read versionName from app/build.gradle.kts"; exit 1; }
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION_NAME" >> "$GITHUB_OUTPUT"
+
       - name: Build APK
         run: gradle assembleDebug --no-daemon
 
-      - name: Publish v1.0 and attach APK
+      - name: Publish release and attach APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0
-          target_commitish: feature/advanced-file-manager
-          name: Solina Files v1.0
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: main
+          name: Solina Files ${{ steps.version.outputs.tag }}
           body: |
-            Solina Files v1.0 — Android debug APK for testing.
+            Solina Files ${{ steps.version.outputs.tag }} — Android debug APK for testing.
 
-            - Display name: Solina Files
-            - Build source: feature/advanced-file-manager
-            - APK type: debug build; not a production-signed release.
-
-            The main branch was not changed for this release.
+            - Source: main branch
+            - Includes the searchable installed-app screen and safer APK/DEX inspection.
+            - Minimum Android version: Android 11 (API 30).
+            - APK type: debug build; not signed with a production release key.
           files: app/build/outputs/apk/debug/*.apk
           fail_on_unmatched_files: true
           make_latest: true
