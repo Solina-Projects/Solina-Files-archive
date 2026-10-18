@@ -366,8 +366,13 @@ class MainActivity : AppCompatActivity() {
     // ---------- permission ----------
 
     private fun hasPermission(): Boolean =
-        android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R ||
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()
+        } else {
+            ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
 
     private fun requestPermission() {
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
