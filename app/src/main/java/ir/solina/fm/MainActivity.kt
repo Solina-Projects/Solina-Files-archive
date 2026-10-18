@@ -957,13 +957,11 @@ class MainActivity : AppCompatActivity() {
 
 
         private fun showCleanDialog() {
-        val totalFreeBytes = currentVol.dir.freeSpace
+        val totalFreeBytes = (currentVol?.dir ?: current).freeSpace
         val freeGb = String.format(java.util.Locale.US, "%.1f", totalFreeBytes / (1024.0 * 1024.0 * 1024.0))
         MaterialAlertDialogBuilder(this)
             .setTitle("پاکسازی هوشمند حافظه (Clean)")
-            .setMessage("فضای آزاد فعلی: " + freeGb + " گیگابایت
-
-آیا مایلید کش موقت و فایل‌های زائد برنامه‌ها به صورت خودکار پاکسازی شوند؟")
+            .setMessage("فضای آزاد فعلی: $freeGb گیگابایت\n\nآیا مایلید کش موقت و فایل‌های زائد برنامه‌ها به صورت خودکار پاکسازی شوند؟")
             .setPositiveButton("پاکسازی سریع") { _: android.content.DialogInterface, _: Int ->
                 cacheDir.deleteRecursively()
                 externalCacheDir?.deleteRecursively()
