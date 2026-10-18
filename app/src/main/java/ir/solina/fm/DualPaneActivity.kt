@@ -871,18 +871,95 @@ class DualPaneActivity : AppCompatActivity() {
             }
             return
         }
-        try {
-            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            startActivity(intent)
-        } catch (_: android.content.ActivityNotFoundException) {
-            toast("نصب‌کنندهٔ بستهٔ اندروید پیدا نشد")
-        } catch (_: Exception) {
-            toast("بازکردن نصب‌کنندهٔ APK ناموفق بود")
+        prepareApkWithWaveform(file)
+    }
+
+    /** Shows animated waveform while validating/copying the APK before handing off to Android Installer. */
+    private fun prepareApkWithWaveform(file: File) {
+        val density = resources.displayMetrics.density
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((22 * density).toInt(), (12 * density).toInt(), (22 * density).toInt(), (8 * density).toInt())
         }
+        val status = TextView(this).apply {
+            text = "در حال آماده‌سازی فایل نصب…"
+            textSize = 14f
+        }
+        val waveform = WaveformProgressView(this).apply {
+            contentDescription = "پیشرفت آماده‌سازی نصب برنامه"
+            setDuration(1000)
+        }
+        val details = TextView(this).apply {
+            text = file.name
+            textSize = 12f
+            setTextColor(0xFF808080.toInt())
+        }
+        content.addView(status)
+        content.addView(waveform, LinearLayout.LayoutParams(-1, (58 * density).toInt()))
+        content.addView(details)
+        val cancelled = java.util.concurrent.atomic.AtomicBoolean(false)
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle("آماده‌سازی نصب")
+            .setView(content)
+            .setNegativeButton("لغو") { _, _ -> cancelled.set(true) }
+            .create()
+        dialog.setOnCancelListener { cancelled.set(true) }
+        dialog.show()
+        Thread {
+            var prepared: File? = null
+            var failure: Exception? = null
+            try {
+                val targetDir = File(cacheDir, "apk-install").apply { mkdirs() }
+                prepared = File(targetDir, "install-${file.nameWithoutExtension}-${System.currentTimeMillis()}.apk")
+                file.inputStream().buffered().use { input ->
+                    prepared!!.outputStream().buffered().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var copied = 0L
+                        while (true) {
+                            if (cancelled.get()) throw InterruptedException("cancelled")
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            output.write(buffer, 0, count)
+                            copied += count
+                            val progressValue = if (file.length() > 0) ((copied * 1000L) / file.length()).toInt().coerceIn(0, 1000) else 1000
+                            runOnUiThread {
+                                if (!cancelled.get() && !isFinishing) {
+                                    waveform.setPosition(progressValue)
+                                    status.text = if (progressValue >= 1000) "آمادهٔ انتقال به نصب‌کننده…" else "در حال آماده‌سازی… ${progressValue / 10}%"
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                failure = e
+            }
+            val readyFile = prepared
+            runOnUiThread {
+                if (cancelled.get() || isFinishing || isDestroyed) {
+                    readyFile?.delete()
+                    return@runOnUiThread
+                }
+                dialog.dismiss()
+                if (failure != null || readyFile == null || !readyFile.isFile) {
+                    readyFile?.delete()
+                    toast("آماده‌سازی فایل APK ناموفق بود")
+                    return@runOnUiThread
+                }
+                try {
+                    val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", readyFile)
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, "application/vnd.android.package-archive")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(intent)
+                } catch (_: android.content.ActivityNotFoundException) {
+                    toast("نصب‌کنندهٔ بستهٔ اندروید پیدا نشد")
+                } catch (_: Exception) {
+                    toast("بازکردن نصب‌کنندهٔ APK ناموفق بود")
+                }
+            }
+        }.start()
     }
 
     @Deprecated("Legacy callback retained for compatibility with minSdk 30")
