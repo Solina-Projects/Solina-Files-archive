@@ -79,7 +79,7 @@ class WaveformProgressView @JvmOverloads constructor(
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
                 if (event.action == MotionEvent.ACTION_MOVE && !isPressed) return false
                 isPressed = true
-                onSeek?.invoke((event.x.coerceIn(0f, width.toFloat()) / max(1f, width) * durationMs).toInt())
+                onSeek?.invoke((event.x.coerceIn(0f, width.toFloat()) / max(1f, width.toFloat()) * durationMs).toInt())
                 return true
             }
             MotionEvent.ACTION_UP -> { isPressed = false; performClick(); return true }
