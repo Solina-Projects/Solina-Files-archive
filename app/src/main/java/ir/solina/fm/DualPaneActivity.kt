@@ -1366,6 +1366,13 @@ class DualPaneActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: Holder, position: Int) {
             val file = items[position]
+            holder.row.background = if (mode == LayoutMode.VERTICAL) null else
+                androidx.appcompat.content.res.AppCompatResources.getDrawable(this@DualPaneActivity, R.drawable.item_bg)
+            holder.icon.background = if (mode == LayoutMode.VERTICAL) android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                cornerRadius = dp(8).toFloat()
+                setColor(resolveThemeColor(com.google.android.material.R.attr.colorSurfaceVariant))
+            } else null
             FileTypeVisuals.applyTo(holder.icon, file)
             holder.name.text = file.name
             holder.info.text = if (!details) "" else if (file.isDirectory) "پوشه" else Formatter.formatFileSize(this@DualPaneActivity, file.length())
