@@ -4,9 +4,9 @@
 [![Build Status](https://img.shields.io/github/actions/workflow/status/Solina-Projects/Solina-Files/build.yml?branch=main&label=Build%20APK)](https://github.com/Solina-Projects/Solina-Files/actions)
 [![Language](https://img.shields.io/badge/Language-Kotlin%201.9-purple.svg?logo=kotlin)](https://kotlinlang.org)
 [![Material 3](https://img.shields.io/badge/UI-Material%20Design%203-blue.svg)](https://m3.material.io)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-AGPL--3.0--or--later-0F3D2E)](LICENSE)
 
-**Solina Files** یک فایل‌منیجر مدرن، سریع، امن و سبک برای سیستم‌عامل اندروید است که با تکیه بر **Material Design 3** و پشتیبانی بومی از زبان فارسی و تاریخ شمسی طراحی شده است.
+**Solina Files** یک فایل‌منیجر متن‌باز برای اندروید است که با تکیه بر **Material Design 3** و پشتیبانی بومی از زبان فارسی و تاریخ شمسی توسعه داده می‌شود. این شاخه برای یکپارچه‌سازی قابلیت‌های منتخب پروژهٔ Strata در ساختار فعلی Solina Files اختصاص دارد.
 
 ---
 
@@ -45,8 +45,12 @@ gradle assembleDebug --no-daemon
 ```
 
 ---
-**توسعه‌دهنده و صاحب‌امتیاز: تیم Solina**  
-با افتخار متن‌باز و توسعه داده شده با کاتلین.
+**توسعه‌دهندهٔ Solina Files: تیم Solina**  
+این شاخه تحت مجوز GNU AGPL نسخهٔ ۳ یا بالاتر منتشر می‌شود. اجزای شخص ثالث همچنان مشمول مجوزها و اطلاعیه‌های مربوط به خود هستند.
+
+## انتساب پروژهٔ Strata
+
+پروژهٔ [Strata](https://github.com/CluvexStudio/Strata) اثر CluvexStudio تحت مجوز GNU AGPL نسخهٔ ۳ یا بالاتر منتشر شده است. هر کد یا دارایی که از Strata وارد این پروژه شود باید اطلاعیه‌های حق‌نشر و مجوزهای مربوط را حفظ کند. این شاخهٔ ادغام در حال توسعه است؛ درج این انتساب به‌تنهایی به معنی تکمیل انتقال امکانات Strata نیست.
 
 
 ## تغییرات نسخه 1.0.3

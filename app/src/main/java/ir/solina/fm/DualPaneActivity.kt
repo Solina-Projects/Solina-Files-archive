@@ -5,10 +5,10 @@ import android.content.Intent
 import android.content.ClipData
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
-import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
+import android.provider.Settings
 import android.text.InputType
 import android.text.Editable
 import android.text.TextWatcher
@@ -26,6 +26,7 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.appbar.MaterialToolbar
 import net.lingala.zip4j.ZipFile
 import java.io.File
@@ -46,9 +47,7 @@ class DualPaneActivity : AppCompatActivity() {
         var sortMode: SortMode = SortMode.NAME
     )
     private lateinit var panesHost: LinearLayout
-    private lateinit var pathTitle: TextView
-    private lateinit var navBack: MaterialButton
-    private lateinit var navForward: MaterialButton
+    private lateinit var searchIconButton: MaterialButton
     private lateinit var searchInput: EditText
     private lateinit var bookmarkButton: MaterialButton
     private lateinit var sortButton: MaterialButton
@@ -65,31 +64,61 @@ class DualPaneActivity : AppCompatActivity() {
     private var showHiddenFiles = false
     private var iconDp = 38
     private var columns = 2
-    private var player: MediaPlayer? = null
+    private var pendingInstallApk: File? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val savedNightMode = getSharedPreferences("solina_preferences", MODE_PRIVATE).getInt("night_mode", 0)
         if (savedNightMode != 0) AppCompatDelegate.setDefaultNightMode(savedNightMode)
         super.onCreate(savedInstanceState)
         val base = Environment.getExternalStorageDirectory()
-        val screen = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(4), 0, dp(4), dp(4)) }
-        val navigation = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_LTR }
-        navBack = MaterialButton(this).apply { text = "‹"; textSize = 26f; minWidth = dp(40); setPadding(0, 0, 0, 0); setOnClickListener { navigateHistory(activePane, true) } }
-        navForward = MaterialButton(this).apply { text = "›"; textSize = 26f; minWidth = dp(40); setPadding(0, 0, 0, 0); setOnClickListener { navigateHistory(activePane, false) } }
-        pathTitle = TextView(this).apply { textSize = 13f; maxLines = 1; setPadding(dp(6), dp(4), dp(6), dp(4)) }
-        searchInput = EditText(this).apply { hint = "جست‌وجوی فایل و پوشه"; setSingleLine(true); textSize = 13f; setPadding(dp(8), 0, dp(8), 0) }
-        navigation.addView(navBack, LinearLayout.LayoutParams(dp(40), dp(48)))
-        navigation.addView(navForward, LinearLayout.LayoutParams(dp(40), dp(48)))
-        bookmarkButton = MaterialButton(this).apply { text = "☆"; minWidth = dp(34); setPadding(0, 0, 0, 0); contentDescription = "نشانک پوشه"; setOnClickListener { toggleBookmark() }; setOnLongClickListener { showBookmarks(); true } }
-        sortButton = MaterialButton(this).apply { text = "☷"; minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "مرتب‌سازی و فیلتر"; setOnClickListener { showSortOptions(activePane) }; setOnLongClickListener { showDisplaySettings(); true } }
-        layoutButton = MaterialButton(this).apply { text = "▥"; minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "تغییر حالت تقسیم صفحه"; setOnClickListener { toggleMode() } }
-        overflowButton = MaterialButton(this).apply { text = "⋮"; minWidth = dp(34); setPadding(0, 0, 0, 0); textSize = 22f; contentDescription = "گزینه‌های بیشتر"; setOnClickListener { showTopMenu(this) } }
-        navigation.addView(pathTitle, LinearLayout.LayoutParams(0, dp(48), 1f))
-        navigation.addView(searchInput, LinearLayout.LayoutParams(0, dp(42), 1f))
-        navigation.addView(sortButton, LinearLayout.LayoutParams(dp(36), dp(42)))
-        navigation.addView(layoutButton, LinearLayout.LayoutParams(dp(36), dp(42)))
-        navigation.addView(overflowButton, LinearLayout.LayoutParams(dp(34), dp(42)))
-        screen.addView(navigation, LinearLayout.LayoutParams(-1, dp(52)))
+        val surfaceColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorSurface, it, true) }.data
+        val onSurfaceColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurface, it, true) }.data
+        val surfaceVariantColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorSurfaceVariant, it, true) }.data
+        val screen = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(4), 0, dp(4), dp(4)); setBackgroundColor(surfaceColor) }
+        val navigation = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            setPadding(dp(2), 0, dp(2), 0)
+        }
+        searchIconButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            setIconResource(android.R.drawable.ic_menu_search)
+            contentDescription = "جست‌وجو"
+            minWidth = dp(34)
+            setPadding(0, 0, 0, 0)
+            setOnClickListener {
+                searchInput.requestFocus()
+                val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                imm.showSoftInput(searchInput, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+            }
+        }
+        searchInput = EditText(this).apply {
+            hint = "جست‌وجوی فایل و پوشه"
+            setSingleLine(true)
+            textSize = 13f
+            setPadding(dp(8), 0, dp(8), 0)
+            setTextColor(onSurfaceColor)
+            setHintTextColor(surfaceVariantColor)
+            background = null
+            contentDescription = "جست‌وجوی فایل و پوشه"
+        }
+        bookmarkButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_pin); minWidth = dp(34); setPadding(0, 0, 0, 0); contentDescription = "نشانک پوشه"; setOnClickListener { toggleBookmark() }; setOnLongClickListener { showBookmarks(); true } }
+        sortButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_sort); minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "مرتب‌سازی و فیلتر"; setOnClickListener { showSortOptions(activePane) }; setOnLongClickListener { showDisplaySettings(); true } }
+        layoutButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_splitscreen); minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "تغییر حالت تقسیم صفحه"; setOnClickListener { toggleMode() } }
+        overflowButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_more_vert); minWidth = dp(34); setPadding(0, 0, 0, 0); contentDescription = "گزینه‌های بیشتر"; setOnClickListener { showTopMenu(this) } }
+        val searchContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@DualPaneActivity, R.drawable.search_field_bg)
+            setPadding(dp(4), 0, dp(4), 0)
+        }
+        searchContainer.addView(searchIconButton, LinearLayout.LayoutParams(dp(32), dp(36)))
+        searchContainer.addView(searchInput, LinearLayout.LayoutParams(0, dp(36), 1f))
+        navigation.addView(searchContainer, LinearLayout.LayoutParams(0, dp(38), 1f))
+        navigation.addView(sortButton, LinearLayout.LayoutParams(dp(42), dp(40)))
+        navigation.addView(layoutButton, LinearLayout.LayoutParams(dp(42), dp(40)))
+        navigation.addView(overflowButton, LinearLayout.LayoutParams(dp(42), dp(40)))
+        screen.addView(navigation, LinearLayout.LayoutParams(-1, dp(44)))
         searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
@@ -107,14 +136,14 @@ class DualPaneActivity : AppCompatActivity() {
         button(selectionActions, "استخراج") { extractSelectedArchives() }
         button(selectionActions, "بیشتر") { showSelectedTools() }
         selectionScroll.addView(selectionActions)
-        screen.addView(selectionScroll, LinearLayout.LayoutParams(-1, dp(48)))
+        screen.addView(selectionScroll, LinearLayout.LayoutParams(-1, dp(46)))
         panesHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         screen.addView(panesHost, LinearLayout.LayoutParams(-1, 0, 1f))
         bottomActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; visibility = View.GONE }
         button(bottomActions, "کپی") { transfer(false) }
         button(bottomActions, "انتقال") { transfer(true) }
         button(bottomActions, "حذف") { deleteSelected(activePane) }
-        screen.addView(bottomActions, LinearLayout.LayoutParams(-1, dp(52)))
+        screen.addView(bottomActions, LinearLayout.LayoutParams(-1, dp(48)))
         setContentView(screen)
         left = createPane(base, 0)
         right = createPane(base, 1)
@@ -130,7 +159,7 @@ class DualPaneActivity : AppCompatActivity() {
         }
         val path = TextView(this).apply {
             textSize = 12f
-            maxLines = 2
+            maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
             setPadding(dp(6), dp(6), dp(6), dp(6))
             setOnClickListener {
@@ -195,7 +224,7 @@ class DualPaneActivity : AppCompatActivity() {
 
     private fun refresh(index: Int) {
         val p = pane(index)
-        p.path.text = (if (index == 0) "چپ: " else "راست: ") + p.current.absolutePath
+        p.path.text = (if (index == 0) "چپ • " else "راست • ") + p.current.name.ifBlank { "/" }
         val unsorted = p.current.listFiles()
             ?.filter { (it.isFile || it.isDirectory) && (showHiddenFiles || !it.name.startsWith(".")) }
             ?: emptyList()
@@ -221,17 +250,14 @@ class DualPaneActivity : AppCompatActivity() {
                     resolveThemeColor(com.google.android.material.R.attr.colorSecondaryContainer), 38
                 ) else 0x00000000
             )
-            pane.path.text = (if (index == 0) "پنل چپ  •  " else "پنل راست  •  ") + pane.current.absolutePath
+            pane.path.text = (if (index == 0) "چپ • " else "راست • ") + pane.current.name.ifBlank { "/" }
+            pane.path.contentDescription = pane.current.absolutePath
         }
         val p = pane(activePane)
-        pathTitle.text = p.current.name.ifBlank { p.current.absolutePath }
-        pathTitle.contentDescription = p.current.absolutePath
-        navBack.isEnabled = p.backHistory.isNotEmpty() || p.current.parentFile != null
-        navForward.isEnabled = p.forwardHistory.isNotEmpty()
         searchInput.setTextIfDifferent(p.query)
         val bookmarks = getBookmarks()
         bookmarkButton.text = if (p.current.absolutePath in bookmarks) "★" else "☆"
-        layoutButton.text = if (mode == LayoutMode.HORIZONTAL) "▥" else "▤"
+        layoutButton.setIconResource(if (mode == LayoutMode.HORIZONTAL) R.drawable.ic_splitscreen else R.drawable.ic_grid_view)
         layoutButton.contentDescription = if (mode == LayoutMode.HORIZONTAL) "تقسیم عمودی پنل‌ها" else "تقسیم افقی پنل‌ها"
         updateSelectionUi()
     }
@@ -472,6 +498,16 @@ class DualPaneActivity : AppCompatActivity() {
             single.extension.lowercase(Locale.ROOT) in setOf("zip", "7z", "rar", "tar", "gz", "tgz", "bz2", "xz")) {
             labels += "مرور و استخراج آرشیو"
         }
+        if (single != null && single.isFile && single.extension.equals("apk", ignoreCase = true)) {
+            labels += "نصب APK"
+            labels += "تحلیل APK و DEX"
+        }
+        if (single != null && single.isFile && single.extension.equals("pdf", true)) {
+            labels += "مشاهده PDF"
+        }
+        if (single != null && single.isFile) {
+            labels += "نمایش هگز"
+        }
         AlertDialog.Builder(this)
             .setTitle(if (selectedFiles.size == 1) selectedFiles.first().name else "${selectedFiles.size} مورد انتخاب‌شده")
             .setItems(labels.toTypedArray()) { _, which ->
@@ -490,6 +526,16 @@ class DualPaneActivity : AppCompatActivity() {
                     )
                     "مرور و استخراج آرشیو" -> single?.let {
                         startActivity(Intent(this, ArchiveToolsActivity::class.java).putExtra("archive_path", it.absolutePath))
+                    }
+                    "نصب APK" -> single?.let { installApk(it) }
+                    "تحلیل APK و DEX" -> single?.let { apk ->
+                        startActivity(Intent(this, ApkToolsActivity::class.java).putExtra("apk_path", apk.absolutePath))
+                    }
+                    "مشاهده PDF" -> single?.let { file ->
+                        startActivity(Intent(this, DocumentViewerActivity::class.java).putExtra("file_path", file.absolutePath))
+                    }
+                    "نمایش هگز" -> single?.let { file ->
+                        startActivity(Intent(this, HexViewerActivity::class.java).putExtra("file_path", file.absolutePath))
                     }
                 }
             }
@@ -552,13 +598,67 @@ class DualPaneActivity : AppCompatActivity() {
 
     private fun showTopMenu(anchor: View) {
         android.widget.PopupMenu(this, anchor).apply {
-            menu.add("نشانک این پوشه").setOnMenuItemClickListener { toggleBookmark(); true }
-            menu.add("پوشه‌های نشانک‌شده").setOnMenuItemClickListener { showBookmarks(); true }
-            menu.add("نمایش فایل‌ها").setOnMenuItemClickListener { showDisplaySettings(); true }
-            menu.add("تعداد ستون‌ها").setOnMenuItemClickListener { showLayoutSettings(); true }
-            menu.add("تم روشن/تیره").setOnMenuItemClickListener { toggleTheme(); true }
+            menu.add("نشانک این پوشه").setIcon(R.drawable.ic_pin).setOnMenuItemClickListener { toggleBookmark(); true }
+            menu.add("پوشه‌های نشانک‌شده").setIcon(R.drawable.ic_folder).setOnMenuItemClickListener { showBookmarks(); true }
+            menu.add("نمایش فایل‌ها").setIcon(R.drawable.ic_list_view).setOnMenuItemClickListener { showDisplaySettings(); true }
+            menu.add("تعداد ستون‌ها").setIcon(R.drawable.ic_grid_view).setOnMenuItemClickListener { showLayoutSettings(); true }
+            menu.add("تم روشن/تیره").setIcon(R.drawable.ic_menu).setOnMenuItemClickListener { toggleTheme(); true }
+            menu.add("ابزارها و قابلیت‌های بیشتر").setIcon(R.drawable.ic_clean).setOnMenuItemClickListener {
+                showIntegratedTools()
+                true
+            }
+            try {
+                val field = javaClass.getDeclaredField("mPopup")
+                field.isAccessible = true
+                (field.get(this) as? androidx.appcompat.view.menu.MenuPopupHelper)?.setForceShowIcon(true)
+            } catch (_: Exception) { }
             show()
         }
+    }
+
+    /**
+     * Opens the file-management tools already shipped with Solina from inside Dual Pane.
+     * This does not imply that every Strata-only feature has been ported.
+     */
+    private fun showIntegratedTools() {
+        val labels = arrayOf(
+            "برنامه‌های نصب‌شده و اطلاعات برنامه",
+            "ابزارهای APK",
+            "مدیریت آرشیوها",
+            "ابزارهای فایل و تغییرنام گروهی",
+            "ذخیره‌سازی شبکه",
+            "اشتراک‌گذاری از طریق Wi-Fi",
+            "سطل بازیافت",
+            "فایل‌های اخیر",
+            "گاوصندوق",
+            "مرورگر فایل با دسترسی ریشه",
+            "تنظیمات پیشرفته"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("ابزارهای Solina در پنل دوگانه")
+            .setItems(labels) { _, which ->
+                val intent = when (which) {
+                    0 -> Intent(this, InstalledAppsActivity::class.java)
+                    1 -> Intent(this, ApkToolsActivity::class.java)
+                    2 -> Intent(this, ArchiveToolsActivity::class.java)
+                    3 -> Intent(this, FileToolsActivity::class.java)
+                        .putExtra("root_path", pane(activePane).current.absolutePath)
+                    4 -> Intent(this, NetworkStorageActivity::class.java)
+                    5 -> Intent(this, WifiTransferActivity::class.java)
+                    6 -> Intent(this, RecycleBinActivity::class.java)
+                    7 -> Intent(this, RecentFilesActivity::class.java)
+                    8 -> Intent(this, VaultActivity::class.java)
+                    9 -> Intent(this, RootExplorerActivity::class.java)
+                    else -> Intent(this, AdvancedSettingsActivity::class.java)
+                }
+                try {
+                    startActivity(intent)
+                } catch (_: Exception) {
+                    toast("بازکردن این ابزار ممکن نشد")
+                }
+            }
+            .setNegativeButton("بستن", null)
+            .show()
     }
 
     private fun toggleTheme() {
@@ -760,13 +860,140 @@ class DualPaneActivity : AppCompatActivity() {
             "txt", "md", "log", "json", "xml", "csv", "tsv", "ini", "kt", "java",
             "html", "htm", "css", "js", "gradle", "kts", "yml", "yaml", "sh",
             "properties", "conf", "cfg", "sql", "py", "c", "cpp", "h", "rs" -> editTextFile(file)
+            "apk" -> installApk(file)
             "zip" -> browseArchive(file, paneIndex)
             "rar", "7z" -> startActivity(Intent(this, ArchiveToolsActivity::class.java).putExtra("archive_path", file.absolutePath))
+            "pdf" -> startActivity(Intent(this, DocumentViewerActivity::class.java).putExtra("file_path", file.absolutePath))
             "jpg", "jpeg", "png", "webp", "bmp", "gif" -> viewImage(file)
             "mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi" -> playAudio(file)
             "mp4", "m4v", "3gp", "webm", "mkv", "avi", "mov", "mpeg", "mpg" -> playVideo(file)
             else -> openExternal(file)
         }
+    }
+
+    /**
+     * Starts Android's package installer for a single APK after checking the
+     * per-app "install unknown apps" permission. Installation is always confirmed
+     * by Android; this activity never silently installs or bypasses system security.
+     */
+    private fun installApk(file: File) {
+        if (!file.isFile || !file.canRead()) {
+            toast("فایل APK قابل خواندن نیست")
+            return
+        }
+        if (!packageManager.canRequestPackageInstalls()) {
+            pendingInstallApk = file
+            try {
+                startActivityForResult(
+                    Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")),
+                    9102
+                )
+            } catch (_: Exception) {
+                pendingInstallApk = null
+                toast("برای نصب APK، مجوز نصب برنامه‌های ناشناس را در تنظیمات فعال کنید")
+            }
+            return
+        }
+        prepareApkWithWaveform(file)
+    }
+
+    /** Shows animated waveform while validating/copying the APK before handing off to Android Installer. */
+    private fun prepareApkWithWaveform(file: File) {
+        val density = resources.displayMetrics.density
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((22 * density).toInt(), (12 * density).toInt(), (22 * density).toInt(), (8 * density).toInt())
+        }
+        val status = TextView(this).apply {
+            text = "در حال آماده‌سازی فایل نصب…"
+            textSize = 14f
+        }
+        val waveform = WaveformProgressView(this).apply {
+            contentDescription = "پیشرفت آماده‌سازی نصب برنامه"
+            setDuration(1000)
+        }
+        val details = TextView(this).apply {
+            text = file.name
+            textSize = 12f
+            setTextColor(0xFF808080.toInt())
+        }
+        content.addView(status)
+        content.addView(waveform, LinearLayout.LayoutParams(-1, (58 * density).toInt()))
+        content.addView(details)
+        val cancelled = java.util.concurrent.atomic.AtomicBoolean(false)
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle("آماده‌سازی نصب")
+            .setView(content)
+            .setNegativeButton("لغو") { _, _ -> cancelled.set(true) }
+            .create()
+        dialog.setOnCancelListener { cancelled.set(true) }
+        dialog.show()
+        Thread {
+            var prepared: File? = null
+            var failure: Exception? = null
+            try {
+                val targetDir = File(cacheDir, "apk-install").apply { mkdirs() }
+                prepared = File(targetDir, "install-${file.nameWithoutExtension}-${System.currentTimeMillis()}.apk")
+                file.inputStream().buffered().use { input ->
+                    prepared!!.outputStream().buffered().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var copied = 0L
+                        while (true) {
+                            if (cancelled.get()) throw InterruptedException("cancelled")
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            output.write(buffer, 0, count)
+                            copied += count
+                            val progressValue = if (file.length() > 0) ((copied * 1000L) / file.length()).toInt().coerceIn(0, 1000) else 1000
+                            runOnUiThread {
+                                if (!cancelled.get() && !isFinishing) {
+                                    waveform.setPosition(progressValue)
+                                    status.text = if (progressValue >= 1000) "آمادهٔ انتقال به نصب‌کننده…" else "در حال آماده‌سازی… ${progressValue / 10}%"
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                failure = e
+            }
+            val readyFile = prepared
+            runOnUiThread {
+                if (cancelled.get() || isFinishing || isDestroyed) {
+                    readyFile?.delete()
+                    return@runOnUiThread
+                }
+                dialog.dismiss()
+                if (failure != null || readyFile == null || !readyFile.isFile) {
+                    readyFile?.delete()
+                    toast("آماده‌سازی فایل APK ناموفق بود")
+                    return@runOnUiThread
+                }
+                try {
+                    val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", readyFile)
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, "application/vnd.android.package-archive")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(intent)
+                } catch (_: android.content.ActivityNotFoundException) {
+                    toast("نصب‌کنندهٔ بستهٔ اندروید پیدا نشد")
+                } catch (_: Exception) {
+                    toast("بازکردن نصب‌کنندهٔ APK ناموفق بود")
+                }
+            }
+        }.start()
+    }
+
+    @Deprecated("Legacy callback retained for compatibility with minSdk 30")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 9102) return
+        val pending = pendingInstallApk
+        pendingInstallApk = null
+        if (pending == null) return
+        if (packageManager.canRequestPackageInstalls()) installApk(pending)
+        else toast("مجوز نصب برنامه‌های ناشناس فعال نشد")
     }
 
     private fun editTextFile(file: File) {
@@ -820,10 +1047,10 @@ class DualPaneActivity : AppCompatActivity() {
             val original = BitmapFactory.decodeFile(file.absolutePath)
             if (original == null) { toast("تصویر خراب است یا قالب آن پشتیبانی نمی‌شود"); return }
             var edited = original
-            val image = ImageView(this).apply {
-                setImageBitmap(edited); adjustViewBounds = true
-                scaleType = ImageView.ScaleType.FIT_CENTER
+            val image = ZoomableImageView(this).apply {
+                setImageBitmap(edited)
                 setPadding(dp(8), dp(8), dp(8), dp(8))
+                contentDescription = file.name
             }
             val dialog = AlertDialog.Builder(this).setTitle(file.name).setView(image)
                 .setNeutralButton("چرخش ۹۰°", null)
@@ -854,69 +1081,213 @@ class DualPaneActivity : AppCompatActivity() {
     }
 
     private fun playAudio(file: File) {
-        try {
-            player?.release()
-            val mp = MediaPlayer()
-            player = mp
-            mp.setDataSource(file.absolutePath)
-            val seek = SeekBar(this)
-            val play = Button(this).apply { text = "پخش / توقف" }
-            val layout = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(12), dp(8), dp(12), dp(8))
-                addView(TextView(this@DualPaneActivity).apply { text = file.name; setPadding(dp(4), dp(8), dp(4), dp(8)) })
-                addView(seek)
-                addView(play)
+        val audioExtensions = setOf("mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi")
+        if (!file.isFile || !file.canRead()) {
+            toast("فایل صوتی قابل خواندن نیست")
+            return
+        }
+
+        val title = TextView(this).apply {
+            text = file.nameWithoutExtension
+            textSize = 18f
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(12), dp(8), dp(8))
+        }
+        val positionLabel = TextView(this).apply {
+            text = "00:00 / --:--"
+            gravity = Gravity.CENTER
+            textSize = 12f
+        }
+        val seek = SeekBar(this)
+        val playPause = MaterialButton(this).apply { text = "پخش / مکث"; isAllCaps = false }
+        val previous = MaterialButton(this).apply { text = "قبلی"; isAllCaps = false }
+        val next = MaterialButton(this).apply { text = "بعدی"; isAllCaps = false }
+        val shuffle = MaterialButton(this).apply { text = "تصادفی: خاموش"; isAllCaps = false }
+        val repeat = MaterialButton(this).apply { text = "تکرار: خاموش"; isAllCaps = false }
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            addView(previous, LinearLayout.LayoutParams(0, dp(48), 1f))
+            addView(playPause, LinearLayout.LayoutParams(0, dp(48), 1.4f))
+            addView(next, LinearLayout.LayoutParams(0, dp(48), 1f))
+        }
+        val options = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            addView(shuffle, LinearLayout.LayoutParams(0, dp(44), 1f))
+            addView(repeat, LinearLayout.LayoutParams(0, dp(44), 1f))
+        }
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            addView(title, LinearLayout.LayoutParams(-1, -2))
+            addView(positionLabel, LinearLayout.LayoutParams(-1, -2))
+            addView(seek, LinearLayout.LayoutParams(-1, -2))
+            addView(controls, LinearLayout.LayoutParams(-1, -2))
+            addView(options, LinearLayout.LayoutParams(-1, -2))
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("پخش‌کنندهٔ صوتی")
+            .setView(layout)
+            .setNegativeButton("بستن", null)
+            .create()
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        var controller: androidx.media3.session.MediaController? = null
+        var mediaListener: androidx.media3.common.Player.Listener? = null
+        var future: com.google.common.util.concurrent.ListenableFuture<androidx.media3.session.MediaController>? = null
+        var repeatEnabled = false
+
+        fun timeLabel(ms: Long): String {
+            if (ms < 0L) return "--:--"
+            val seconds = ms / 1000L
+            return String.format(Locale.ROOT, "%02d:%02d", seconds / 60L, seconds % 60L)
+        }
+        lateinit var ticker: Runnable
+        ticker = Runnable {
+            val c = controller
+            if (dialog.isShowing && c != null) {
+                val duration = c.duration
+                val safeDuration = if (duration > 0L) duration else 0L
+                seek.max = safeDuration.coerceAtMost(Int.MAX_VALUE.toLong()).toInt().coerceAtLeast(1)
+                if (!seek.isPressed) seek.progress = c.currentPosition.coerceIn(0L, seek.max.toLong()).toInt()
+                positionLabel.text = "${timeLabel(c.currentPosition)} / ${timeLabel(duration)}"
+                handler.postDelayed(ticker, 500L)
             }
-            val dialog = AlertDialog.Builder(this).setTitle("پخش‌کننده صوتی").setView(layout)
-                .setNegativeButton("بستن", null).create()
-            mp.setOnPreparedListener { prepared ->
-                seek.max = prepared.duration.coerceAtLeast(1)
-                play.setOnClickListener {
-                    if (prepared.isPlaying) { prepared.pause(); play.text = "ادامه پخش" }
-                    else { prepared.start(); play.text = "توقف" }
+        }
+
+        dialog.setOnDismissListener {
+            handler.removeCallbacks(ticker)
+            val c = controller
+            if (c != null && mediaListener != null) c.removeListener(mediaListener!!)
+            future?.let { androidx.media3.session.MediaController.releaseFuture(it) }
+            controller = null
+        }
+        dialog.show()
+
+        val token = androidx.media3.session.SessionToken(
+            this,
+            android.content.ComponentName(this, StrataPlaybackService::class.java)
+        )
+        future = androidx.media3.session.MediaController.Builder(this, token).buildAsync()
+        future!!.addListener({
+            val f = future ?: return@addListener
+            val c = try { f.get() } catch (_: Exception) {
+                if (dialog.isShowing) toast("راه‌اندازی موتور پخش صوتی ناموفق بود")
+                return@addListener
+            }
+            if (!dialog.isShowing) {
+                androidx.media3.session.MediaController.releaseFuture(f)
+                return@addListener
+            }
+            controller = c
+            val siblings = (file.parentFile?.listFiles()?.filter {
+                it.isFile && it.canRead() && it.extension.lowercase(Locale.ROOT) in audioExtensions
+            } ?: listOf(file)).sortedBy { it.name.lowercase(Locale.ROOT) }
+            val startIndex = siblings.indexOfFirst { it.absolutePath == file.absolutePath }.coerceAtLeast(0)
+            val items = siblings.map { audio ->
+                androidx.media3.common.MediaItem.Builder()
+                    .setUri(Uri.fromFile(audio))
+                    .setMediaId(audio.absolutePath)
+                    .setMediaMetadata(
+                        androidx.media3.common.MediaMetadata.Builder()
+                            .setDisplayTitle(audio.nameWithoutExtension)
+                            .build()
+                    )
+                    .build()
+            }
+            c.setMediaItems(items, startIndex, 0L)
+            c.prepare()
+            c.play()
+
+            mediaListener = object : androidx.media3.common.Player.Listener {
+                override fun onMediaItemTransition(
+                    mediaItem: androidx.media3.common.MediaItem?,
+                    reason: Int
+                ) {
+                    title.text = c.mediaMetadata.title?.toString()
+                        ?: c.currentMediaItem?.mediaMetadata?.displayTitle?.toString()
+                        ?: file.nameWithoutExtension
                 }
-                seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                    override fun onProgressChanged(s: SeekBar, progress: Int, fromUser: Boolean) { if (fromUser) prepared.seekTo(progress) }
-                    override fun onStartTrackingTouch(s: SeekBar) {}
-                    override fun onStopTrackingTouch(s: SeekBar) {}
-                })
-                prepared.start()
-                play.text = "توقف"
+                override fun onMediaMetadataChanged(metadata: androidx.media3.common.MediaMetadata) {
+                    title.text = metadata.title?.toString()
+                        ?: metadata.displayTitle?.toString()
+                        ?: file.nameWithoutExtension
+                }
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    playPause.text = if (isPlaying) "مکث" else "ادامهٔ پخش"
+                }
             }
-            mp.setOnErrorListener { _, _, _ -> toast("این قالب صوتی پشتیبانی نمی‌شود"); true }
-            dialog.setOnDismissListener {
-                try { if (mp.isPlaying) mp.stop() } catch (_: Exception) {}
-                mp.release()
-                if (player === mp) player = null
+            c.addListener(mediaListener!!)
+            title.text = c.mediaMetadata.title?.toString()
+                ?: c.currentMediaItem?.mediaMetadata?.displayTitle?.toString()
+                ?: file.nameWithoutExtension
+            playPause.setOnClickListener {
+                if (c.isPlaying) c.pause() else c.play()
             }
-            dialog.show()
-            mp.prepareAsync()
-        } catch (_: Exception) { toast("پخش این فایل صوتی ممکن نیست؛ قالب یا سلامت فایل را بررسی کنید") }
+            previous.setOnClickListener { c.seekToPreviousMediaItem() }
+            next.setOnClickListener { c.seekToNextMediaItem() }
+            shuffle.setOnClickListener {
+                c.shuffleModeEnabled = !c.shuffleModeEnabled
+                shuffle.text = if (c.shuffleModeEnabled) "تصادفی: روشن" else "تصادفی: خاموش"
+            }
+            repeat.setOnClickListener {
+                repeatEnabled = !repeatEnabled
+                c.repeatMode = if (repeatEnabled) androidx.media3.common.Player.REPEAT_MODE_ALL
+                    else androidx.media3.common.Player.REPEAT_MODE_OFF
+                repeat.text = if (repeatEnabled) "تکرار: همه" else "تکرار: خاموش"
+            }
+            seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar, progress: Int, fromUser: Boolean) {
+                    if (fromUser) c.seekTo(progress.toLong())
+                }
+                override fun onStartTrackingTouch(bar: SeekBar) {}
+                override fun onStopTrackingTouch(bar: SeekBar) {}
+            })
+            handler.post(ticker)
+        }, androidx.core.content.ContextCompat.getMainExecutor(this))
     }
 
     private fun playVideo(file: File) {
-        try {
-            val video = VideoView(this)
-            video.setVideoPath(file.absolutePath)
-            val play = Button(this).apply { text = "پخش / توقف" }
-            val layout = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(8), dp(8), dp(8), dp(8))
-                addView(video, LinearLayout.LayoutParams(-1, dp(260)))
-                addView(play)
+        if (!file.isFile || !file.canRead()) {
+            toast("فایل ویدئویی قابل خواندن نیست")
+            return
+        }
+        val exoPlayer = try {
+            androidx.media3.exoplayer.ExoPlayer.Builder(this).build()
+        } catch (_: Exception) {
+            toast("راه‌اندازی موتور پخش ویدئو ناموفق بود")
+            return
+        }
+        val playerView = androidx.media3.ui.PlayerView(this).apply {
+            player = exoPlayer
+            useController = true
+            setShowBuffering(androidx.media3.ui.PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+        }
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            addView(playerView, LinearLayout.LayoutParams(-1, dp(280)))
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(file.name)
+            .setView(layout)
+            .setNegativeButton("بستن", null)
+            .create()
+        exoPlayer.setMediaItem(androidx.media3.common.MediaItem.fromUri(Uri.fromFile(file)))
+        exoPlayer.addListener(object : androidx.media3.common.Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                if (dialog.isShowing) toast("پخش ویدئو ناموفق بود: " + (error.errorCodeName ?: "قالب پشتیبانی‌نشده"))
             }
-            val dialog = AlertDialog.Builder(this).setTitle(file.name).setView(layout)
-                .setNegativeButton("بستن", null).create()
-            video.setOnPreparedListener { video.start() }
-            video.setOnErrorListener { _, _, _ -> toast("این قالب ویدئویی پشتیبانی نمی‌شود"); true }
-            play.setOnClickListener {
-                if (video.isPlaying) { video.pause(); play.text = "ادامه پخش" }
-                else { video.start(); play.text = "توقف" }
-            }
-            dialog.setOnDismissListener { video.stopPlayback() }
-            dialog.show()
-        } catch (_: Exception) { toast("پخش این ویدئو ممکن نیست؛ قالب یا سلامت فایل را بررسی کنید") }
+        })
+        dialog.setOnShowListener {
+            exoPlayer.prepare()
+            exoPlayer.play()
+        }
+        dialog.setOnDismissListener {
+            playerView.player = null
+            exoPlayer.release()
+        }
+        dialog.show()
     }
 
     private fun openExternal(file: File) {
@@ -944,16 +1315,42 @@ class DualPaneActivity : AppCompatActivity() {
     }
 
     private fun button(parent: LinearLayout, text: String, action: () -> Unit) {
-        val b = MaterialButton(this).apply { this.text = text; isAllCaps = false; setOnClickListener { action() } }
-        val params = if (::selectionActions.isInitialized && parent === selectionActions)
-            LinearLayout.LayoutParams(-2, -1)
-        else LinearLayout.LayoutParams(0, -1, 1f)
+        val iconRes = when (text) {
+            "انتخاب همه" -> R.drawable.ic_select_all
+            "برداشتن انتخاب" -> R.drawable.ic_close
+            "✎ A تغییر نام", "✎ تغییر نام", "تغییر نام" -> R.drawable.ic_edit
+            "فشرده‌سازی" -> R.drawable.ic_archive
+            "استخراج" -> R.drawable.ic_unarchive
+            "بیشتر" -> R.drawable.ic_more_vert
+            "کپی" -> R.drawable.ic_content_copy
+            "انتقال" -> R.drawable.ic_content_cut
+            "حذف" -> R.drawable.ic_delete
+            else -> R.drawable.ic_file
+        }
+        val b = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            this.text = ""
+            isAllCaps = false
+            setIconResource(iconRes)
+            iconSize = dp(25)
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            insetTop = 0
+            insetBottom = 0
+            minWidth = dp(44)
+            minimumWidth = dp(44)
+            setPadding(dp(4), 0, dp(4), 0)
+            contentDescription = text
+            tooltipText = text
+            setOnClickListener { action() }
+        }
+        val params = if (parent === selectionActions)
+            LinearLayout.LayoutParams(dp(48), dp(44))
+        else LinearLayout.LayoutParams(0, dp(48), 1f)
         parent.addView(b, params)
     }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
 
-    override fun onDestroy() { player?.release(); player = null; super.onDestroy() }
+    override fun onDestroy() { super.onDestroy() }
 
     private inner class PaneAdapter(private val paneIndex: Int) : RecyclerView.Adapter<PaneAdapter.Holder>() {
         var items: List<File> = emptyList()
@@ -973,7 +1370,8 @@ class DualPaneActivity : AppCompatActivity() {
                 setPadding(dp(8), dp(7), dp(8), dp(7))
                 isClickable = true
                 isFocusable = true
-                background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@DualPaneActivity, R.drawable.item_bg)
+                background = if (mode == LayoutMode.VERTICAL) null else
+                    androidx.appcompat.content.res.AppCompatResources.getDrawable(this@DualPaneActivity, R.drawable.item_bg)
             }
             val check = CheckBox(this@DualPaneActivity)
             val icon = ImageView(this@DualPaneActivity).apply {
@@ -982,6 +1380,11 @@ class DualPaneActivity : AppCompatActivity() {
                 val tv = android.util.TypedValue()
                 theme.resolveAttribute(com.google.android.material.R.attr.colorPrimary, tv, true)
                 imageTintList = android.content.res.ColorStateList.valueOf(tv.data)
+                background = if (mode == LayoutMode.VERTICAL) android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    cornerRadius = dp(8).toFloat()
+                    setColor(resolveThemeColor(com.google.android.material.R.attr.colorSurfaceVariant))
+                } else null
             }
             val textBlock = LinearLayout(this@DualPaneActivity).apply {
                 orientation = LinearLayout.VERTICAL
@@ -1010,6 +1413,13 @@ class DualPaneActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: Holder, position: Int) {
             val file = items[position]
+            holder.row.background = if (mode == LayoutMode.VERTICAL) null else
+                androidx.appcompat.content.res.AppCompatResources.getDrawable(this@DualPaneActivity, R.drawable.item_bg)
+            holder.icon.background = if (mode == LayoutMode.VERTICAL) android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                cornerRadius = dp(8).toFloat()
+                setColor(resolveThemeColor(com.google.android.material.R.attr.colorSurfaceVariant))
+            } else null
             FileTypeVisuals.applyTo(holder.icon, file)
             holder.name.text = file.name
             holder.info.text = if (!details) "" else if (file.isDirectory) "پوشه" else Formatter.formatFileSize(this@DualPaneActivity, file.length())

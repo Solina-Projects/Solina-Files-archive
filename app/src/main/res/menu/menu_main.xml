@@ -18,6 +18,7 @@
         android:id="@+id/action_sort"
         android:title="مرتب‌سازی فایل‌ها"
         app:showAsAction="never" />
+    <item android:id="@+id/action_pinned" android:title="موارد پین‌شده" app:showAsAction="never" />
     <item
         android:id="@+id/action_storage_analysis"
         android:title="تحلیل فضای پوشه"

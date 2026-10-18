@@ -1,0 +1,17 @@
+Third-party project attribution
+===============================
+
+Strata
+------
+Project: https://github.com/CluvexStudio/Strata
+Copyright: CluvexStudio and the respective contributors
+License: GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)
+License text: see LICENSE
+
+Any Strata-derived source code or assets integrated into Solina Files must retain
+applicable copyright and license notices. Third-party dependencies used by
+Strata may have their own licenses; consult Strata's upstream project and its
+in-app About / licenses information for the complete dependency notices.
+
+This file records intended upstream attribution for the integration branch.
+It does not claim that all Strata functionality has already been ported.

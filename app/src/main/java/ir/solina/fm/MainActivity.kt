@@ -69,6 +69,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var mainBar: MaterialToolbar
     private lateinit var selectionBar: MaterialToolbar
+    private lateinit var navigationBar: View
     private lateinit var storageButton: MaterialButton
     private lateinit var storageQuickBar: LinearLayout
     private lateinit var sortFilterButton: MaterialButton
@@ -90,6 +91,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var emptyText: TextView
     private lateinit var grantButton: MaterialButton
     private lateinit var pasteFab: ExtendedFloatingActionButton
+    private lateinit var createFab: com.google.android.material.floatingactionbutton.FloatingActionButton
 
     private val adapter = FileAdapter()
     private var volumes: List<Vol> = emptyList()
@@ -97,7 +99,8 @@ class MainActivity : AppCompatActivity() {
     private var current: File = Environment.getExternalStorageDirectory()
     private var showHidden = false
     private var gridLayout = false
-    private var sortMode = SortMode.NAME
+    private var sortMode = SortMode.MODIFIED
+    private var activityTimes: Map<String, Long> = emptyMap()
     private var allFiles: List<File> = emptyList()
     private val backHistory = ArrayDeque<File>()
     private val forwardHistory = ArrayDeque<File>()
@@ -109,6 +112,7 @@ class MainActivity : AppCompatActivity() {
     private var initialNavigationApplied = false
     private var lockPromptShown = false
     private var pendingRecentOpenPath: String? = null
+    private var activeCategory: String? = null
 
     private val dateFmt: android.icu.text.DateFormat by lazy {
         if (Locale.getDefault().language == "fa") {
@@ -134,6 +138,7 @@ class MainActivity : AppCompatActivity() {
 
         mainBar = findViewById(R.id.mainBar)
         selectionBar = findViewById(R.id.selectionBar)
+        navigationBar = findViewById(R.id.navigationBar)
         storageButton = findViewById(R.id.storageButton)
         storageQuickBar = findViewById(R.id.storageQuickBar)
         sortFilterButton = findViewById(R.id.sortFilterButton)
@@ -160,6 +165,7 @@ class MainActivity : AppCompatActivity() {
         emptyText = findViewById(R.id.emptyText)
         grantButton = findViewById(R.id.grantButton)
         pasteFab = findViewById(R.id.pasteFab)
+        createFab = findViewById(R.id.createFab)
 
         mainBar.inflateMenu(R.menu.menu_main)
         mainBar.setOnMenuItemClickListener { onMainMenu(it) }
@@ -178,13 +184,9 @@ class MainActivity : AppCompatActivity() {
         overflowButton.setOnClickListener { showTopMenu(it) }
         drawerButton.setOnClickListener { showRightDrawer() }
         dualPaneButton.setOnClickListener { startActivity(Intent(this, DualPaneActivity::class.java)) }
-        gridLayout = getSharedPreferences("solina_preferences", MODE_PRIVATE).getBoolean("grid_layout", false)
-        layoutModeButton.setOnClickListener {
-            gridLayout = !gridLayout
-            getSharedPreferences("solina_preferences", MODE_PRIVATE).edit().putBoolean("grid_layout", gridLayout).apply()
-            applyFileLayout()
-            adapter.notifyDataSetChanged()
-        }
+        val savedColumns = getSharedPreferences("solina_preferences", MODE_PRIVATE).getInt("grid_columns", 1)
+        gridLayout = savedColumns > 1
+        layoutModeButton.setOnClickListener { showLayoutSettings() }
         mainBar.visibility = View.GONE
         navBack.setOnClickListener { navigateHistory(back = true) }
         navForward.setOnClickListener { navigateHistory(back = false) }
@@ -198,9 +200,12 @@ class MainActivity : AppCompatActivity() {
         bottomDelete.setOnClickListener { confirmDelete() }
         grantButton.setOnClickListener { requestPermission() }
         pasteFab.setOnClickListener { paste() }
+        createFab.setOnClickListener { showCreateMenu() }
 
         list.adapter = adapter
         applyFileLayout()
+        activeCategory = intent.getStringExtra("file_category")?.lowercase(Locale.ROOT)
+        intent.getStringExtra("search_query")?.let { searchInput.setText(it) }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -208,25 +213,14 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        findViewById<com.google.android.material.bottomnavigation.BottomNavigationView?>(R.id.bottomNav)?.setOnItemSelectedListener { item ->
-            when (item.itemId) {
-                R.id.nav_browse -> true
-                R.id.nav_clean -> {
-                    showCleanDialog()
-                    false
-                }
-                R.id.nav_vault -> {
-                    startActivity(Intent(this, VaultActivity::class.java))
-                    false
-                }
-                R.id.nav_share -> {
-                    startActivity(Intent(this, WifiTransferActivity::class.java))
-                    false
-                }
-                else -> false
-            }
+        if (intent.getBooleanExtra("request_storage_permission", false)) {
+            intent.removeExtra("request_storage_permission")
+            if (!hasPermission()) window.decorView.post { requestPermission() }
         }
-        if (!hasPermission()) requestPermission()
+        if (intent.getBooleanExtra("open_clean_tools", false)) {
+            intent.removeExtra("open_clean_tools")
+            window.decorView.post { showCleanDialog() }
+        }
     }
 
     override fun onResume() {
@@ -234,7 +228,7 @@ class MainActivity : AppCompatActivity() {
         loadVolumes()
         if (!initialNavigationApplied) {
             val requestedPath = intent.getStringExtra("start_path")
-                ?: pendingRecentOpenPath?.let { File(it).parentFile?.absolutePath }
+                ?: pendingRecentOpenPath?.let { path -> File(path).let { if (it.isDirectory) it.absolutePath else it.parentFile?.absolutePath } }
                 ?: getSharedPreferences("solina_preferences", MODE_PRIVATE).getString("home_folder", null)
             val requested = requestedPath?.let { File(it) }
             val validRequested = requested?.takeIf { it.exists() && it.isDirectory && volumes.any { v -> inside(it, v.dir) } }
@@ -315,62 +309,50 @@ class MainActivity : AppCompatActivity() {
     private fun renderStorageQuickBar() {
         if (!::storageQuickBar.isInitialized) return
         storageQuickBar.removeAllViews()
-        volumes.forEach { volume ->
-            val item = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = android.view.Gravity.CENTER
-                setPadding(dp(8), dp(3), dp(8), dp(2))
-                isClickable = true
-                isFocusable = true
-                background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@MainActivity, R.drawable.item_bg)
-                contentDescription = volume.name
-                setOnClickListener {
-                    currentVol = volume
-                    navigate(volume.dir)
-                    renderStorageQuickBar()
-                }
-            }
-            val icon = ImageView(this).apply {
-                setImageResource(when (volume.kind) {
-                    Kind.INTERNAL -> R.drawable.ic_hard_drive
-                    Kind.SD -> R.drawable.ic_sd_card
-                    Kind.USB -> R.drawable.ic_usb
-                })
-                val tv = android.util.TypedValue()
-                theme.resolveAttribute(com.google.android.material.R.attr.colorPrimary, tv, true)
-                imageTintList = android.content.res.ColorStateList.valueOf(tv.data)
-                contentDescription = volume.name
-            }
-            item.addView(icon, LinearLayout.LayoutParams(dp(27), dp(27)))
-            val label = TextView(this).apply {
-                text = volume.name
-                textSize = 10f
-                maxLines = 1
-                val tv = android.util.TypedValue()
-                theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurfaceVariant, tv, true)
-                setTextColor(tv.data)
-            }
-            item.addView(label, LinearLayout.LayoutParams(-2, dp(17)))
-            item.addView(TextView(this).apply {
-                text = "⌄"
-                textSize = 14f
-                gravity = android.view.Gravity.CENTER
-                val tv = android.util.TypedValue()
-                theme.resolveAttribute(com.google.android.material.R.attr.colorPrimary, tv, true)
-                setTextColor(tv.data)
-            }, LinearLayout.LayoutParams(-1, dp(14)))
-            item.isSelected = currentVol?.dir?.path == volume.dir.path
-            storageQuickBar.addView(item, LinearLayout.LayoutParams(dp(88), dp(66)))
-        }
+        // Volume selection remains available from the "حافظه دستگاه" button.
+        // Hide the square storage shortcuts and their dropdown arrows on the home screen.
+        storageQuickBar.visibility = View.GONE
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun applyFileLayout() {
-        list.layoutManager = if (gridLayout) GridLayoutManager(this, 2) else LinearLayoutManager(this)
+        val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
+        val multiColumn = prefs.getBoolean("layout_mode_multi", gridLayout)
+        val fallbackColumns = prefs.getInt("grid_columns", if (gridLayout) 2 else 1).coerceIn(1, 4)
+        val oldPreset = prefs.getInt("layout_preset", presetForColumns(fallbackColumns)).coerceIn(0, 7)
+        val multiPreset = prefs.getInt("multi_layout_preset", when (oldPreset) {
+            2, 3 -> oldPreset - 2
+            4, 5 -> oldPreset - 2
+            6, 7 -> oldPreset - 2
+            else -> 0
+        }.coerceIn(0, 5))
+        val columns = if (multiColumn) multiLayoutColumns(multiPreset) else 1
+        gridLayout = multiColumn
+        list.layoutManager = if (columns > 1) {
+            GridLayoutManager(this, columns).apply {
+                spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                    override fun getSpanSize(position: Int): Int =
+                        if (adapter.getItemViewType(position) == 1) columns else 1
+                }
+            }
+        } else LinearLayoutManager(this)
         layoutModeButton.setIconResource(if (gridLayout) R.drawable.ic_list_view else R.drawable.ic_grid_view)
         layoutModeButton.text = ""
-        layoutModeButton.contentDescription = if (gridLayout) "تغییر به چیدمان فهرستی" else "تغییر به چیدمان شبکه‌ای"
+        layoutModeButton.contentDescription = if (gridLayout) "تغییر به چیدمان تک‌ستونه" else "تغییر به چیدمان چندستونه"
+    }
+
+    private fun multiLayoutColumns(preset: Int): Int = when (preset.coerceIn(0, 5)) {
+        0, 1 -> 2
+        2, 3 -> 3
+        else -> 4
+    }
+
+    private fun presetForColumns(columns: Int): Int = when (columns.coerceIn(1, 4)) {
+        1 -> 0
+        2 -> 2
+        3 -> 4
+        else -> 6
     }
 
     private fun fmt(bytes: Long): String = Formatter.formatFileSize(this, bytes)
@@ -387,8 +369,14 @@ class MainActivity : AppCompatActivity() {
                 Kind.SD -> R.drawable.ic_sd_card
                 Kind.USB -> R.drawable.ic_usb
             }
-            row.findViewById<ImageView>(R.id.volIcon).setImageResource(iconRes)
-            row.findViewById<TextView>(R.id.volName).text = v.name
+            row.minimumHeight = dp(54)
+            row.setPadding(dp(6), dp(3), dp(6), dp(3))
+            row.findViewById<ImageView>(R.id.volIcon).apply {
+                setImageResource(iconRes)
+                layoutParams = layoutParams.apply { width = dp(30); height = dp(30) }
+            }
+            row.findViewById<TextView>(R.id.volName).apply { text = v.name; textSize = 12f }
+            row.findViewById<TextView>(R.id.volStats).textSize = 10f
             var total = 0L
             var free = 0L
             try {
@@ -399,8 +387,10 @@ class MainActivity : AppCompatActivity() {
                 // volume not readable
             }
             val used = (total - free).coerceAtLeast(0L)
-            row.findViewById<LinearProgressIndicator>(R.id.volBar).progress =
-                if (total > 0L) ((used * 100L) / total).toInt() else 0
+            row.findViewById<LinearProgressIndicator>(R.id.volBar).apply {
+                progress = if (total > 0L) ((used * 100L) / total).toInt() else 0
+                layoutParams = layoutParams.apply { height = dp(4) }
+            }
             row.findViewById<TextView>(R.id.volStats).text =
                 getString(R.string.storage_stats, fmt(used), fmt(free), fmt(total))
             row.isActivated = currentVol?.dir?.path == v.dir.path
@@ -417,9 +407,36 @@ class MainActivity : AppCompatActivity() {
 
     // ---------- permission ----------
 
-    private fun hasPermission(): Boolean = Environment.isExternalStorageManager()
+    private fun hasPermission(): Boolean =
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
 
     private fun requestPermission() {
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("دسترسی به فایل‌های دستگاه")
+            .setMessage(
+                "برای نمایش پوشه‌ها و انجام عملیات مدیریت فایل، Solina به دسترسی حافظه نیاز دارد. " +
+                    "در نسخه‌های جدید Android، فعال‌سازی این مجوز در تنظیمات دستگاه انجام می‌شود."
+            )
+            .setPositiveButton("ادامه") { _, _ -> openStoragePermissionSettings() }
+            .setNegativeButton("انصراف", null)
+            .show()
+    }
+
+    private fun openStoragePermissionSettings() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+            val permissions = arrayOf(
+                android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+            )
+            androidx.core.app.ActivityCompat.requestPermissions(this, permissions, 4102)
+            return
+        }
         try {
             startActivity(
                 Intent(
@@ -427,8 +444,12 @@ class MainActivity : AppCompatActivity() {
                     Uri.parse("package:$packageName")
                 )
             )
-        } catch (e: Exception) {
-            startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+        } catch (_: Exception) {
+            try {
+                startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+            } catch (_: Exception) {
+                toast("تنظیمات دسترسی حافظه در این دستگاه در دسترس نیست")
+            }
         }
     }
 
@@ -459,6 +480,22 @@ class MainActivity : AppCompatActivity() {
         refresh()
     }
 
+    private fun latestActivityTime(file: File, cache: MutableMap<String, Long>, budget: IntArray, depth: Int = 0): Long {
+        val key = file.absolutePath
+        cache[key]?.let { return it }
+        var latest = file.lastModified()
+        if (file.isDirectory && depth < 32 && budget[0] > 0) {
+            val children = try { file.listFiles() } catch (_: SecurityException) { null }
+            children?.forEach { child ->
+                if (budget[0] <= 0 || child.name.startsWith(".solina-trash-")) return@forEach
+                budget[0]--
+                latest = maxOf(latest, latestActivityTime(child, cache, budget, depth + 1))
+            }
+        }
+        cache[key] = latest
+        return latest
+    }
+
     private fun refresh() {
         updateBars()
         if (!hasPermission()) {
@@ -471,15 +508,46 @@ class MainActivity : AppCompatActivity() {
         val unsorted = (raw ?: emptyArray()).filter {
             !it.name.startsWith(".solina-trash-") && (showHidden || !it.name.startsWith("."))
         }
-        allFiles = when (sortMode) {
+        // Avoid recursively walking descendants for every refresh/search keystroke.
+        // Use filesystem modification times for a fast, predictable listing.
+        val activityCache = unsorted.associate { it.absolutePath to it.lastModified() }
+        val byRecentActivity = unsorted.sortedWith(
+            compareByDescending<File> { it.lastModified() }
+                .thenBy { it.name.lowercase(Locale.ROOT) }
+        )
+        activityTimes = activityCache
+        val sortedFiles = when (sortMode) {
             SortMode.NAME -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) }))
             SortMode.SIZE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { if (it.isDirectory) 0L else it.length() }))
-            SortMode.MODIFIED -> unsorted.sortedByDescending { it.lastModified() }
+            SortMode.MODIFIED -> byRecentActivity
             SortMode.TYPE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.extension.lowercase(Locale.ROOT) }, { it.name.lowercase(Locale.ROOT) }))
+        }
+        val pinOrder = getPinnedOrder()
+        allFiles = sortedFiles.sortedBy { file ->
+            val index = pinOrder.indexOf(file.absolutePath)
+            if (index < 0) Int.MAX_VALUE else index
         }
         selected.retainAll(allFiles.toSet())
         val query = searchInput.text?.toString()?.trim()?.lowercase(Locale.ROOT).orEmpty()
-        val files = allFiles.filter { query.isEmpty() || it.name.lowercase(Locale.ROOT).contains(query) }
+        val imageTypes = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif", "tif", "tiff", "svg")
+        val videoTypes = setOf("mp4", "mkv", "mov", "webm", "3gp", "avi", "mpeg", "mpg", "m4v")
+        val audioTypes = setOf("mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi", "wma")
+        val documentTypes = setOf("pdf", "doc", "docx", "txt", "rtf", "odt", "xls", "xlsx", "csv", "ppt", "pptx", "md")
+        val archiveTypes = setOf("zip", "7z", "rar", "tar", "gz", "bz2", "xz")
+        val files = allFiles.filter { file ->
+            val matchesQuery = query.isEmpty() || file.name.lowercase(Locale.ROOT).contains(query)
+            val extension = file.extension.lowercase(Locale.ROOT)
+            val matchesCategory = when (activeCategory) {
+                "images" -> file.isFile && extension in imageTypes
+                "videos" -> file.isFile && extension in videoTypes
+                "audio" -> file.isFile && extension in audioTypes
+                "documents" -> file.isFile && extension in documentTypes
+                "apk" -> file.isFile && extension == "apk"
+                "archives" -> file.isFile && extension in archiveTypes
+                else -> true
+            }
+            matchesQuery && matchesCategory
+        }
         adapter.submit(files)
         if (files.isEmpty()) {
             showEmpty(getString(if (raw == null) R.string.cannot_read else R.string.empty_folder), false)
@@ -557,9 +625,10 @@ class MainActivity : AppCompatActivity() {
         val sel = selected.isNotEmpty()
         mainBar.visibility = View.GONE
         selectionBar.visibility = if (sel) View.VISIBLE else View.GONE
+        navigationBar.visibility = if (sel) View.GONE else View.VISIBLE
         bottomActions.visibility = if (sel) View.VISIBLE else View.GONE
         if (sel) {
-            selectionBar.title = getString(R.string.selected_count, selected.size)
+            selectionBar.title = ""
             selectionBar.menu.findItem(R.id.action_rename).isVisible = selected.size == 1
             selectionBar.menu.findItem(R.id.action_extract).isVisible =
                 selected.any { it.isFile && it.extension.equals("zip", ignoreCase = true) }
@@ -580,6 +649,7 @@ class MainActivity : AppCompatActivity() {
             R.id.action_refresh -> refresh()
             R.id.action_bookmark -> toggleBookmark()
             R.id.action_bookmarks -> showBookmarks()
+            R.id.action_pinned -> showPinnedItems()
             R.id.action_sort -> showSortOptions()
             R.id.action_storage_analysis -> analyzeStorage()
             R.id.action_theme -> toggleTheme()
@@ -614,10 +684,33 @@ class MainActivity : AppCompatActivity() {
         val popup = android.widget.PopupMenu(this, anchor)
         for (index in 0 until mainBar.menu.size()) {
             val original = mainBar.menu.getItem(index)
-            if (original.itemId == R.id.action_dual_pane || original.itemId == R.id.action_theme) continue
+            if (original.itemId in setOf(
+                    R.id.action_dual_pane, R.id.action_theme, R.id.action_sort, R.id.action_pinned,
+                    R.id.action_storage_analysis, R.id.action_vault, R.id.action_root, R.id.action_network,
+                    R.id.action_apk_tools, R.id.action_installed_apps, R.id.action_file_tools,
+                    R.id.action_recycle_bin, R.id.action_recent_files, R.id.action_advanced_settings,
+                    R.id.action_wifi_transfer, R.id.action_text_editor
+                )) continue
             val item = popup.menu.add(original.groupId, original.itemId, original.order, original.title)
             item.isCheckable = original.isCheckable
             item.isChecked = if (original.itemId == R.id.action_hidden) showHidden else original.isChecked
+            val icon = when (original.itemId) {
+                R.id.action_new_folder -> R.drawable.ic_folder
+                R.id.action_refresh -> R.drawable.ic_clean
+                R.id.action_bookmark, R.id.action_bookmarks, R.id.action_pinned -> R.drawable.ic_pin
+                R.id.action_storage_analysis -> R.drawable.ic_hard_drive
+                R.id.action_vault -> R.drawable.ic_lock
+                R.id.action_root -> R.drawable.ic_phone
+                R.id.action_network, R.id.action_wifi_transfer -> R.drawable.ic_share
+                R.id.action_apk_tools, R.id.action_installed_apps -> R.drawable.ic_file_apk
+                R.id.action_file_tools, R.id.action_text_editor -> R.drawable.ic_edit
+                R.id.action_recycle_bin -> R.drawable.ic_delete
+                R.id.action_recent_files -> R.drawable.ic_file
+                R.id.action_advanced_settings -> R.drawable.ic_menu
+                R.id.action_hidden -> R.drawable.ic_file
+                else -> 0
+            }
+            if (icon != 0) item.setIcon(icon)
         }
         popup.setOnMenuItemClickListener { item ->
             if (item.itemId == R.id.action_hidden) {
@@ -628,58 +721,38 @@ class MainActivity : AppCompatActivity() {
                 true
             } else onMainMenu(item)
         }
+        try {
+            val field = popup.javaClass.getDeclaredField("mPopup")
+            field.isAccessible = true
+            (field.get(popup) as? androidx.appcompat.view.menu.MenuPopupHelper)?.setForceShowIcon(true)
+        } catch (_: Exception) { }
         popup.show()
     }
 
     private fun showRightDrawer() {
         loadVolumes()
         val dialog = android.app.Dialog(this)
-        val night = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
         val surface = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorSurface, it, true) }.data
         val onSurface = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurface, it, true) }.data
         val muted = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurfaceVariant, it, true) }.data
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(18), dp(12), dp(12))
+            setPadding(dp(10), dp(10), dp(10), dp(10))
             setBackgroundColor(surface)
         }
         root.addView(TextView(this).apply {
-            text = "تنظیمات و حافظه"
-            textSize = 20f
+            text = "ابزارها و حافظه"
+            textSize = 19f
             setTextColor(onSurface)
-            setPadding(dp(8), dp(4), dp(8), dp(16))
+            setPadding(dp(8), dp(2), dp(8), dp(8))
         }, LinearLayout.LayoutParams(-1, -2))
-
-        val themeRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER_VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(12))
-            isClickable = true
-            isFocusable = true
-            background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@MainActivity, R.drawable.item_bg)
-            contentDescription = if (night) "تغییر به تم روشن" else "تغییر به تم تیره"
-            setOnClickListener { dialog.dismiss(); toggleTheme() }
-        }
-        themeRow.addView(TextView(this).apply {
-            text = if (night) "☀" else "☾"
-            textSize = 24f
-            gravity = android.view.Gravity.CENTER
-            setTextColor(onSurface)
-        }, LinearLayout.LayoutParams(dp(36), dp(36)))
-        themeRow.addView(TextView(this).apply {
-            text = if (night) "تم روشن" else "تم تیره"
-            textSize = 16f
-            setTextColor(onSurface)
-            setPadding(dp(12), 0, 0, 0)
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        root.addView(themeRow, LinearLayout.LayoutParams(-1, -2))
 
         root.addView(TextView(this).apply {
             text = "انتخاب حافظه"
-            textSize = 16f
+            textSize = 13f
             setTextColor(onSurface)
-            setPadding(dp(8), dp(20), dp(8), dp(8))
+            setPadding(dp(8), dp(8), dp(8), dp(4))
         }, LinearLayout.LayoutParams(-1, -2))
 
         val scroll = android.widget.ScrollView(this).apply { isFillViewport = false }
@@ -692,8 +765,14 @@ class MainActivity : AppCompatActivity() {
                 Kind.SD -> R.drawable.ic_sd_card
                 Kind.USB -> R.drawable.ic_usb
             }
-            row.findViewById<ImageView>(R.id.volIcon).setImageResource(iconRes)
-            row.findViewById<TextView>(R.id.volName).text = v.name
+            row.setPadding(dp(6), dp(4), dp(6), dp(4))
+            row.minimumHeight = dp(48)
+            row.findViewById<ImageView>(R.id.volIcon).apply {
+                setImageResource(iconRes)
+                layoutParams = layoutParams.apply { width = dp(26); height = dp(26) }
+            }
+            row.findViewById<TextView>(R.id.volName).apply { text = v.name; textSize = 12f }
+            row.findViewById<TextView>(R.id.volStats).textSize = 10f
             var total = 0L
             var free = 0L
             try {
@@ -702,8 +781,10 @@ class MainActivity : AppCompatActivity() {
                 free = stat.availableBytes
             } catch (_: Exception) {}
             val used = (total - free).coerceAtLeast(0L)
-            row.findViewById<LinearProgressIndicator>(R.id.volBar).progress =
-                if (total > 0L) ((used * 100L) / total).toInt() else 0
+            row.findViewById<LinearProgressIndicator>(R.id.volBar).apply {
+                progress = if (total > 0L) ((used * 100L) / total).toInt() else 0
+                visibility = View.GONE
+            }
             row.findViewById<TextView>(R.id.volStats).text =
                 getString(R.string.storage_stats, fmt(used), fmt(free), fmt(total))
             row.isActivated = currentVol?.dir?.path == v.dir.path
@@ -714,7 +795,49 @@ class MainActivity : AppCompatActivity() {
             }
             volumeList.addView(row)
         }
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(scroll, LinearLayout.LayoutParams(-1, dp(150)))
+        root.addView(TextView(this).apply {
+            text = "ابزارها"
+            textSize = 13f
+            setTextColor(muted)
+            setPadding(dp(8), dp(8), dp(8), dp(4))
+        }, LinearLayout.LayoutParams(-1, -2))
+        val toolsScroll = android.widget.ScrollView(this).apply { isFillViewport = false }
+        val toolsList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        toolsScroll.addView(toolsList, ViewGroup.LayoutParams(-1, -2))
+        val toolItems = listOf(
+            Triple(R.id.action_dual_pane, "مدیریت دوپنجره‌ای", R.drawable.ic_splitscreen),
+            Triple(R.id.action_storage_analysis, "تحلیل فضای پوشه", R.drawable.ic_hard_drive),
+            Triple(R.id.action_vault, "خزانه رمزگذاری‌شده", R.drawable.ic_lock),
+            Triple(R.id.action_root, "مدیریت فایل با دسترسی ریشه", R.drawable.ic_phone),
+            Triple(R.id.action_network, "اتصال به فضای شبکه", R.drawable.ic_share),
+            Triple(R.id.action_apk_tools, "تحلیل APK و DEX", R.drawable.ic_file_apk),
+            Triple(R.id.action_installed_apps, "برنامه‌های نصب‌شده", R.drawable.ic_file_apk),
+            Triple(R.id.action_file_tools, "ابزارهای تکمیلی فایل", R.drawable.ic_edit),
+            Triple(R.id.action_recycle_bin, "سطل بازیافت", R.drawable.ic_delete),
+            Triple(R.id.action_recent_files, "فایل‌های اخیر", R.drawable.ic_file),
+            Triple(R.id.action_advanced_settings, "تنظیمات تکمیلی", R.drawable.ic_menu),
+            Triple(R.id.action_wifi_transfer, "انتقال فایل با Wi-Fi", R.drawable.ic_share),
+            Triple(R.id.action_text_editor, "ویرایشگر متن و Smali", R.drawable.ic_edit)
+        )
+        toolItems.forEach { (id, label, iconRes) ->
+            val action = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                text = label
+                isAllCaps = false
+                textSize = 13f
+                gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+                setIconResource(iconRes)
+                iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+                setPadding(dp(10), 0, dp(10), 0)
+                contentDescription = label
+                setOnClickListener {
+                    dialog.dismiss()
+                    mainBar.menu.findItem(id)?.let { onMainMenu(it) }
+                }
+            }
+            toolsList.addView(action, LinearLayout.LayoutParams(-1, dp(44)))
+        }
+        root.addView(toolsScroll, LinearLayout.LayoutParams(-1, 0, 1f))
         dialog.setContentView(root)
         dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
         dialog.show()
@@ -741,6 +864,7 @@ class MainActivity : AppCompatActivity() {
                 updateSelectionUi()
             }
             R.id.action_deselect_all -> clearSelection()
+            R.id.action_pin -> pinSelected()
             R.id.action_compress -> compressSelected()
             R.id.action_extract -> extractSelectedArchives()
             R.id.action_text_editor -> selected.firstOrNull()?.let { file ->
@@ -1008,6 +1132,76 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun askText(title: String, initial: String, onOk: (String) -> Unit) {
+        val view = layoutInflater.inflate(R.layout.dialog_input, null)
+        val input = view.findViewById<TextInputEditText>(R.id.input)
+        input.setText(initial)
+        input.setSelection(0, initial.substringBeforeLast('.', initial).length)
+        MaterialAlertDialogBuilder(this)
+            .setTitle(title)
+            .setView(view)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                val text = input.text.toString().trim()
+                if (text.isNotEmpty() && !text.contains('/')) onOk(text)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun showCreateMenu() {
+        val options = arrayOf("پوشه جدید", "فایل متنی جدید (.txt)", "فایل HTML جدید (.html)")
+        MaterialAlertDialogBuilder(this)
+            .setTitle("ایجاد مورد جدید")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> newFolder()
+                    1 -> createTextFile("txt")
+                    2 -> createTextFile("html")
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun createTextFile(extension: String) {
+        val defaultName = if (extension == "html") "index.html" else "new.txt"
+        askText("نام فایل جدید", defaultName) { rawName ->
+            var name = rawName.trim()
+            if (name.isBlank() || name == "." || name == ".." || name.contains("/")) {
+                toast("نام فایل معتبر نیست")
+                return@askText
+            }
+            if (!name.endsWith(".$extension", ignoreCase = true)) {
+                name = if (name.contains(".")) name.substringBeforeLast('.') + ".$extension" else "$name.$extension"
+            }
+            val target = File(current, name)
+            if (target.exists()) {
+                toast(getString(R.string.name_exists))
+                return@askText
+            }
+            try {
+                if (!target.createNewFile()) throw IllegalStateException("createNewFile failed")
+                if (extension == "html") target.writeText(
+                    """<!doctype html>
+<html lang="fa">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>صفحه جدید</title>
+</head>
+<body>
+  <h1>صفحه جدید</h1>
+</body>
+</html>""".trimIndent() + "\n", Charsets.UTF_8
+                )
+                refresh()
+                startActivity(Intent(this, TextEditorActivity::class.java).putExtra("file_path", target.absolutePath))
+            } catch (_: Exception) {
+                toast("ساخت فایل انجام نشد")
+            }
+        }
+    }
+
     private fun newFolder() {
         askText(R.string.new_folder, "") { name ->
             val dir = File(current, name)
@@ -1027,6 +1221,71 @@ class MainActivity : AppCompatActivity() {
             selected.clear()
             refresh()
         }
+    }
+
+    private fun getPinnedItems(): MutableSet<String> =
+        getSharedPreferences("solina_preferences", MODE_PRIVATE)
+            .getStringSet("pinned_items", emptySet())?.toMutableSet() ?: mutableSetOf()
+
+    private fun getPinnedOrder(): MutableList<String> {
+        val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
+        val raw = prefs.getString("pinned_items_order", null)
+        val pins = getPinnedItems()
+        if (!raw.isNullOrBlank()) {
+            val order = runCatching {
+                val json = org.json.JSONArray(raw)
+                MutableList(json.length()) { index -> json.getString(index) }
+            }.getOrDefault(mutableListOf())
+            order.retainAll(pins)
+            pins.forEach { path -> if (path !in order) order.add(path) }
+            return order
+        }
+        return pins.sortedBy { File(it).name.lowercase(Locale.ROOT) }.toMutableList()
+    }
+
+    private fun pinSelected() {
+        if (selected.isEmpty()) return
+        val pins = getPinnedItems()
+        val order = getPinnedOrder()
+        var added = 0
+        var removed = 0
+        selected.toList().asReversed().forEach { file ->
+            val path = file.absolutePath
+            if (pins.remove(path)) {
+                order.remove(path)
+                removed++
+            } else {
+                pins.add(path)
+                order.remove(path)
+                order.add(0, path)
+                added++
+            }
+        }
+        getSharedPreferences("solina_preferences", MODE_PRIVATE).edit()
+            .putStringSet("pinned_items", pins)
+            .putString("pinned_items_order", org.json.JSONArray(order).toString())
+            .apply()
+        toast(when {
+            added > 0 && removed > 0 -> "موارد انتخاب‌شده به‌روزرسانی شدند"
+            added > 0 -> "موارد انتخاب‌شده پین شدند"
+            else -> "پین موارد انتخاب‌شده برداشته شد"
+        })
+        refresh()
+        list.scrollToPosition(0)
+        clearSelection()
+    }
+
+    private fun showPinnedItems() {
+        val files = getPinnedItems().map { File(it) }.filter { it.exists() }.sortedBy { it.name.lowercase(Locale.ROOT) }
+        if (files.isEmpty()) { toast("مورد پین‌شده‌ای وجود ندارد"); return }
+        MaterialAlertDialogBuilder(this)
+            .setTitle("موارد پین‌شده")
+            .setItems(files.map { (if (it.isDirectory) "📁 " else "📄 ") + it.name }.toTypedArray()) { _, which ->
+                val file = files[which]
+                if (file.isDirectory) navigate(file) else openFile(file)
+            }
+            .setNegativeButton("بستن", null)
+            .show()
     }
 
     private fun getBookmarks(): MutableSet<String> =
@@ -1062,6 +1321,99 @@ class MainActivity : AppCompatActivity() {
                 getSharedPreferences("solina_preferences", MODE_PRIVATE).edit().putStringSet("bookmarks", bookmarks).apply()
                 toast("نشانک حذف شد")
             }.setNegativeButton(R.string.cancel, null).show()
+    }
+
+    private fun showLayoutSettings() {
+        val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
+        val singleValues = arrayOf("سایز فعلی • ۱۰۰٪ / ۱۰۰٪", "۱۲۵٪ / ۱۰۰٪", "۱۵۰٪ / ۱۰۰٪", "۱۷۵٪ / ۱۰۵٪", "۲۰۰٪ / ۱۱۰٪", "۲۲۵٪ / ۱۱۰٪", "۲۵۰٪ / ۱۱۰٪")
+        val multiValues = arrayOf("۲ ستون • ۳۰۰٪ / ۱۱۵٪", "۲ ستون • ۲۵۰٪ / ۱۱۰٪", "۳ ستون • ۲۲۵٪ / ۱۱۰٪", "۳ ستون • ۲۰۰٪ / ۱۰۵٪", "۴ ستون • ۱۵۰٪ / ۱۰۵٪", "۴ ستون • ۱۰۰٪ / ۱۰۰٪")
+        var singlePreset = prefs.getInt("single_layout_preset", 0).coerceIn(0, 6)
+        var multiPreset = prefs.getInt("multi_layout_preset", 1).coerceIn(0, 5)
+        val currentMulti = prefs.getBoolean("layout_mode_multi", gridLayout)
+
+        val singleTitle = TextView(this).apply {
+            text = "☰  تک‌ستونه"
+            textSize = 16f
+            setTextColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.solina_on_surface))
+            setPadding(dp(4), dp(8), dp(4), dp(2))
+        }
+        val singleValue = TextView(this).apply { textSize = 13f; gravity = android.view.Gravity.CENTER; setPadding(dp(4), dp(2), dp(4), dp(2)) }
+        val singleSeek = SeekBar(this).apply { max = 6; progress = singlePreset; contentDescription = "اندازه تک‌ستونه" }
+        val multiTitle = TextView(this).apply {
+            text = "▦  چندستونه"
+            textSize = 16f
+            setTextColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.solina_on_surface))
+            setPadding(dp(4), dp(12), dp(4), dp(2))
+        }
+        val multiValue = TextView(this).apply { textSize = 13f; gravity = android.view.Gravity.CENTER; setPadding(dp(4), dp(2), dp(4), dp(2)) }
+        val multiSeek = SeekBar(this).apply { max = 5; progress = multiPreset; contentDescription = "اندازه چندستونه" }
+        fun updateSingle() {
+            singleValue.text = singleValues[singlePreset]
+            prefs.edit().putInt("single_layout_preset", singlePreset).putBoolean("layout_mode_multi", false)
+                .putInt("grid_columns", 1).putBoolean("grid_layout", false).apply()
+            gridLayout = false
+            applyFileLayout()
+            adapter.notifyDataSetChanged()
+        }
+        fun updateMulti() {
+            multiValue.text = multiValues[multiPreset]
+            val columns = multiLayoutColumns(multiPreset)
+            prefs.edit().putInt("multi_layout_preset", multiPreset).putBoolean("layout_mode_multi", true)
+                .putInt("grid_columns", columns).putBoolean("grid_layout", true).apply()
+            gridLayout = true
+            applyFileLayout()
+            adapter.notifyDataSetChanged()
+        }
+        singleSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: SeekBar?, value: Int, fromUser: Boolean) {
+                if (fromUser) { singlePreset = value.coerceIn(0, 6); updateSingle() }
+                singleValue.text = singleValues[value.coerceIn(0, 6)]
+            }
+            override fun onStartTrackingTouch(bar: SeekBar?) {}
+            override fun onStopTrackingTouch(bar: SeekBar?) {}
+        })
+        multiSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: SeekBar?, value: Int, fromUser: Boolean) {
+                if (fromUser) { multiPreset = value.coerceIn(0, 5); updateMulti() }
+                multiValue.text = multiValues[value.coerceIn(0, 5)]
+            }
+            override fun onStartTrackingTouch(bar: SeekBar?) {}
+            override fun onStopTrackingTouch(bar: SeekBar?) {}
+        })
+        singleValue.text = singleValues[singlePreset]
+        multiValue.text = multiValues[multiPreset]
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(6), dp(20), dp(8))
+            addView(singleTitle, LinearLayout.LayoutParams(-1, -2))
+            addView(singleValue, LinearLayout.LayoutParams(-1, -2))
+            addView(singleSeek, LinearLayout.LayoutParams(-1, -2))
+            addView(multiTitle, LinearLayout.LayoutParams(-1, -2))
+            addView(multiValue, LinearLayout.LayoutParams(-1, -2))
+            addView(multiSeek, LinearLayout.LayoutParams(-1, -2))
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle("چیدمان فایل‌ها")
+            .setMessage("با حرکت هر نوار، اندازه و چیدمان همان بخش فوراً تغییر می‌کند؛ نیازی به تأیید نیست.")
+            .setView(panel)
+            .setNegativeButton("بستن", null)
+            .show()
+        if (currentMulti) {
+            multiValue.text = multiValues[multiPreset]
+        } else {
+            singleValue.text = singleValues[singlePreset]
+        }
+    }
+
+    private fun layoutDescription(preset: Int): String = when (preset.coerceIn(0, 7)) {
+        0 -> "تک‌ستونه • اندازه فعلی آیکن و قلم"
+        1 -> "تک‌ستونه • آیکن ۱۲۰٪، قلم ۱۰۵٪"
+        2 -> "دوستونه • آیکن ۱۳۵٪، قلم ۱۱۰٪"
+        3 -> "دوستونه • آیکن ۱۴۵٪، قلم ۱۱۵٪"
+        4 -> "سه‌ستونه • آیکن ۱۶۰٪، قلم ۱۲۰٪"
+        5 -> "سه‌ستونه • آیکن ۱۷۰٪، قلم ۱۲۵٪"
+        6 -> "چهارستونه • آیکن ۱۸۵٪، قلم ۱۳۰٪"
+        else -> "چهارستونه • آیکن ۲۰۰٪، قلم ۱۳۰٪"
     }
 
     private fun showSortOptions() {
@@ -1353,34 +1705,173 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun playAudio(file: File) {
+        var player: MediaPlayer? = null
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        var dismissed = false
+        fun timeLabel(ms: Int): String {
+            val seconds = (ms.coerceAtLeast(0) / 1000)
+            return String.format(Locale.ROOT, "%d:%02d", seconds / 60, seconds % 60)
+        }
         try {
-            val player = MediaPlayer()
-            player.setDataSource(file.absolutePath)
-            val controls = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 12, 20, 8) }
-            val status = TextView(this).apply { text = file.name; textSize = 14f }
-            val seek = SeekBar(this)
-            val play = MaterialButton(this).apply { text = "پخش / توقف"; isAllCaps = false }
-            controls.addView(status)
-            controls.addView(seek)
-            controls.addView(play)
-            val dialog = MaterialAlertDialogBuilder(this).setTitle("پخش‌کننده صوتی").setView(controls)
-                .setNegativeButton("بستن", null).create()
-            player.setOnPreparedListener { mp ->
-                seek.max = mp.duration.coerceAtLeast(1)
-                play.setOnClickListener { if (mp.isPlaying) { mp.pause(); play.text = "ادامه پخش" } else { mp.start(); play.text = "توقف" } }
-                seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                    override fun onProgressChanged(s: SeekBar, value: Int, fromUser: Boolean) { if (fromUser) mp.seekTo(value) }
-                    override fun onStartTrackingTouch(s: SeekBar) {}
-                    override fun onStopTrackingTouch(s: SeekBar) {}
-                })
-                mp.start()
-                play.text = "توقف"
+            val controls = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding((18 * resources.displayMetrics.density).toInt(), (12 * resources.displayMetrics.density).toInt(),
+                    (18 * resources.displayMetrics.density).toInt(), (8 * resources.displayMetrics.density).toInt())
             }
-            player.setOnErrorListener { mp, _, _ -> mp.release(); toast("این قالب صوتی یا فایل پشتیبانی نمی‌شود"); true }
-            dialog.setOnDismissListener { try { player.stop() } catch (_: Exception) {}; player.release() }
+            val artwork = ImageView(this).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setImageResource(R.drawable.ic_file_audio)
+                background = ContextCompat.getDrawable(this@MainActivity, R.drawable.item_bg)
+                contentDescription = "تصویر آلبوم موسیقی"
+            }
+            val artRow = LinearLayout(this).apply { gravity = android.view.Gravity.CENTER_VERTICAL; orientation = LinearLayout.HORIZONTAL }
+            artRow.addView(artwork, LinearLayout.LayoutParams((104 * resources.displayMetrics.density).toInt(), (104 * resources.displayMetrics.density).toInt()))
+            val metadata = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding((14 * resources.displayMetrics.density).toInt(), 0, 0, 0)
+            }
+            val title = TextView(this).apply { text = file.nameWithoutExtension; textSize = 17f; setTypeface(typeface, android.graphics.Typeface.BOLD); maxLines = 2 }
+            val artist = TextView(this).apply { text = "اطلاعات هنرمند در دسترس نیست"; textSize = 13f; setTextColor(0xFF808080.toInt()); maxLines = 2 }
+            metadata.addView(title)
+            metadata.addView(artist)
+            artRow.addView(metadata, LinearLayout.LayoutParams(0, -2, 1f))
+            controls.addView(artRow)
+
+            val waveform = WaveformProgressView(this).apply {
+                contentDescription = "نوار پیشرفت پخش موسیقی"
+                setPadding(0, (6 * resources.displayMetrics.density).toInt(), 0, (6 * resources.displayMetrics.density).toInt())
+            }
+            controls.addView(waveform, LinearLayout.LayoutParams(-1, (54 * resources.displayMetrics.density).toInt()))
+            val times = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+            val elapsed = TextView(this).apply { text = "0:00"; textSize = 12f; setTextColor(0xFF596ED1.toInt()) }
+            val total = TextView(this).apply { text = "0:00"; textSize = 12f; gravity = android.view.Gravity.END; setTextColor(0xFF808080.toInt()) }
+            times.addView(elapsed, LinearLayout.LayoutParams(0, -2, 1f))
+            times.addView(total, LinearLayout.LayoutParams(0, -2, 1f))
+            controls.addView(times)
+
+            val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER }
+            val play = MaterialButton(this).apply { text = "توقف"; isAllCaps = false }
+            val share = MaterialButton(this).apply {
+                text = "اشتراک‌گذاری"; isAllCaps = false
+                setIconResource(R.drawable.ic_share)
+            }
+            val delete = MaterialButton(this).apply {
+                text = "حذف"; isAllCaps = false
+                setIconResource(R.drawable.ic_delete)
+            }
+            actions.addView(play, LinearLayout.LayoutParams(0, -2, 1.2f))
+            actions.addView(share, LinearLayout.LayoutParams(0, -2, 1f))
+            actions.addView(delete, LinearLayout.LayoutParams(0, -2, 0.75f))
+            controls.addView(actions)
+
+            val dialog = MaterialAlertDialogBuilder(this).setTitle("پخش موسیقی").setView(controls)
+                .setNegativeButton("بستن", null).create()
+            val retriever = android.media.MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(file.absolutePath)
+                retriever.embeddedPicture?.let { bytes ->
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.let { artwork.setImageBitmap(it) }
+                }
+                retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE)?.takeIf { it.isNotBlank() }?.let { title.text = it }
+                val artistName = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                    ?: retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
+                if (!artistName.isNullOrBlank()) artist.text = artistName
+            } catch (_: Exception) {
+            } finally {
+                try { retriever.release() } catch (_: Exception) {}
+            }
+
+            val tick = object : Runnable {
+                override fun run() {
+                    val mp = player ?: return
+                    if (dismissed) return
+                    try {
+                        elapsed.text = timeLabel(mp.currentPosition)
+                        waveform.setPosition(mp.currentPosition)
+                        waveform.setPlaying(mp.isPlaying)
+                        handler.postDelayed(this, 250L)
+                    } catch (_: Exception) {}
+                }
+            }
+            player = MediaPlayer().also { mp ->
+                mp.setDataSource(file.absolutePath)
+                mp.setOnPreparedListener { prepared ->
+                    waveform.setDuration(prepared.duration)
+                    total.text = timeLabel(prepared.duration)
+                    prepared.start()
+                    play.text = "توقف"
+                    handler.post(tick)
+                }
+                mp.setOnCompletionListener {
+                    play.text = "پخش مجدد"
+                    waveform.setPlaying(false)
+                    elapsed.text = total.text
+                }
+                mp.setOnErrorListener { _, _, _ ->
+                    toast("این قالب صوتی یا فایل پشتیبانی نمی‌شود")
+                    true
+                }
+            }
+            waveform.onSeek = { position -> try { player?.seekTo(position) } catch (_: Exception) {} }
+            play.setOnClickListener {
+                val mp = player ?: return@setOnClickListener
+                try {
+                    if (mp.isPlaying) {
+                        mp.pause(); play.text = "ادامه پخش"; waveform.setPlaying(false)
+                    } else {
+                        if (mp.currentPosition >= mp.duration) mp.seekTo(0)
+                        mp.start(); play.text = "توقف"; waveform.setPlaying(true); handler.post(tick)
+                    }
+                } catch (_: Exception) {}
+            }
+            share.setOnClickListener {
+                try {
+                    val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+                    startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                        type = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase(Locale.ROOT)) ?: "audio/*"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }, "اشتراک‌گذاری موسیقی"))
+                } catch (_: Exception) { toast("اشتراک‌گذاری فایل ممکن نیست") }
+            }
+            delete.setOnClickListener {
+                MaterialAlertDialogBuilder(this).setTitle("حذف موسیقی")
+                    .setMessage("فایل «${file.name}» حذف شود؟ این کار فایل را از حافظه پاک می‌کند.")
+                    .setNegativeButton("لغو", null)
+                    .setPositiveButton("حذف") { _, _ ->
+                        try {
+                            dismissed = true
+                            handler.removeCallbacksAndMessages(null)
+                            try { player?.stop() } catch (_: Exception) {}
+                            player?.release(); player = null
+                            if (file.delete()) {
+                                dialog.dismiss()
+                                refresh()
+                                toast("فایل حذف شد")
+                            } else {
+                                dismissed = false
+                                toast("حذف فایل ناموفق بود")
+                            }
+                        } catch (_: Exception) { toast("حذف فایل ناموفق بود") }
+                    }.show()
+            }
+            dialog.setOnDismissListener {
+                dismissed = true
+                handler.removeCallbacksAndMessages(null)
+                waveform.setPlaying(false)
+                try { player?.stop() } catch (_: Exception) {}
+                try { player?.release() } catch (_: Exception) {}
+                player = null
+            }
             dialog.show()
-            player.prepareAsync()
-        } catch (_: Exception) { toast("پخش این فایل صوتی ممکن نیست؛ قالب یا سلامت فایل را بررسی کنید") }
+            player?.prepareAsync()
+        } catch (_: Exception) {
+            dismissed = true
+            handler.removeCallbacksAndMessages(null)
+            try { player?.release() } catch (_: Exception) {}
+            toast("پخش این فایل صوتی ممکن نیست؛ قالب یا سلامت فایل را بررسی کنید")
+        }
     }
 
     private fun playVideo(file: File) {
@@ -1446,12 +1937,15 @@ class MainActivity : AppCompatActivity() {
 
     // ---------- list adapter ----------
 
-    private inner class FileAdapter : RecyclerView.Adapter<FileAdapter.VH>() {
-
+    private inner class FileAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         var items: List<File> = emptyList()
+        private var pinnedCount: Int = 0
+        private val pinnedHeaderType = 1
 
         fun submit(newItems: List<File>) {
             items = newItems
+            val pins = getPinnedItems()
+            pinnedCount = newItems.count { it.absolutePath in pins }
             notifyDataSetChanged()
         }
 
@@ -1462,18 +1956,72 @@ class MainActivity : AppCompatActivity() {
             val check: CheckBox = view.findViewById(R.id.fileCheck)
         }
 
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH =
-            VH(layoutInflater.inflate(R.layout.item_file, parent, false))
+        inner class PinnedHeaderVH(view: View) : RecyclerView.ViewHolder(view)
 
-        override fun getItemCount(): Int = items.size
+        override fun getItemCount(): Int = items.size + if (pinnedCount > 0) 1 else 0
 
-        override fun onBindViewHolder(holder: VH, position: Int) {
-            val file = items[position]
-            holder.name.text = file.name
+        override fun getItemViewType(position: Int): Int =
+            if (pinnedCount > 0 && position == 0) pinnedHeaderType else 0
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            if (viewType == pinnedHeaderType) {
+                val title = TextView(this@MainActivity).apply {
+                    text = "📌  پین‌شده‌ها"
+                    textSize = 13f
+                    setTypeface(typeface, android.graphics.Typeface.BOLD)
+                    setTextColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.solina_primary))
+                    setPadding(dp(14), dp(8), dp(14), dp(8))
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        cornerRadius = dp(12).toFloat()
+                        setColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.solina_primary_container))
+                    }
+                }
+                return PinnedHeaderVH(title)
+            }
+            return VH(layoutInflater.inflate(R.layout.item_file, parent, false))
+        }
+
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            if (holder is PinnedHeaderVH) return
+            holder as VH
+            val file = items[position - if (pinnedCount > 0) 1 else 0]
+            val pinned = file.absolutePath in getPinnedItems()
+            val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
+            val multiColumn = prefs.getBoolean("layout_mode_multi", gridLayout)
+            val singlePreset = prefs.getInt("single_layout_preset", 0).coerceIn(0, 6)
+            val legacyPreset = prefs.getInt("layout_preset", 0).coerceIn(0, 7)
+            val legacyMultiPreset = when (legacyPreset) {
+                0, 1, 2 -> 0
+                3 -> 1
+                4 -> 2
+                5 -> 3
+                6 -> 4
+                else -> 5
+            }
+            val multiPreset = prefs.getInt("multi_layout_preset", legacyMultiPreset).coerceIn(0, 5)
+            val iconScale = if (multiColumn)
+                floatArrayOf(3.0f, 2.5f, 2.25f, 2.0f, 1.5f, 1.0f)[multiPreset]
+            else floatArrayOf(1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 2.25f, 2.5f)[singlePreset]
+            val fontScale = if (multiColumn)
+                floatArrayOf(1.15f, 1.10f, 1.10f, 1.05f, 1.05f, 1.0f)[multiPreset]
+            else floatArrayOf(1.0f, 1.0f, 1.0f, 1.05f, 1.10f, 1.10f, 1.10f)[singlePreset]
+            holder.name.text = if (pinned) "📌  ${file.name}" else file.name
+            holder.name.textSize = 15f * fontScale
+            holder.info.textSize = 12f * fontScale
+            holder.itemView.background = if (pinned && !selected.contains(file)) {
+                android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(12).toFloat()
+                    setColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.solina_primary_container))
+                }
+            } else {
+                androidx.appcompat.content.res.AppCompatResources.getDrawable(this@MainActivity, R.drawable.item_bg)
+            }
+            holder.info.visibility = if (!multiColumn) View.VISIBLE else View.GONE
             FileTypeVisuals.applyTo(holder.icon, file)
-            val date = formatDate(file.lastModified())
-            holder.info.text =
-                if (file.isDirectory) date else fmt(file.length()) + " • " + date
+            val latestChange = activityTimes[file.absolutePath] ?: file.lastModified()
+            val date = formatDate(latestChange)
+            val detail = if (file.isDirectory) "پوشه • $date" else fmt(file.length()) + " • " + date
+            holder.info.text = if (pinned) "پین‌شده • $detail" else detail
             val root = holder.itemView as? LinearLayout
             val iconFrame = (0 until (root?.childCount ?: 0)).mapNotNull { root?.getChildAt(it) }.firstOrNull { it is android.widget.FrameLayout } as? android.widget.FrameLayout
             val details = (0 until (root?.childCount ?: 0)).mapNotNull { root?.getChildAt(it) }.firstOrNull { it is LinearLayout } as? LinearLayout
@@ -1481,9 +2029,9 @@ class MainActivity : AppCompatActivity() {
                 if (gridLayout) {
                     root.orientation = LinearLayout.VERTICAL
                     root.gravity = android.view.Gravity.CENTER_HORIZONTAL
-                    root.minimumHeight = dp(116)
+                    root.minimumHeight = dp((116 * iconScale).toInt())
                     root.setPadding(dp(8), dp(8), dp(8), dp(8))
-                    iconFrame.layoutParams = LinearLayout.LayoutParams(dp(44), dp(44)).apply { gravity = android.view.Gravity.CENTER }
+                    iconFrame.layoutParams = LinearLayout.LayoutParams(dp((44 * iconScale).toInt()), dp((44 * iconScale).toInt())).apply { gravity = android.view.Gravity.CENTER }
                     details.layoutParams = LinearLayout.LayoutParams(-1, -2).apply { gravity = android.view.Gravity.CENTER_HORIZONTAL }
                     details.gravity = android.view.Gravity.CENTER_HORIZONTAL
                     holder.name.textAlignment = View.TEXT_ALIGNMENT_CENTER
@@ -1491,14 +2039,17 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     root.orientation = LinearLayout.HORIZONTAL
                     root.gravity = android.view.Gravity.CENTER_VERTICAL
-                    root.minimumHeight = 0
+                    root.minimumHeight = dp((56 * iconScale).toInt())
                     root.setPadding(dp(10), dp(10), dp(10), dp(10))
-                    iconFrame.layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
+                    iconFrame.layoutParams = LinearLayout.LayoutParams(dp((44 * iconScale).toInt()), dp((44 * iconScale).toInt()))
                     details.layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(14) }
                     details.gravity = android.view.Gravity.START
                     holder.name.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
                     holder.info.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
                 }
+                holder.icon.layoutParams = android.widget.FrameLayout.LayoutParams(
+                    dp((26 * iconScale).toInt()), dp((26 * iconScale).toInt()), android.view.Gravity.CENTER
+                )
             }
             holder.itemView.isActivated = selected.contains(file)
             holder.check.setOnCheckedChangeListener(null)

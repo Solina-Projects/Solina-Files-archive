@@ -47,6 +47,12 @@ class ArchiveToolsActivity : AppCompatActivity() {
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         extractButton = MaterialButton(this).apply { text = "استخراج همه در پوشه جدید"; setOnClickListener { extractAll() } }
         root.addView(extractButton)
+        if (file.extension.equals("zip", true)) {
+            root.addView(MaterialButton(this).apply {
+                text = "افزودن فایل به ZIP"
+                setOnClickListener { addFilesToZip() }
+            })
+        }
         root.addView(MaterialButton(this).apply { text = "بستن"; setOnClickListener { finish() } })
         setContentView(root)
         Thread { val summary = inspect(); runOnUiThread { report.text = summary } }.start()
@@ -86,6 +92,43 @@ class ArchiveToolsActivity : AppCompatActivity() {
             } else "این قالب آرشیو در ابزار داخلی شناخته نشد."
         }
     } catch (e: Exception) { "خواندن آرشیو ناموفق بود: ${e.message}" }
+
+    private fun addFilesToZip() {
+        val parent = file.parentFile ?: return
+        val candidates = parent.listFiles()?.filter { it.isFile && it.canRead() && it != file }?.sortedBy { it.name } ?: emptyList()
+        if (candidates.isEmpty()) {
+            toast("فایل دیگری برای افزودن در این پوشه وجود ندارد")
+            return
+        }
+        val checked = BooleanArray(candidates.size)
+        MaterialAlertDialogBuilder(this)
+            .setTitle("انتخاب فایل برای افزودن")
+            .setMultiChoiceItems(candidates.map { it.name }.toTypedArray(), checked) { _, which, value -> checked[which] = value }
+            .setNegativeButton("لغو", null)
+            .setPositiveButton("افزودن") { _, _ ->
+                val chosen = candidates.filterIndexed { index, _ -> checked[index] }
+                if (chosen.isEmpty()) {
+                    toast("فایلی انتخاب نشد")
+                    return@setPositiveButton
+                }
+                extractButton.isEnabled = false
+                report.text = "در حال افزودن فایل‌ها به ZIP…"
+                Thread {
+                    var error: String? = null
+                    try {
+                        val zip = ZipFile(file)
+                        chosen.forEach { zip.addFile(it) }
+                    } catch (e: Exception) {
+                        error = e.localizedMessage ?: "افزودن فایل ناموفق بود"
+                    }
+                    runOnUiThread {
+                        extractButton.isEnabled = true
+                        report.text = if (error == null) "فایل‌های افزوده‌شده:\n" + chosen.joinToString("\n") { it.name } else "افزودن ناموفق بود: $error"
+                        toast(if (error == null) "فایل‌ها به ZIP افزوده شدند" else "افزودن فایل ناموفق بود")
+                    }
+                }.start()
+            }.show()
+    }
 
     private fun extractAll() {
         val target = File(file.parentFile ?: filesDir, file.nameWithoutExtension + "-extracted")

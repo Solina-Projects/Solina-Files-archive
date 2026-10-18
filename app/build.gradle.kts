@@ -11,8 +11,8 @@ android {
         applicationId = "ir.solina.fm"
         minSdk = 30
         targetSdk = 34
-        versionCode = 6
-        versionName = "1.0.3"
+        versionCode = 7
+        versionName = "2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -43,6 +43,11 @@ android {
     buildFeatures {
         aidl = true
         viewBinding = true
+        compose = true
+    }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.14"
     }
 
     packaging {
@@ -61,6 +66,15 @@ android {
 }
 
 dependencies {
+    // Jetpack Compose UI
+    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
+    implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+
     // AndroidX Core & UI
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
@@ -75,6 +89,11 @@ dependencies {
 
     // Security & Biometric
     implementation("androidx.biometric:biometric:1.1.0")
+
+    // Media playback engine (Strata-compatible Media3)
+    implementation("androidx.media3:media3-exoplayer:1.5.1")
+    implementation("androidx.media3:media3-session:1.5.1")
+    implementation("androidx.media3:media3-ui:1.5.1")
 
     // Archives & Compression
     implementation("net.lingala.zip4j:zip4j:2.11.5")

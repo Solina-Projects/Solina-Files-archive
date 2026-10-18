@@ -45,6 +45,11 @@ class ApkToolsActivity : AppCompatActivity() {
         scroll.addView(result)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
+        intent.getStringExtra("apk_path")?.let { path ->
+            val apk = File(path)
+            if (apk.isFile && apk.canRead()) inspectLocalApk(apk)
+            else result.text = "فایل APK ارسالی پیدا نشد یا قابل خواندن نیست."
+        }
     }
 
     @Deprecated("Legacy callback retained for compatibility with minSdk 30")
@@ -118,6 +123,75 @@ class ApkToolsActivity : AppCompatActivity() {
                     temp.delete()
                 }
             } catch (e: Exception) { "تحلیل APK ناموفق بود: ${e.localizedMessage ?: e.javaClass.simpleName}" }
+            runOnUiThread { result.text = report }
+        }.start()
+    }
+
+    /**
+     * Inspect a selected on-device APK directly, so the Dual Pane action does not
+     * make the user choose the same file a second time.
+     */
+    private fun inspectLocalApk(apk: File) {
+        result.text = "در حال بررسی ${apk.name}…"
+        Thread {
+            val report = try {
+                require(apk.length() <= 512L * 1024L * 1024L) {
+                    "حجم APK از حد مجاز ۵۱۲ مگابایت بیشتر است"
+                }
+                val out = StringBuilder()
+                out.appendLine("فایل: ${apk.name}")
+                out.appendLine("حجم: ${android.text.format.Formatter.formatFileSize(this, apk.length())}")
+                out.appendLine("SHA-256 فایل: ${sha256(apk)}")
+                val info = packageManager.getPackageArchiveInfo(
+                    apk.absolutePath,
+                    PackageManager.GET_PERMISSIONS or PackageManager.GET_SIGNING_CERTIFICATES
+                )
+                if (info != null) {
+                    out.appendLine("\n--- اطلاعات بسته ---")
+                    out.appendLine("Package: ${info.packageName}")
+                    out.appendLine("Version: ${info.versionName} (${info.longVersionCode})")
+                    out.appendLine("Min SDK: ${info.applicationInfo?.minSdkVersion ?: "نامشخص"}")
+                    out.appendLine("Target SDK: ${info.applicationInfo?.targetSdkVersion ?: "نامشخص"}")
+                    out.appendLine("مجوزهای درخواستی:")
+                    (info.requestedPermissions ?: emptyArray()).forEach { out.appendLine(" • $it") }
+                    if (android.os.Build.VERSION.SDK_INT >= 28) {
+                        out.appendLine("\nSHA-256 گواهی امضا:")
+                        (info.signingInfo?.apkContentsSigners ?: emptyArray()).forEach {
+                            out.appendLine(sha256Bytes(it.toByteArray()))
+                        }
+                    }
+                } else {
+                    out.appendLine("\nPackageManager نتوانست اطلاعات بسته را تحلیل کند.")
+                }
+                out.appendLine("\n--- فایل‌های DEX ---")
+                ZipFile(apk).use { zip ->
+                    val dexFiles = zip.entries().asSequence()
+                        .filter { !it.isDirectory && it.name.matches(Regex("classes(\\d*)\\.dex")) }
+                        .toList()
+                    out.appendLine("تعداد DEX: ${dexFiles.size}")
+                    dexFiles.forEach { entry ->
+                        out.appendLine("\n[${entry.name}]")
+                        if (entry.size > 64L * 1024L * 1024L) {
+                            out.appendLine("DEX بزرگ‌تر از حد مجاز ۶۴ مگابایت است؛ رد شد.")
+                            return@forEach
+                        }
+                        val bytes = zip.getInputStream(entry).use { readLimited(it, 64 * 1024 * 1024) }
+                        if (bytes.size > 64 * 1024 * 1024) {
+                            out.appendLine("DEX بزرگ‌تر از حد مجاز است؛ رد شد.")
+                            return@forEach
+                        }
+                        out.append(dexStructureReport(bytes))
+                        val strings = Regex("[ -~]{5,}")
+                            .findAll(bytes.toString(Charsets.ISO_8859_1))
+                            .map { it.value }.distinct().take(80).toList()
+                        out.appendLine("رشته‌های قابل‌خواندن (نمونه):")
+                        strings.forEach { out.appendLine(it.take(240)) }
+                    }
+                }
+                out.toString()
+            } catch (e: Exception) {
+                "تحلیل APK ناموفق بود: ${e.localizedMessage ?: e.javaClass.simpleName}"
+            }
             runOnUiThread { result.text = report }
         }.start()
     }
