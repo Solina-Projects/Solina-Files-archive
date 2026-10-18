@@ -225,7 +225,7 @@ class MainActivity : AppCompatActivity() {
         loadVolumes()
         if (!initialNavigationApplied) {
             val requestedPath = intent.getStringExtra("start_path")
-                ?: pendingRecentOpenPath?.let { File(it).parentFile?.absolutePath }
+                ?: pendingRecentOpenPath?.let { path -> File(path).let { if (it.isDirectory) it.absolutePath else it.parentFile?.absolutePath } }
                 ?: getSharedPreferences("solina_preferences", MODE_PRIVATE).getString("home_folder", null)
             val requested = requestedPath?.let { File(it) }
             val validRequested = requested?.takeIf { it.exists() && it.isDirectory && volumes.any { v -> inside(it, v.dir) } }
