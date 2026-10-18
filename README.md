@@ -1,4 +1,4 @@
-# 📂 Solina Files (SolinaFM) v1.0
+# 📂 Solina Files (SolinaFM) v1.0.1
 
 [![Release](https://img.shields.io/github/v/release/Solina-Projects/Solina-Files?color=006B5F&logo=android&label=Solina%20Files)](https://github.com/Solina-Projects/Solina-Files/releases)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/Solina-Projects/Solina-Files/build.yml?branch=main&label=Build%20APK)](https://github.com/Solina-Projects/Solina-Files/actions)
@@ -21,14 +21,14 @@
 | 📦 **فشرده‌سازی همه‌جانبه** | مدیریت و استخراج فرمت‌های **ZIP**, **7Z**, **RAR**, **TAR**, **GZ**, **XZ** با رمزنگاری |
 | ⚡ **انتقال فایل Wi-Fi** | سرور اختصاصی HTTP برای انتقال سریع و بی‌سیم فایل‌ها بین گوشی و رایانه |
 | 📱 **نمای دو پنله (Dual-Pane)** | مدیریت همزمان دو پوشه با قابلیت Drag & Drop |
-| 🔧 **ابزارهای پیشرفته** | آنالیز حجم دیسک، محاسبه هش SHA-256، نمایشگر هگزادسیمال، و ابزار بازرسی ساختار APK |
+| 🔧 **ابزارهای پیشرفته** | آنالیز حجم دیسک، محاسبه هش SHA-256، نمایشگر هگزادسیمال، ابزار بازرسی APK و مدیریت برنامه‌های نصب‌شده |
 | ⚡ **پشتیبانی Root و Shizuku** | دسترسی به فایل‌های سیستمی از طریق پروتکل رسمی Shizuku و سوپریوزر |
 
 ---
 
 ## 📥 دانلود فایل APK آماده نصب
 
-👉 **[دانلود مستقیم Solina Files v1.0 APK](https://github.com/Solina-Projects/Solina-Files/releases/download/v1.0/app-debug.apk)**
+👉 **[دانلود مستقیم Solina Files v1.0.1 APK](https://github.com/Solina-Projects/Solina-Files/releases/download/v1.0.1/app-debug.apk)**
 
 ---
 
@@ -39,10 +39,20 @@
 git clone https://github.com/Solina-Projects/Solina-Files.git
 cd Solina-Files
 
-# ۲. کامپایل نسخه Debug
-./gradlew assembleDebug
+# ۲. نیازمندی‌ها: JDK 17 و Gradle 8.7
+# ۳. کامپایل نسخه Debug
+gradle assembleDebug --no-daemon
 ```
 
 ---
 **توسعه‌دهنده و صاحب‌امتیاز: تیم Solina**  
 با افتخار متن‌باز و توسعه داده شده با کاتلین.
+
+
+## تغییرات نسخه 1.0.1
+
+- اضافه‌شدن فهرست قابل جست‌وجوی برنامه‌های نصب‌شده؛ لمس برای اجرا و لمس طولانی برای بازکردن اطلاعات برنامه.
+- بهبود پایداری ابزار تحلیل APK/DEX با محدودیت اندازه ورودی و پاک‌سازی فایل موقت.
+- اصلاح خطاهای ساخت که در CI شناسایی شدند.
+
+> این دانلود نسخه Debug برای آزمایش است، نه APK امضاشده با کلید انتشار تولیدی. حداقل نسخهٔ پشتیبانی‌شده اندروید ۱۱ (API 30) است.
