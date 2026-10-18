@@ -5,43 +5,54 @@
         android:id="@+id/action_select_all"
         android:icon="@drawable/ic_select_all"
         android:title="@string/select_all"
-        app:showAsAction="ifRoom" />
+        app:showAsAction="always" />
     <item
         android:id="@+id/action_deselect_all"
+        android:icon="@drawable/ic_close"
         android:title="لغو انتخاب"
-        app:showAsAction="never" />
+        app:showAsAction="always" />
     <item
         android:id="@+id/action_rename"
         android:icon="@drawable/ic_edit"
         android:title="تغییر نام"
-        app:showAsAction="ifRoom" />
+        app:showAsAction="always" />
     <item
         android:id="@+id/action_compress"
         android:icon="@drawable/ic_archive"
         android:title="فشرده‌سازی"
-        app:showAsAction="ifRoom" />
+        app:showAsAction="always" />
     <item
         android:id="@+id/action_extract"
         android:icon="@drawable/ic_unarchive"
+        android:icon="@drawable/ic_unarchive"
         android:title="استخراج"
         android:visible="false"
-        app:showAsAction="ifRoom" />
+        app:showAsAction="always" />
     <item
         android:id="@+id/action_text_editor"
+        android:icon="@drawable/ic_edit"
         android:title="ویرایش متن / Smali"
         android:visible="false"
-        app:showAsAction="never" />
+        app:showAsAction="always" />
     <item
         android:id="@+id/action_hex_editor"
+        android:icon="@drawable/ic_file_code"
         android:title="نمایش/ویرایش HEX"
         android:visible="false"
-        app:showAsAction="never" />
+        app:showAsAction="always" />
     <item
         android:id="@+id/action_file_tools"
+        android:icon="@drawable/ic_menu"
         android:title="ابزارهای تکمیلی برای انتخاب‌ها"
-        app:showAsAction="never" />
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_pin"
+        android:icon="@drawable/ic_pin"
+        android:title="پین / برداشتن پین"
+        app:showAsAction="always" />
     <item
         android:id="@+id/action_details"
+        android:icon="@drawable/ic_file"
         android:title="@string/details"
-        app:showAsAction="never" />
+        app:showAsAction="always" />
 </menu>
