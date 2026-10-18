@@ -557,8 +557,57 @@ class DualPaneActivity : AppCompatActivity() {
             menu.add("نمایش فایل‌ها").setOnMenuItemClickListener { showDisplaySettings(); true }
             menu.add("تعداد ستون‌ها").setOnMenuItemClickListener { showLayoutSettings(); true }
             menu.add("تم روشن/تیره").setOnMenuItemClickListener { toggleTheme(); true }
+            menu.add("ابزارها و قابلیت‌های بیشتر").setOnMenuItemClickListener {
+                showIntegratedTools()
+                true
+            }
             show()
         }
+    }
+
+    /**
+     * Opens the file-management tools already shipped with Solina from inside Dual Pane.
+     * This does not imply that every Strata-only feature has been ported.
+     */
+    private fun showIntegratedTools() {
+        val labels = arrayOf(
+            "برنامه‌های نصب‌شده و اطلاعات برنامه",
+            "ابزارهای APK",
+            "مدیریت آرشیوها",
+            "ابزارهای فایل و تغییرنام گروهی",
+            "ذخیره‌سازی شبکه",
+            "اشتراک‌گذاری از طریق Wi-Fi",
+            "سطل بازیافت",
+            "فایل‌های اخیر",
+            "گاوصندوق",
+            "مرورگر فایل با دسترسی ریشه",
+            "تنظیمات پیشرفته"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("ابزارهای Solina در پنل دوگانه")
+            .setItems(labels) { _, which ->
+                val intent = when (which) {
+                    0 -> Intent(this, InstalledAppsActivity::class.java)
+                    1 -> Intent(this, ApkToolsActivity::class.java)
+                    2 -> Intent(this, ArchiveToolsActivity::class.java)
+                    3 -> Intent(this, FileToolsActivity::class.java)
+                        .putExtra("root_path", pane(activePane).current.absolutePath)
+                    4 -> Intent(this, NetworkStorageActivity::class.java)
+                    5 -> Intent(this, WifiTransferActivity::class.java)
+                    6 -> Intent(this, RecycleBinActivity::class.java)
+                    7 -> Intent(this, RecentFilesActivity::class.java)
+                    8 -> Intent(this, VaultActivity::class.java)
+                    9 -> Intent(this, RootExplorerActivity::class.java)
+                    else -> Intent(this, AdvancedSettingsActivity::class.java)
+                }
+                try {
+                    startActivity(intent)
+                } catch (_: Exception) {
+                    toast("بازکردن این ابزار ممکن نشد")
+                }
+            }
+            .setNegativeButton("بستن", null)
+            .show()
     }
 
     private fun toggleTheme() {
