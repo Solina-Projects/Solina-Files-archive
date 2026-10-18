@@ -1,4 +1,4 @@
-# 📂 Solina Files (SolinaFM) v1.0.3
+# 📂 Solina Files (SolinaFM) v2.0
 
 [![Release](https://img.shields.io/github/v/release/Solina-Projects/Solina-Files?color=006B5F&logo=android&label=Solina%20Files)](https://github.com/Solina-Projects/Solina-Files/releases)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/Solina-Projects/Solina-Files/build.yml?branch=main&label=Build%20APK)](https://github.com/Solina-Projects/Solina-Files/actions)
@@ -6,7 +6,7 @@
 [![Material 3](https://img.shields.io/badge/UI-Material%20Design%203-blue.svg)](https://m3.material.io)
 [![License](https://img.shields.io/badge/License-AGPL--3.0--or--later-0F3D2E)](LICENSE)
 
-**Solina Files** یک فایل‌منیجر متن‌باز برای اندروید است که با تکیه بر **Material Design 3** و پشتیبانی بومی از زبان فارسی و تاریخ شمسی توسعه داده می‌شود. این شاخه برای یکپارچه‌سازی قابلیت‌های منتخب پروژهٔ Strata در ساختار فعلی Solina Files اختصاص دارد.
+**Solina Files** یک فایل‌منیجر متن‌باز برای اندروید است که با تکیه بر **Material Design 3** و پشتیبانی بومی از زبان فارسی و تاریخ شمسی توسعه داده می‌شود. نسخهٔ ۲.۰ شامل بازطراحی صفحهٔ خانه، نمایش آمار حافظه و دسته‌بندی‌ها، بهبود فایل‌های سنجاق‌شده، نوارهای فشرده‌تر حالت دوپنجره‌ای و دسترسی ساده‌تر به ابزارها است.
 
 ---
 
@@ -28,7 +28,9 @@
 
 ## 📥 دانلود فایل APK آماده نصب
 
-👉 **[دانلود مستقیم Solina Files v1.0.3 APK](https://github.com/Solina-Projects/Solina-Files/releases/download/v1.0.3/app-debug.apk)**
+👉 **[دانلود مستقیم Solina Files v2.0 APK](https://github.com/Solina-Projects/Solina-Files/releases/download/v2.0/app-debug.apk)**
+
+[مشاهده صفحه انتشار نسخه ۲.۰ و یادداشت‌های انتشار](https://github.com/Solina-Projects/Solina-Files/releases/tag/v2.0)
 
 ---
 
@@ -50,8 +52,17 @@ gradle assembleDebug --no-daemon
 
 ## انتساب پروژهٔ Strata
 
-پروژهٔ [Strata](https://github.com/CluvexStudio/Strata) اثر CluvexStudio تحت مجوز GNU AGPL نسخهٔ ۳ یا بالاتر منتشر شده است. هر کد یا دارایی که از Strata وارد این پروژه شود باید اطلاعیه‌های حق‌نشر و مجوزهای مربوط را حفظ کند. این شاخهٔ ادغام در حال توسعه است؛ درج این انتساب به‌تنهایی به معنی تکمیل انتقال امکانات Strata نیست.
+پروژهٔ [Strata](https://github.com/CluvexStudio/Strata) اثر CluvexStudio تحت مجوز GNU AGPL نسخهٔ ۳ یا بالاتر منتشر شده است. هر کد یا دارایی که از Strata وارد این پروژه شود باید اطلاعیه‌های حق‌نشر و مجوزهای مربوط را حفظ کند. نسخهٔ ۲.۰ شامل انتقال مرحله‌ای برخی قابلیت‌هاست و به معنی انتقال کامل تمام امکانات Strata نیست.
 
+
+## تغییرات نسخه 2.0
+
+- بازطراحی کارت حافظه با نمایش فضای کل، آزاد و مصرف‌شده و شمارش فایل‌ها و پوشه‌ها.
+- نمایش تعداد و حجم فایل‌ها در کارت‌های دسته‌بندی.
+- گروه‌بندی فایل‌ها و پوشه‌های سنجاق‌شده در ابتدای فهرست.
+- فشرده‌سازی نوارهای جست‌وجو و انتخاب در حالت دوپنجره‌ای و استفاده از آیکن به‌جای برچسب‌های طولانی.
+- انتقال دسترسی ابزارها به کشوی کناری و افزودن دکمهٔ شناور برای ساخت پوشه، فایل متنی و HTML.
+- یکپارچه‌سازی ظاهر روشن و تاریک.
 
 ## تغییرات نسخه 1.0.3
 
