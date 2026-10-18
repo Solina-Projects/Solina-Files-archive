@@ -213,7 +213,7 @@ private fun CategoryFilesScreen(
         }
     }
 
-    LaunchedEffect(category, refreshKey, hasAccess) {
+    LaunchedEffect(category, refreshKey, hasAccess, permissionRefreshKey) {
         if (hasAccess) {
             loading = true
             files = withContext(Dispatchers.IO) { scanCategoryFiles(context, category) }
