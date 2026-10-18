@@ -314,11 +314,29 @@ class MainActivity : AppCompatActivity() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun applyFileLayout() {
-        val columns = getSharedPreferences("solina_preferences", MODE_PRIVATE).getInt("grid_columns", if (gridLayout) 2 else 1).coerceIn(1, 4)
+        val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
+        val fallbackColumns = prefs.getInt("grid_columns", if (gridLayout) 2 else 1).coerceIn(1, 4)
+        val preset = prefs.getInt("layout_preset", presetForColumns(fallbackColumns)).coerceIn(0, 7)
+        val columns = layoutColumns(preset)
+        gridLayout = columns > 1
         list.layoutManager = if (columns > 1) GridLayoutManager(this, columns) else LinearLayoutManager(this)
         layoutModeButton.setIconResource(if (gridLayout) R.drawable.ic_list_view else R.drawable.ic_grid_view)
         layoutModeButton.text = ""
         layoutModeButton.contentDescription = if (gridLayout) "تغییر به چیدمان فهرستی" else "تغییر به چیدمان شبکه‌ای"
+    }
+
+    private fun layoutColumns(preset: Int): Int = when (preset.coerceIn(0, 7)) {
+        0, 1 -> 1
+        2, 3 -> 2
+        4, 5 -> 3
+        else -> 4
+    }
+
+    private fun presetForColumns(columns: Int): Int = when (columns.coerceIn(1, 4)) {
+        1 -> 0
+        2 -> 2
+        3 -> 4
+        else -> 6
     }
 
     private fun fmt(bytes: Long): String = Formatter.formatFileSize(this, bytes)
@@ -1146,21 +1164,24 @@ class MainActivity : AppCompatActivity() {
 
     private fun showLayoutSettings() {
         val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
-        val currentColumns = prefs.getInt("grid_columns", if (gridLayout) 2 else 1).coerceIn(1, 4)
+        val fallbackColumns = prefs.getInt("grid_columns", if (gridLayout) 2 else 1).coerceIn(1, 4)
+        val currentPreset = prefs.getInt("layout_preset", presetForColumns(fallbackColumns)).coerceIn(0, 7)
         val preview = TextView(this).apply {
-            text = layoutDescription(currentColumns)
+            text = layoutDescription(currentPreset)
             textSize = 15f
             setTextColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.solina_on_surface))
             gravity = android.view.Gravity.CENTER
             setPadding(dp(8), dp(4), dp(8), dp(8))
         }
         val seek = SeekBar(this).apply {
-            max = 3
-            progress = currentColumns - 1
-            contentDescription = "تغییر ترکیب نمایش پوشه‌ها و فایل‌ها"
+            max = 7
+            progress = currentPreset
+            contentDescription = "تغییر تعداد ستون‌ها و اندازه آیکن و قلم"
         }
         seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(bar: SeekBar?, value: Int, fromUser: Boolean) { preview.text = layoutDescription(value + 1) }
+            override fun onProgressChanged(bar: SeekBar?, value: Int, fromUser: Boolean) {
+                preview.text = layoutDescription(value)
+            }
             override fun onStartTrackingTouch(bar: SeekBar?) {}
             override fun onStopTrackingTouch(bar: SeekBar?) {}
         })
@@ -1172,11 +1193,14 @@ class MainActivity : AppCompatActivity() {
         }
         MaterialAlertDialogBuilder(this)
             .setTitle("چیدمان فایل‌ها")
-            .setMessage("نوار را جابه‌جا کن تا از فهرست ساده تا شبکهٔ چهارستونه انتخاب شود.")
+            .setMessage("با جابه‌جایی نوار، تعداد ستون‌ها و اندازه آیکن‌ها و نوشته‌ها را انتخاب کن.")
             .setView(panel)
             .setPositiveButton("اعمال") { _, _ ->
-                val columns = seek.progress + 1
-                prefs.edit().putInt("grid_columns", columns).putBoolean("grid_layout", columns > 1).apply()
+                val preset = seek.progress.coerceIn(0, 7)
+                val columns = layoutColumns(preset)
+                prefs.edit().putInt("layout_preset", preset)
+                    .putInt("grid_columns", columns)
+                    .putBoolean("grid_layout", columns > 1).apply()
                 gridLayout = columns > 1
                 applyFileLayout()
                 adapter.notifyDataSetChanged()
@@ -1185,11 +1209,15 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun layoutDescription(columns: Int): String = when (columns) {
-        1 -> "فهرست فشرده"
-        2 -> "شبکهٔ دو ستونه"
-        3 -> "شبکهٔ سه ستونه"
-        else -> "شبکهٔ چهار ستونه"
+    private fun layoutDescription(preset: Int): String = when (preset.coerceIn(0, 7)) {
+        0 -> "تک‌ستونه • اندازه فعلی آیکن و قلم"
+        1 -> "تک‌ستونه • آیکن ۱۲۰٪، قلم ۱۰۵٪"
+        2 -> "دوستونه • آیکن ۱۳۵٪، قلم ۱۱۰٪"
+        3 -> "دوستونه • آیکن ۱۴۵٪، قلم ۱۱۵٪"
+        4 -> "سه‌ستونه • آیکن ۱۶۰٪، قلم ۱۲۰٪"
+        5 -> "سه‌ستونه • آیکن ۱۷۰٪، قلم ۱۲۵٪"
+        6 -> "چهارستونه • آیکن ۱۸۵٪، قلم ۱۳۰٪"
+        else -> "چهارستونه • آیکن ۲۰۰٪، قلم ۱۳۰٪"
     }
 
     private fun showSortOptions() {
@@ -1714,8 +1742,6 @@ class MainActivity : AppCompatActivity() {
     // ---------- list adapter ----------
 
     private inner class FileAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-        private val TYPE_FILE = 0
-        private val TYPE_RECENT_DIVIDER = 1
         var items: List<File> = emptyList()
 
         fun submit(newItems: List<File>) {
@@ -1730,43 +1756,23 @@ class MainActivity : AppCompatActivity() {
             val check: CheckBox = view.findViewById(R.id.fileCheck)
         }
 
-        inner class DividerVH(view: View) : RecyclerView.ViewHolder(view)
+        override fun getItemCount(): Int = items.size
 
-        override fun getItemViewType(position: Int): Int =
-            if (items.size > 10 && position == 10) TYPE_RECENT_DIVIDER else TYPE_FILE
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-            if (viewType == TYPE_RECENT_DIVIDER) {
-                val context = parent.context
-                val container = LinearLayout(context).apply {
-                    orientation = LinearLayout.VERTICAL
-                    setPadding(dp(12), dp(10), dp(12), dp(10))
-                }
-                val label = TextView(context).apply {
-                    text = "سایر موارد"
-                    textSize = 12f
-                    setTextColor(0xFF5B6FC7.toInt())
-                    setPadding(0, 0, 0, dp(6))
-                }
-                val line = View(context).apply {
-                    setBackgroundColor(0xFFB0B0B0.toInt())
-                    layoutParams = LinearLayout.LayoutParams(-1, dp(1))
-                }
-                container.addView(label)
-                container.addView(line)
-                return DividerVH(container)
-            }
-            return VH(layoutInflater.inflate(R.layout.item_file, parent, false))
-        }
-
-        override fun getItemCount(): Int = items.size + if (items.size > 10) 1 else 0
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder =
+            VH(layoutInflater.inflate(R.layout.item_file, parent, false))
 
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-            if (holder is DividerVH) return
             holder as VH
-            val itemIndex = if (items.size > 10 && position > 10) position - 1 else position
-            val file = items[itemIndex]
+            val file = items[position]
+            val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
+            val fallbackColumns = prefs.getInt("grid_columns", if (gridLayout) 2 else 1).coerceIn(1, 4)
+            val preset = prefs.getInt("layout_preset", presetForColumns(fallbackColumns)).coerceIn(0, 7)
+            val iconScale = floatArrayOf(1.0f, 1.2f, 1.35f, 1.45f, 1.6f, 1.7f, 1.85f, 2.0f)[preset]
+            val fontScale = floatArrayOf(1.0f, 1.05f, 1.10f, 1.15f, 1.20f, 1.25f, 1.30f, 1.30f)[preset]
             holder.name.text = file.name
+            holder.name.textSize = 15f * fontScale
+            holder.info.textSize = 12f * fontScale
+            holder.info.visibility = if (layoutColumns(preset) <= 2) View.VISIBLE else View.GONE
             FileTypeVisuals.applyTo(holder.icon, file)
             val latestChange = activityTimes[file.absolutePath] ?: file.lastModified()
             val date = formatDate(latestChange)
@@ -1779,9 +1785,9 @@ class MainActivity : AppCompatActivity() {
                 if (gridLayout) {
                     root.orientation = LinearLayout.VERTICAL
                     root.gravity = android.view.Gravity.CENTER_HORIZONTAL
-                    root.minimumHeight = dp(116)
+                    root.minimumHeight = dp((116 * iconScale).toInt())
                     root.setPadding(dp(8), dp(8), dp(8), dp(8))
-                    iconFrame.layoutParams = LinearLayout.LayoutParams(dp(44), dp(44)).apply { gravity = android.view.Gravity.CENTER }
+                    iconFrame.layoutParams = LinearLayout.LayoutParams(dp((44 * iconScale).toInt()), dp((44 * iconScale).toInt())).apply { gravity = android.view.Gravity.CENTER }
                     details.layoutParams = LinearLayout.LayoutParams(-1, -2).apply { gravity = android.view.Gravity.CENTER_HORIZONTAL }
                     details.gravity = android.view.Gravity.CENTER_HORIZONTAL
                     holder.name.textAlignment = View.TEXT_ALIGNMENT_CENTER
@@ -1789,14 +1795,17 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     root.orientation = LinearLayout.HORIZONTAL
                     root.gravity = android.view.Gravity.CENTER_VERTICAL
-                    root.minimumHeight = 0
+                    root.minimumHeight = dp((56 * iconScale).toInt())
                     root.setPadding(dp(10), dp(10), dp(10), dp(10))
-                    iconFrame.layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
+                    iconFrame.layoutParams = LinearLayout.LayoutParams(dp((44 * iconScale).toInt()), dp((44 * iconScale).toInt()))
                     details.layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(14) }
                     details.gravity = android.view.Gravity.START
                     holder.name.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
                     holder.info.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
                 }
+                holder.icon.layoutParams = FrameLayout.LayoutParams(
+                    dp((26 * iconScale).toInt()), dp((26 * iconScale).toInt()), android.view.Gravity.CENTER
+                )
             }
             holder.itemView.isActivated = selected.contains(file)
             holder.check.setOnCheckedChangeListener(null)
