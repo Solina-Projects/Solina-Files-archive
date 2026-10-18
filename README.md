@@ -1,4 +1,4 @@
-# 📂 Solina Files (SolinaFM) v1.0.2
+# 📂 Solina Files (SolinaFM) v1.0.3
 
 [![Release](https://img.shields.io/github/v/release/Solina-Projects/Solina-Files?color=006B5F&logo=android&label=Solina%20Files)](https://github.com/Solina-Projects/Solina-Files/releases)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/Solina-Projects/Solina-Files/build.yml?branch=main&label=Build%20APK)](https://github.com/Solina-Projects/Solina-Files/actions)
@@ -28,7 +28,7 @@
 
 ## 📥 دانلود فایل APK آماده نصب
 
-👉 **[دانلود مستقیم Solina Files v1.0.2 APK](https://github.com/Solina-Projects/Solina-Files/releases/download/v1.0.2/app-debug.apk)**
+👉 **[دانلود مستقیم Solina Files v1.0.3 APK](https://github.com/Solina-Projects/Solina-Files/releases/download/v1.0.3/app-debug.apk)**
 
 ---
 
@@ -48,6 +48,10 @@ gradle assembleDebug --no-daemon
 **توسعه‌دهنده و صاحب‌امتیاز: تیم Solina**  
 با افتخار متن‌باز و توسعه داده شده با کاتلین.
 
+
+## تغییرات نسخه 1.0.3
+
+- رفع کرش هنگام شروع برنامه: شناسهٔ نمای کارت حافظه با نوع ویوی مورد انتظار در کد یکسان نبود؛ فهرست میانبرهای حافظه اکنون در یک چیدمان افقی مجزا نمایش داده می‌شود.
 
 ## تغییرات نسخه 1.0.2
 

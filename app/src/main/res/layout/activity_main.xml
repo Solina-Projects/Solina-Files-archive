@@ -98,7 +98,7 @@
 
     <!-- Google Files Material 3 Storage Summary Hero Card -->
     <com.google.android.material.card.MaterialCardView
-        android:id="@+id/storageQuickBar"
+        android:id="@+id/storageSummaryCard"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="12dp"
@@ -147,6 +147,21 @@
                     app:icon="@drawable/ic_splitscreen"
                     app:iconTint="?attr/colorOnSurfaceVariant" />
             </LinearLayout>
+
+            <!-- Scrollable storage-volume shortcuts populated by MainActivity. -->
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:fillViewport="false"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/storageQuickBar"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
 
             <!-- Segmented Multi-Color Progress Indicator -->
             <com.google.android.material.progressindicator.LinearProgressIndicator
