@@ -1481,34 +1481,173 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun playAudio(file: File) {
+        var player: MediaPlayer? = null
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        var dismissed = false
+        fun timeLabel(ms: Int): String {
+            val seconds = (ms.coerceAtLeast(0) / 1000)
+            return String.format(Locale.ROOT, "%d:%02d", seconds / 60, seconds % 60)
+        }
         try {
-            val player = MediaPlayer()
-            player.setDataSource(file.absolutePath)
-            val controls = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 12, 20, 8) }
-            val status = TextView(this).apply { text = file.name; textSize = 14f }
-            val seek = SeekBar(this)
-            val play = MaterialButton(this).apply { text = "پخش / توقف"; isAllCaps = false }
-            controls.addView(status)
-            controls.addView(seek)
-            controls.addView(play)
-            val dialog = MaterialAlertDialogBuilder(this).setTitle("پخش‌کننده صوتی").setView(controls)
-                .setNegativeButton("بستن", null).create()
-            player.setOnPreparedListener { mp ->
-                seek.max = mp.duration.coerceAtLeast(1)
-                play.setOnClickListener { if (mp.isPlaying) { mp.pause(); play.text = "ادامه پخش" } else { mp.start(); play.text = "توقف" } }
-                seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                    override fun onProgressChanged(s: SeekBar, value: Int, fromUser: Boolean) { if (fromUser) mp.seekTo(value) }
-                    override fun onStartTrackingTouch(s: SeekBar) {}
-                    override fun onStopTrackingTouch(s: SeekBar) {}
-                })
-                mp.start()
-                play.text = "توقف"
+            val controls = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding((18 * resources.displayMetrics.density).toInt(), (12 * resources.displayMetrics.density).toInt(),
+                    (18 * resources.displayMetrics.density).toInt(), (8 * resources.displayMetrics.density).toInt())
             }
-            player.setOnErrorListener { mp, _, _ -> mp.release(); toast("این قالب صوتی یا فایل پشتیبانی نمی‌شود"); true }
-            dialog.setOnDismissListener { try { player.stop() } catch (_: Exception) {}; player.release() }
+            val artwork = ImageView(this).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setImageResource(R.drawable.ic_file_audio)
+                background = ContextCompat.getDrawable(this@MainActivity, R.drawable.item_bg)
+                contentDescription = "تصویر آلبوم موسیقی"
+            }
+            val artRow = LinearLayout(this).apply { gravity = android.view.Gravity.CENTER_VERTICAL; orientation = LinearLayout.HORIZONTAL }
+            artRow.addView(artwork, LinearLayout.LayoutParams((104 * resources.displayMetrics.density).toInt(), (104 * resources.displayMetrics.density).toInt()))
+            val metadata = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding((14 * resources.displayMetrics.density).toInt(), 0, 0, 0)
+            }
+            val title = TextView(this).apply { text = file.nameWithoutExtension; textSize = 17f; setTypeface(typeface, android.graphics.Typeface.BOLD); maxLines = 2 }
+            val artist = TextView(this).apply { text = "اطلاعات هنرمند در دسترس نیست"; textSize = 13f; setTextColor(0xFF808080.toInt()); maxLines = 2 }
+            metadata.addView(title)
+            metadata.addView(artist)
+            artRow.addView(metadata, LinearLayout.LayoutParams(0, -2, 1f))
+            controls.addView(artRow)
+
+            val waveform = WaveformProgressView(this).apply {
+                contentDescription = "نوار پیشرفت پخش موسیقی"
+                setPadding(0, (6 * resources.displayMetrics.density).toInt(), 0, (6 * resources.displayMetrics.density).toInt())
+            }
+            controls.addView(waveform, LinearLayout.LayoutParams(-1, (54 * resources.displayMetrics.density).toInt()))
+            val times = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+            val elapsed = TextView(this).apply { text = "0:00"; textSize = 12f; setTextColor(0xFF596ED1.toInt()) }
+            val total = TextView(this).apply { text = "0:00"; textSize = 12f; gravity = android.view.Gravity.END; setTextColor(0xFF808080.toInt()) }
+            times.addView(elapsed, LinearLayout.LayoutParams(0, -2, 1f))
+            times.addView(total, LinearLayout.LayoutParams(0, -2, 1f))
+            controls.addView(times)
+
+            val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER }
+            val play = MaterialButton(this).apply { text = "توقف"; isAllCaps = false }
+            val share = MaterialButton(this).apply {
+                text = "اشتراک‌گذاری"; isAllCaps = false
+                setIconResource(R.drawable.ic_share)
+            }
+            val delete = MaterialButton(this).apply {
+                text = "حذف"; isAllCaps = false
+                setIconResource(R.drawable.ic_delete)
+            }
+            actions.addView(play, LinearLayout.LayoutParams(0, -2, 1.2f))
+            actions.addView(share, LinearLayout.LayoutParams(0, -2, 1f))
+            actions.addView(delete, LinearLayout.LayoutParams(0, -2, 0.75f))
+            controls.addView(actions)
+
+            val dialog = MaterialAlertDialogBuilder(this).setTitle("پخش موسیقی").setView(controls)
+                .setNegativeButton("بستن", null).create()
+            val retriever = android.media.MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(file.absolutePath)
+                retriever.embeddedPicture?.let { bytes ->
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.let { artwork.setImageBitmap(it) }
+                }
+                retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE)?.takeIf { it.isNotBlank() }?.let { title.text = it }
+                val artistName = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                    ?: retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
+                if (!artistName.isNullOrBlank()) artist.text = artistName
+            } catch (_: Exception) {
+            } finally {
+                try { retriever.release() } catch (_: Exception) {}
+            }
+
+            val tick = object : Runnable {
+                override fun run() {
+                    val mp = player ?: return
+                    if (dismissed) return
+                    try {
+                        elapsed.text = timeLabel(mp.currentPosition)
+                        waveform.setPosition(mp.currentPosition)
+                        waveform.setPlaying(mp.isPlaying)
+                        handler.postDelayed(this, 250L)
+                    } catch (_: Exception) {}
+                }
+            }
+            player = MediaPlayer().also { mp ->
+                mp.setDataSource(file.absolutePath)
+                mp.setOnPreparedListener { prepared ->
+                    waveform.setDuration(prepared.duration)
+                    total.text = timeLabel(prepared.duration)
+                    prepared.start()
+                    play.text = "توقف"
+                    handler.post(tick)
+                }
+                mp.setOnCompletionListener {
+                    play.text = "پخش مجدد"
+                    waveform.setPlaying(false)
+                    elapsed.text = total.text
+                }
+                mp.setOnErrorListener { _, _, _ ->
+                    toast("این قالب صوتی یا فایل پشتیبانی نمی‌شود")
+                    true
+                }
+            }
+            waveform.onSeek = { position -> try { player?.seekTo(position) } catch (_: Exception) {} }
+            play.setOnClickListener {
+                val mp = player ?: return@setOnClickListener
+                try {
+                    if (mp.isPlaying) {
+                        mp.pause(); play.text = "ادامه پخش"; waveform.setPlaying(false)
+                    } else {
+                        if (mp.currentPosition >= mp.duration) mp.seekTo(0)
+                        mp.start(); play.text = "توقف"; waveform.setPlaying(true); handler.post(tick)
+                    }
+                } catch (_: Exception) {}
+            }
+            share.setOnClickListener {
+                try {
+                    val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+                    startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                        type = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase(Locale.ROOT)) ?: "audio/*"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }, "اشتراک‌گذاری موسیقی"))
+                } catch (_: Exception) { toast("اشتراک‌گذاری فایل ممکن نیست") }
+            }
+            delete.setOnClickListener {
+                MaterialAlertDialogBuilder(this).setTitle("حذف موسیقی")
+                    .setMessage("فایل «${file.name}» حذف شود؟ این کار فایل را از حافظه پاک می‌کند.")
+                    .setNegativeButton("لغو", null)
+                    .setPositiveButton("حذف") { _, _ ->
+                        try {
+                            dismissed = true
+                            handler.removeCallbacksAndMessages(null)
+                            try { player?.stop() } catch (_: Exception) {}
+                            player?.release(); player = null
+                            if (file.delete()) {
+                                dialog.dismiss()
+                                refresh()
+                                toast("فایل حذف شد")
+                            } else {
+                                dismissed = false
+                                toast("حذف فایل ناموفق بود")
+                            }
+                        } catch (_: Exception) { toast("حذف فایل ناموفق بود") }
+                    }.show()
+            }
+            dialog.setOnDismissListener {
+                dismissed = true
+                handler.removeCallbacksAndMessages(null)
+                waveform.setPlaying(false)
+                try { player?.stop() } catch (_: Exception) {}
+                try { player?.release() } catch (_: Exception) {}
+                player = null
+            }
             dialog.show()
-            player.prepareAsync()
-        } catch (_: Exception) { toast("پخش این فایل صوتی ممکن نیست؛ قالب یا سلامت فایل را بررسی کنید") }
+            player?.prepareAsync()
+        } catch (_: Exception) {
+            dismissed = true
+            handler.removeCallbacksAndMessages(null)
+            try { player?.release() } catch (_: Exception) {}
+            toast("پخش این فایل صوتی ممکن نیست؛ قالب یا سلامت فایل را بررسی کنید")
+        }
     }
 
     private fun playVideo(file: File) {
