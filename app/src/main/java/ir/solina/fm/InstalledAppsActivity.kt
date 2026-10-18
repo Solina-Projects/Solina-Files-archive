@@ -32,7 +32,7 @@ class InstalledAppsActivity : AppCompatActivity() {
             setNavigationIcon(R.drawable.ic_arrow_back)
             setNavigationOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(56)))
-        search = EditText(this).apply { hint = "جست‌وجوی نام یا شناسه بسته"; singleLine = true }
+        search = EditText(this).apply { hint = "جست‌وجوی نام یا شناسه بسته"; setSingleLine(true) }
         root.addView(search, LinearLayout.LayoutParams(-1, -2))
         count = TextView(this).apply { textSize = 12f; setPadding(dp(4), dp(8), dp(4), dp(8)) }
         root.addView(count)
