@@ -27,6 +27,7 @@
         <activity android:name=".DocumentViewerActivity" android:exported="false" />
         <activity android:name=".AdvancedSettingsActivity" android:exported="false" />
         <activity android:name=".RecentFilesActivity" android:exported="false" />
+        <activity android:name=".HomeCategoryActivity" android:exported="false" />
         <activity android:name=".VaultActivity" android:exported="false" />
         <activity android:name=".RootExplorerActivity" android:exported="false" />
         <activity android:name=".NetworkStorageActivity" android:exported="false" />
