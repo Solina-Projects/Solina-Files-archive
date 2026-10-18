@@ -146,6 +146,11 @@ class ComposeHomeActivity : ComponentActivity() {
                         if (!category.isNullOrBlank()) intent.putExtra("file_category", category)
                         startActivity(intent)
                     },
+                    onOpenCategory = { title, category ->
+                        startActivity(Intent(this, HomeCategoryActivity::class.java)
+                            .putExtra("category_title", title)
+                            .putExtra("category_filter", category))
+                    },
                     onOpenFile = { path ->
                         startActivity(Intent(this, MainActivity::class.java)
                             .putExtra("open_recent_path", path))
@@ -253,6 +258,7 @@ private fun SolinaHomeScreen(
     onCleanTools: () -> Unit,
     onSearch: (String) -> Unit,
     onOpenFolder: (String, String?) -> Unit,
+    onOpenCategory: (String, String) -> Unit,
     onOpenFile: (String) -> Unit,
     onDualPane: () -> Unit,
     onVault: () -> Unit,
@@ -288,8 +294,8 @@ private fun SolinaHomeScreen(
     val used = (total - free).coerceAtLeast(0L)
     val progress = if (total > 0L) used.toFloat() / total.toFloat() else 0f
     val categories = listOf(
-        HomeCategory("دانلودها", "فایل‌های دریافت‌شده", Icons.Default.FolderOpen,
-            Color(0xFF1A73E8), Environment.DIRECTORY_DOWNLOADS),
+        HomeCategory("دانلودها", "همه فایل‌های جدید از سراسر حافظه", Icons.Default.FolderOpen,
+            Color(0xFF1A73E8), null, "recent"),
         HomeCategory("تصاویر", "عکس‌ها و تصاویر", Icons.Default.Image,
             Color(0xFFAF52DE), Environment.DIRECTORY_PICTURES, "images"),
         HomeCategory("ویدیوها", "فیلم‌ها و کلیپ‌ها", Icons.Default.VideoLibrary,
@@ -425,10 +431,7 @@ private fun SolinaHomeScreen(
                                 category = category,
                                 modifier = Modifier.weight(1f),
                                 onClick = {
-                                    val dir = categoryDirectory(category.directory)
-                                    val path = dir?.takeIf { it.exists() && it.isDirectory }?.absolutePath
-                                        ?: root.absolutePath
-                                    onOpenFolder(path, category.filter)
+                                    onOpenCategory(category.title, category.filter ?: "recent")
                                 }
                             )
                         }
