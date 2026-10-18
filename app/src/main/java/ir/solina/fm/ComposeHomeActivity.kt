@@ -105,6 +105,8 @@ class ComposeHomeActivity : ComponentActivity() {
             ) {
                 SolinaHomeScreen(
                     onBrowse = { openBrowser() },
+                    onRequestPermission = { requestStoragePermission() },
+                    onCleanTools = { openCleanTools() },
                     onSearch = { query ->
                         startActivity(Intent(this, MainActivity::class.java)
                             .putExtra("search_query", query))
@@ -130,6 +132,16 @@ class ComposeHomeActivity : ComponentActivity() {
 
     private fun openBrowser() {
         startActivity(Intent(this, MainActivity::class.java))
+    }
+
+    private fun requestStoragePermission() {
+        startActivity(Intent(this, MainActivity::class.java)
+            .putExtra("request_storage_permission", true))
+    }
+
+    private fun openCleanTools() {
+        startActivity(Intent(this, MainActivity::class.java)
+            .putExtra("open_clean_tools", true))
     }
 }
 
@@ -169,6 +181,8 @@ private fun formatSize(context: android.content.Context, bytes: Long): String =
 @Composable
 private fun SolinaHomeScreen(
     onBrowse: () -> Unit,
+    onRequestPermission: () -> Unit,
+    onCleanTools: () -> Unit,
     onSearch: (String) -> Unit,
     onOpenFolder: (String, String?) -> Unit,
     onOpenFile: (String) -> Unit,
@@ -343,7 +357,7 @@ private fun SolinaHomeScreen(
                                 Text("برای دیدن فایل‌های واقعی، دسترسی حافظه را فعال کن.",
                                     color = MaterialTheme.colorScheme.onSurface)
                                 Spacer(Modifier.height(8.dp))
-                                Button(onClick = onBrowse) { Text("فعال‌سازی دسترسی") }
+                                Button(onClick = onRequestPermission) { Text("بررسی و اعطای دسترسی") }
                             }
                         }
                     }
@@ -358,9 +372,14 @@ private fun SolinaHomeScreen(
                     Text("ابزارها", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         QuickTool("دو پنجره‌ای", Icons.Default.GridView, Modifier.weight(1f), onDualPane)
-                        QuickTool("گاوصندوق", Icons.Default.Lock, Modifier.weight(1f), onVault)
+                        QuickTool("پاک‌سازی", Icons.Default.Refresh, Modifier.weight(1f), onCleanTools)
                         QuickTool("انتقال فایل", Icons.Default.Share, Modifier.weight(1f), onShare)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        QuickTool("گاوصندوق", Icons.Default.Lock, Modifier.weight(1f), onVault)
                         QuickTool("تنظیمات", Icons.Default.Settings, Modifier.weight(1f), onSettings)
+                        Spacer(Modifier.weight(1f))
                     }
                 }
             }
