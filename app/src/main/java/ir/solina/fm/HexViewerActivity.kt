@@ -67,6 +67,10 @@ class HexViewerActivity : AppCompatActivity() {
             setOnClickListener { showByteEditor() }
         }, LinearLayout.LayoutParams(dp(112), dp(48)))
         root.addView(jumpRow)
+        root.addView(MaterialButton(this).apply {
+            text = "جست‌وجوی دنبالهٔ هگز"
+            setOnClickListener { searchHexSequence() }
+        }, LinearLayout.LayoutParams(-1, dp(44)))
         pageLabel = TextView(this).apply { gravity = Gravity.CENTER; textSize = 12f; setPadding(0, dp(4), 0, dp(4)) }
         root.addView(pageLabel)
         val scroll = ScrollView(this)
@@ -93,6 +97,73 @@ class HexViewerActivity : AppCompatActivity() {
         root.addView(nav)
         setContentView(root)
         renderPage()
+    }
+
+    private fun searchHexSequence() {
+        val input = EditText(this).apply {
+            hint = "بایت‌ها، مانند DE AD BE EF"
+            setSingleLine(true)
+            setText("")
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("جست‌وجوی دنبالهٔ هگز")
+            .setView(input)
+            .setNegativeButton("لغو", null)
+            .setPositiveButton("جست‌وجو") { _, _ ->
+                val cleaned = input.text.toString().replace(Regex("[^0-9a-fA-F]"), "")
+                if (cleaned.isEmpty() || cleaned.length % 2 != 0) {
+                    Toast.makeText(this, "دنبالهٔ هگز نامعتبر است؛ تعداد رقم‌ها باید زوج باشد", Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+                val pattern = try {
+                    ByteArray(cleaned.length / 2) { index ->
+                        cleaned.substring(index * 2, index * 2 + 2).toInt(16).toByte()
+                    }
+                } catch (_: Exception) {
+                    Toast.makeText(this, "دنبالهٔ هگز نامعتبر است", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                Toast.makeText(this, "جست‌وجو در حال انجام است…", Toast.LENGTH_SHORT).show()
+                Thread {
+                    var found = -1L
+                    try {
+                        RandomAccessFile(file, "r").use { raf ->
+                            val buffer = ByteArray(64 * 1024 + pattern.size)
+                            var base = 0L
+                            var carry = 0
+                            while (base < raf.length() && found < 0L) {
+                                val count = raf.read(buffer, carry, minOf(64 * 1024, buffer.size - carry))
+                                if (count <= 0) break
+                                val available = carry + count
+                                var i = 0
+                                while (i <= available - pattern.size) {
+                                    var matches = true
+                                    for (j in pattern.indices) {
+                                        if (buffer[i + j] != pattern[j]) { matches = false; break }
+                                    }
+                                    if (matches) {
+                                        found = base - carry + i
+                                        break
+                                    }
+                                    i++
+                                }
+                                if (found < 0L) {
+                                    carry = minOf(pattern.size - 1, available)
+                                    if (carry > 0) System.arraycopy(buffer, available - carry, buffer, 0, carry)
+                                    base += count
+                                }
+                            }
+                        }
+                    } catch (_: Exception) { found = -1L }
+                    runOnUiThread {
+                        if (found >= 0L) {
+                            offset = found - found % pageBytes
+                            renderPage()
+                            Toast.makeText(this, "دنباله در آدرس 0x${found.toString(16).uppercase(Locale.ROOT)} پیدا شد", Toast.LENGTH_LONG).show()
+                        } else Toast.makeText(this, "دنباله پیدا نشد یا فایل قابل خواندن نیست", Toast.LENGTH_LONG).show()
+                    }
+                }.start()
+            }.show()
     }
 
     private fun showByteEditor() {
