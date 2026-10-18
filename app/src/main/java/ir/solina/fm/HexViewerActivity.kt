@@ -54,7 +54,7 @@ class HexViewerActivity : AppCompatActivity() {
         val jumpRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         offsetInput = EditText(this).apply {
             hint = "جابجایی هگز (مثلاً 1000)"
-            singleLine = true
+            setSingleLine(true)
             setText("0")
         }
         jumpRow.addView(offsetInput, LinearLayout.LayoutParams(0, dp(48), 1f))
