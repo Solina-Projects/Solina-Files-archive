@@ -314,57 +314,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderStorageQuickBar() {
         if (!::storageQuickBar.isInitialized) return
-        // Keep the home screen uncluttered; storage switching remains available
-        // through the "حافظه دستگاه" selector and the storage sheet.
         storageQuickBar.removeAllViews()
+        // Volume selection remains available from the "حافظه دستگاه" button.
+        // Hide the square storage shortcuts and their dropdown arrows on the home screen.
         storageQuickBar.visibility = View.GONE
-        volumes.forEach { volume ->
-            val item = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = android.view.Gravity.CENTER
-                setPadding(dp(8), dp(3), dp(8), dp(2))
-                isClickable = true
-                isFocusable = true
-                background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@MainActivity, R.drawable.item_bg)
-                contentDescription = volume.name
-                setOnClickListener {
-                    currentVol = volume
-                    navigate(volume.dir)
-                    renderStorageQuickBar()
-                }
-            }
-            val icon = ImageView(this).apply {
-                setImageResource(when (volume.kind) {
-                    Kind.INTERNAL -> R.drawable.ic_hard_drive
-                    Kind.SD -> R.drawable.ic_sd_card
-                    Kind.USB -> R.drawable.ic_usb
-                })
-                val tv = android.util.TypedValue()
-                theme.resolveAttribute(com.google.android.material.R.attr.colorPrimary, tv, true)
-                imageTintList = android.content.res.ColorStateList.valueOf(tv.data)
-                contentDescription = volume.name
-            }
-            item.addView(icon, LinearLayout.LayoutParams(dp(27), dp(27)))
-            val label = TextView(this).apply {
-                text = volume.name
-                textSize = 10f
-                maxLines = 1
-                val tv = android.util.TypedValue()
-                theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurfaceVariant, tv, true)
-                setTextColor(tv.data)
-            }
-            item.addView(label, LinearLayout.LayoutParams(-2, dp(17)))
-            item.addView(TextView(this).apply {
-                text = "⌄"
-                textSize = 14f
-                gravity = android.view.Gravity.CENTER
-                val tv = android.util.TypedValue()
-                theme.resolveAttribute(com.google.android.material.R.attr.colorPrimary, tv, true)
-                setTextColor(tv.data)
-            }, LinearLayout.LayoutParams(-1, dp(14)))
-            item.isSelected = currentVol?.dir?.path == volume.dir.path
-            storageQuickBar.addView(item, LinearLayout.LayoutParams(dp(88), dp(66)))
-        }
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
