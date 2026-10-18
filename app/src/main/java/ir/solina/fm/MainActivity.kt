@@ -329,7 +329,14 @@ class MainActivity : AppCompatActivity() {
         }.coerceIn(0, 5))
         val columns = if (multiColumn) multiLayoutColumns(multiPreset) else 1
         gridLayout = multiColumn
-        list.layoutManager = if (columns > 1) GridLayoutManager(this, columns) else LinearLayoutManager(this)
+        list.layoutManager = if (columns > 1) {
+            GridLayoutManager(this, columns).apply {
+                spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                    override fun getSpanSize(position: Int): Int =
+                        if (adapter.getItemViewType(position) == 1) columns else 1
+                }
+            }
+        } else LinearLayoutManager(this)
         layoutModeButton.setIconResource(if (gridLayout) R.drawable.ic_list_view else R.drawable.ic_grid_view)
         layoutModeButton.text = ""
         layoutModeButton.contentDescription = if (gridLayout) "تغییر به چیدمان تک‌ستونه" else "تغییر به چیدمان چندستونه"
