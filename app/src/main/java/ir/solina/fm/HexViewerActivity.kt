@@ -62,6 +62,10 @@ class HexViewerActivity : AppCompatActivity() {
             text = "برو"
             setOnClickListener { jumpToOffset() }
         }, LinearLayout.LayoutParams(dp(76), dp(48)))
+        jumpRow.addView(MaterialButton(this).apply {
+            text = "ویرایش بایت"
+            setOnClickListener { showByteEditor() }
+        }, LinearLayout.LayoutParams(dp(112), dp(48)))
         root.addView(jumpRow)
         pageLabel = TextView(this).apply { gravity = Gravity.CENTER; textSize = 12f; setPadding(0, dp(4), 0, dp(4)) }
         root.addView(pageLabel)
@@ -89,6 +93,59 @@ class HexViewerActivity : AppCompatActivity() {
         root.addView(nav)
         setContentView(root)
         renderPage()
+    }
+
+    private fun showByteEditor() {
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(8), dp(16), dp(4))
+        }
+        val at = EditText(this).apply {
+            hint = "آدرس هگز (مثلاً 10)"
+            setSingleLine(true)
+            setText(offset.toString(16).uppercase(Locale.ROOT))
+        }
+        val value = EditText(this).apply {
+            hint = "مقدار بایت (00 تا FF)"
+            setSingleLine(true)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            setText("00")
+        }
+        form.addView(at)
+        form.addView(value)
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("ویرایش یک بایت")
+            .setMessage("قبل از تغییر، نسخهٔ پشتیبان با پسوند .bak ساخته می‌شود. این عملیات فایل اصلی را تغییر می‌دهد.")
+            .setView(form)
+            .setNegativeButton("لغو", null)
+            .setPositiveButton("ذخیرهٔ بایت") { _, _ ->
+                val position = at.text.toString().trim().removePrefix("0x").removePrefix("0X").toLongOrNull(16)
+                val byte = value.text.toString().trim().removePrefix("0x").removePrefix("0X").toIntOrNull(16)
+                if (position == null || byte == null || byte !in 0..255 || position < 0 || position >= file.length()) {
+                    Toast.makeText(this, "آدرس یا مقدار بایت نامعتبر است", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                Thread {
+                    var error: String? = null
+                    try {
+                        val backup = File(file.parentFile, file.name + ".bak")
+                        if (!backup.exists()) file.copyTo(backup, overwrite = false)
+                        RandomAccessFile(file, "rw").use { raf ->
+                            raf.seek(position)
+                            raf.write(byte)
+                        }
+                    } catch (e: Exception) {
+                        error = e.localizedMessage ?: "نوشتن فایل ناموفق بود"
+                    }
+                    runOnUiThread {
+                        if (error == null) {
+                            offset = position - position % pageBytes
+                            renderPage()
+                            Toast.makeText(this, "بایت ذخیره شد؛ نسخهٔ پشتیبان: ${file.name}.bak", Toast.LENGTH_LONG).show()
+                        } else Toast.makeText(this, "ویرایش ناموفق بود: $error", Toast.LENGTH_LONG).show()
+                    }
+                }.start()
+            }.show()
     }
 
     private fun jumpToOffset() {
