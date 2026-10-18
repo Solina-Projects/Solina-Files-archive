@@ -476,6 +476,9 @@ class DualPaneActivity : AppCompatActivity() {
             labels += "نصب APK"
             labels += "تحلیل APK و DEX"
         }
+        if (single != null && single.isFile && single.extension.equals("pdf", true)) {
+            labels += "مشاهده PDF"
+        }
         if (single != null && single.isFile) {
             labels += "نمایش هگز"
         }
@@ -501,6 +504,9 @@ class DualPaneActivity : AppCompatActivity() {
                     "نصب APK" -> single?.let { installApk(it) }
                     "تحلیل APK و DEX" -> single?.let { apk ->
                         startActivity(Intent(this, ApkToolsActivity::class.java).putExtra("apk_path", apk.absolutePath))
+                    }
+                    "مشاهده PDF" -> single?.let { file ->
+                        startActivity(Intent(this, DocumentViewerActivity::class.java).putExtra("file_path", file.absolutePath))
                     }
                     "نمایش هگز" -> single?.let { file ->
                         startActivity(Intent(this, HexViewerActivity::class.java).putExtra("file_path", file.absolutePath))
@@ -826,6 +832,7 @@ class DualPaneActivity : AppCompatActivity() {
             "apk" -> installApk(file)
             "zip" -> browseArchive(file, paneIndex)
             "rar", "7z" -> startActivity(Intent(this, ArchiveToolsActivity::class.java).putExtra("archive_path", file.absolutePath))
+            "pdf" -> startActivity(Intent(this, DocumentViewerActivity::class.java).putExtra("file_path", file.absolutePath))
             "jpg", "jpeg", "png", "webp", "bmp", "gif" -> viewImage(file)
             "mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi" -> playAudio(file)
             "mp4", "m4v", "3gp", "webm", "mkv", "avi", "mov", "mpeg", "mpg" -> playVideo(file)
