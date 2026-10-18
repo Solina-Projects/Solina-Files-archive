@@ -3,6 +3,7 @@ package ir.solina.fm
 import android.content.Intent
 import android.os.Bundle
 import android.os.Environment
+import android.os.storage.StorageManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
@@ -126,15 +127,41 @@ private fun categoryMatches(file: File, category: String): Boolean {
  * Uses modification time as the available recency signal. Android's ordinary File API
  * does not provide a reliable creation/download timestamp for every file system.
  */
-private fun scanCategoryFiles(category: String): List<File> {
-    val root = Environment.getExternalStorageDirectory()
+private fun scanCategoryFiles(context: android.content.Context, category: String): List<File> {
+    val roots = try {
+        val storageManager = context.getSystemService(StorageManager::class.java)
+        storageManager.storageVolumes.mapNotNull { volume ->
+            val state = volume.state
+            if (state != Environment.MEDIA_MOUNTED && state != Environment.MEDIA_MOUNTED_READ_ONLY) {
+                null
+            } else {
+                volume.directory?.takeIf { it.exists() && it.isDirectory }
+            }
+        }
+    } catch (_: Exception) {
+        emptyList()
+    }.ifEmpty {
+        listOf(Environment.getExternalStorageDirectory())
+    }
+
     val found = ArrayList<File>()
-    val stack = ArrayDeque<Pair<File, Int>>()
-    stack.add(root to 0)
-    var visited = 0
-    val maxEntries = 100_000
-    while (stack.isNotEmpty() && visited < maxEntries) {
-        val (directory, depth) = stack.removeLast()
+    val stack = ArrayDeque<File>()
+    val visitedDirectories = HashSet<String>()
+    roots.forEach { root ->
+        if (root.exists() && root.isDirectory) stack.addLast(root)
+    }
+
+    // Walk every accessible mounted volume without an arbitrary file-count/depth cap.
+    // Canonical-path tracking avoids revisiting the same directory through aliases.
+    while (stack.isNotEmpty()) {
+        val directory = stack.removeLast()
+        val canonicalDirectory = try {
+            directory.canonicalPath
+        } catch (_: Exception) {
+            directory.absolutePath
+        }
+        if (!visitedDirectories.add(canonicalDirectory)) continue
+
         val children = try {
             directory.listFiles()
         } catch (_: SecurityException) {
@@ -144,16 +171,20 @@ private fun scanCategoryFiles(category: String): List<File> {
         } ?: continue
 
         for (child in children) {
-            if (child.name.startsWith(".") || child.name.startsWith(".solina-trash-")) continue
-            visited++
-            if (child.isFile && categoryMatches(child, category)) found.add(child)
-            if (child.isDirectory && depth < 32 && visited < maxEntries) {
-                stack.add(child to depth + 1)
+            if (child.name.startsWith(".solina-trash-")) continue
+            try {
+                if (child.isFile && categoryMatches(child, category)) {
+                    found.add(child)
+                } else if (child.isDirectory) {
+                    stack.addLast(child)
+                }
+            } catch (_: SecurityException) {
+                // A restricted directory must not prevent scanning other accessible folders.
             }
-            if (visited >= maxEntries) break
         }
     }
-    return found.sortedWith(
+
+    return found.distinctBy { it.absolutePath }.sortedWith(
         compareByDescending<File> { it.lastModified() }
             .thenBy { it.name.lowercase(Locale.ROOT) }
     )
@@ -185,7 +216,7 @@ private fun CategoryFilesScreen(
     LaunchedEffect(category, refreshKey, hasAccess) {
         if (hasAccess) {
             loading = true
-            files = withContext(Dispatchers.IO) { scanCategoryFiles(category) }
+            files = withContext(Dispatchers.IO) { scanCategoryFiles(context, category) }
             loading = false
         } else {
             files = emptyList()
