@@ -109,6 +109,7 @@ class MainActivity : AppCompatActivity() {
     private var initialNavigationApplied = false
     private var lockPromptShown = false
     private var pendingRecentOpenPath: String? = null
+    private var activeCategory: String? = null
 
     private val dateFmt: android.icu.text.DateFormat by lazy {
         if (Locale.getDefault().language == "fa") {
@@ -201,6 +202,8 @@ class MainActivity : AppCompatActivity() {
 
         list.adapter = adapter
         applyFileLayout()
+        activeCategory = intent.getStringExtra("file_category")?.lowercase(Locale.ROOT)
+        intent.getStringExtra("search_query")?.let { searchInput.setText(it) }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -435,7 +438,25 @@ class MainActivity : AppCompatActivity() {
         }
         selected.retainAll(allFiles.toSet())
         val query = searchInput.text?.toString()?.trim()?.lowercase(Locale.ROOT).orEmpty()
-        val files = allFiles.filter { query.isEmpty() || it.name.lowercase(Locale.ROOT).contains(query) }
+        val imageTypes = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif", "tif", "tiff", "svg")
+        val videoTypes = setOf("mp4", "mkv", "mov", "webm", "3gp", "avi", "mpeg", "mpg", "m4v")
+        val audioTypes = setOf("mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi", "wma")
+        val documentTypes = setOf("pdf", "doc", "docx", "txt", "rtf", "odt", "xls", "xlsx", "csv", "ppt", "pptx", "md")
+        val archiveTypes = setOf("zip", "7z", "rar", "tar", "gz", "bz2", "xz")
+        val files = allFiles.filter { file ->
+            val matchesQuery = query.isEmpty() || file.name.lowercase(Locale.ROOT).contains(query)
+            val extension = file.extension.lowercase(Locale.ROOT)
+            val matchesCategory = when (activeCategory) {
+                "images" -> file.isFile && extension in imageTypes
+                "videos" -> file.isFile && extension in videoTypes
+                "audio" -> file.isFile && extension in audioTypes
+                "documents" -> file.isFile && extension in documentTypes
+                "apk" -> file.isFile && extension == "apk"
+                "archives" -> file.isFile && extension in archiveTypes
+                else -> true
+            }
+            matchesQuery && matchesCategory
+        }
         adapter.submit(files)
         if (files.isEmpty()) {
             showEmpty(getString(if (raw == null) R.string.cannot_read else R.string.empty_folder), false)
