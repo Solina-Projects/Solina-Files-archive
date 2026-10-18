@@ -375,6 +375,18 @@ class MainActivity : AppCompatActivity() {
         }
 
     private fun requestPermission() {
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("دسترسی به فایل‌های دستگاه")
+            .setMessage(
+                "برای نمایش پوشه‌ها و انجام عملیات مدیریت فایل، Solina به دسترسی حافظه نیاز دارد. " +
+                    "در نسخه‌های جدید Android، فعال‌سازی این مجوز در تنظیمات دستگاه انجام می‌شود."
+            )
+            .setPositiveButton("ادامه") { _, _ -> openStoragePermissionSettings() }
+            .setNegativeButton("انصراف", null)
+            .show()
+    }
+
+    private fun openStoragePermissionSettings() {
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
             val permissions = arrayOf(
                 android.Manifest.permission.READ_EXTERNAL_STORAGE,
