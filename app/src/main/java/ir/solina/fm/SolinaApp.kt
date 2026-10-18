@@ -2,7 +2,6 @@ package ir.solina.fm
 
 import android.app.Application
 import androidx.appcompat.app.AppCompatDelegate
-import com.google.android.material.color.DynamicColors
 
 class SolinaApp : Application() {
     override fun onCreate() {
@@ -12,6 +11,6 @@ class SolinaApp : Application() {
         val mode = getSharedPreferences("solina_preferences", MODE_PRIVATE)
             .getInt("night_mode", AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
         AppCompatDelegate.setDefaultNightMode(mode)
-        DynamicColors.applyToActivitiesIfAvailable(this)
+        // Keep the app's brand palette consistent across native Views and Compose screens.
     }
 }
