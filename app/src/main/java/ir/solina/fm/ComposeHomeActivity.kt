@@ -57,8 +57,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -73,7 +71,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -95,37 +92,7 @@ class ComposeHomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val isDark = (resources.configuration.uiMode and
-                android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
-                android.content.res.Configuration.UI_MODE_NIGHT_YES
-            val scheme = if (isDark) darkColorScheme(
-                primary = colorResource(R.color.solina_primary),
-                onPrimary = colorResource(R.color.solina_on_primary),
-                primaryContainer = colorResource(R.color.solina_primary_container),
-                onPrimaryContainer = colorResource(R.color.solina_on_primary_container),
-                secondary = colorResource(R.color.solina_secondary),
-                onSecondary = colorResource(R.color.solina_on_secondary),
-                background = colorResource(R.color.solina_background),
-                surface = colorResource(R.color.solina_surface),
-                onSurface = colorResource(R.color.solina_on_surface),
-                surfaceVariant = colorResource(R.color.solina_surface_variant),
-                onSurfaceVariant = colorResource(R.color.solina_on_surface_variant),
-                error = colorResource(R.color.solina_error)
-            ) else lightColorScheme(
-                primary = colorResource(R.color.solina_primary),
-                onPrimary = colorResource(R.color.solina_on_primary),
-                primaryContainer = colorResource(R.color.solina_primary_container),
-                onPrimaryContainer = colorResource(R.color.solina_on_primary_container),
-                secondary = colorResource(R.color.solina_secondary),
-                onSecondary = colorResource(R.color.solina_on_secondary),
-                background = colorResource(R.color.solina_background),
-                surface = colorResource(R.color.solina_surface),
-                onSurface = colorResource(R.color.solina_on_surface),
-                surfaceVariant = colorResource(R.color.solina_surface_variant),
-                onSurfaceVariant = colorResource(R.color.solina_on_surface_variant),
-                error = colorResource(R.color.solina_error)
-            )
-            MaterialTheme(colorScheme = scheme) {
+            SolinaComposeTheme {
                 SolinaHomeScreen(
                     permissionRefreshKey = resumeVersion,
                     onBrowse = { openBrowser() },
