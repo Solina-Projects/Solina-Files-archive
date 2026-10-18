@@ -46,3 +46,21 @@ jobs:
           name: SolinaFiles-v1.0-debug
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 14
+
+      - name: Send Telegram Alert on Failure
+        if: ${{ failure() }}
+        uses: appleboy/telegram-action@master
+        continue-on-error: true
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: |
+            🚨 *Solina Files CI Alert: Build Failed*
+            
+            • *Branch:* `${{ github.ref_name }}`
+            • *Commit:* `${{ github.sha }}`
+            • *Author:* ${{ github.actor }}
+            • *Run:* #${{ github.run_number }}
+            
+            [👉 View Workflow Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})

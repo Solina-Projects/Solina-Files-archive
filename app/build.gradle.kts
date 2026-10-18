@@ -62,16 +62,16 @@ android {
 
 dependencies {
     // AndroidX Core & UI
-    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.activity:activity-ktx:1.9.3")
 
     // Kotlin Coroutines & Lifecycle
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.6")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
 
     // Security & Biometric
     implementation("androidx.biometric:biometric:1.1.0")
@@ -84,9 +84,9 @@ dependencies {
 
     // Network Storage Protocols
     implementation("commons-net:commons-net:3.11.1")
-    implementation("com.github.mwiede:jsch:0.2.21")
+    implementation("com.github.mwiede:jsch:0.2.23")
     implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
-    implementation("com.github.lookfirst:sardine:5.12")
+    implementation("com.github.lookfirst:sardine:5.13")
 
     // System Tools & Root / Shizuku
     implementation("dev.rikka.shizuku:api:13.1.5")
