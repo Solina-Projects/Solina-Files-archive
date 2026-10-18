@@ -1,29 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.SolinaFM" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Google Material 3 Expressive Tones -->
         <item name="colorPrimary">@color/solina_primary</item>
         <item name="colorOnPrimary">@color/solina_on_primary</item>
         <item name="colorPrimaryContainer">@color/solina_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/solina_on_primary_container</item>
+
         <item name="colorSecondary">@color/solina_secondary</item>
         <item name="colorOnSecondary">@color/solina_on_secondary</item>
         <item name="colorSecondaryContainer">@color/solina_secondary_container</item>
         <item name="colorOnSecondaryContainer">@color/solina_on_secondary_container</item>
+
         <item name="colorTertiary">@color/solina_tertiary</item>
         <item name="colorOnTertiary">@color/solina_on_tertiary</item>
         <item name="colorTertiaryContainer">@color/solina_tertiary_container</item>
         <item name="colorOnTertiaryContainer">@color/solina_on_tertiary_container</item>
+
         <item name="colorError">@color/solina_error</item>
         <item name="colorSurface">@color/solina_surface</item>
         <item name="colorOnSurface">@color/solina_on_surface</item>
         <item name="colorSurfaceVariant">@color/solina_surface_variant</item>
         <item name="colorOnSurfaceVariant">@color/solina_on_surface_variant</item>
         <item name="colorOutline">@color/solina_outline</item>
+
         <item name="colorSurfaceContainerLowest">@color/solina_surface_container_lowest</item>
         <item name="colorSurfaceContainerLow">@color/solina_surface_container_low</item>
         <item name="colorSurfaceContainer">@color/solina_surface_container</item>
         <item name="colorSurfaceContainerHigh">@color/solina_surface_container_high</item>
         <item name="colorSurfaceContainerHighest">@color/solina_surface_container_highest</item>
+
+        <!-- Expressive Corner Radii and Shape Appearances -->
+        <item name="shapeAppearanceCornerSmall">@style/ShapeAppearance.Material3.Corner.Small</item>
+        <item name="shapeAppearanceCornerMedium">@style/ShapeAppearance.Material3.Corner.Medium</item>
+        <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.Material3.Corner.Large</item>
+        <item name="shapeAppearanceCornerExtraLarge">@style/ShapeAppearance.Material3.Corner.ExtraLarge</item>
+
         <item name="android:colorAccent">@color/solina_primary</item>
         <item name="android:windowBackground">?attr/colorSurface</item>
         <item name="android:statusBarColor">?attr/colorSurface</item>
