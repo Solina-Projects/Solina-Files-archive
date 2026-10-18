@@ -72,18 +72,21 @@ class DualPaneActivity : AppCompatActivity() {
         if (savedNightMode != 0) AppCompatDelegate.setDefaultNightMode(savedNightMode)
         super.onCreate(savedInstanceState)
         val base = Environment.getExternalStorageDirectory()
-        val screen = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(4), 0, dp(4), dp(4)) }
+        val surfaceColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorSurface, it, true) }.data
+        val onSurfaceColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurface, it, true) }.data
+        val surfaceVariantColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorSurfaceVariant, it, true) }.data
+        val screen = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(4), 0, dp(4), dp(4)); setBackgroundColor(surfaceColor) }
         val navigation = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_LTR }
-        navBack = MaterialButton(this).apply { text = "‹"; textSize = 26f; minWidth = dp(40); setPadding(0, 0, 0, 0); setOnClickListener { navigateHistory(activePane, true) } }
-        navForward = MaterialButton(this).apply { text = "›"; textSize = 26f; minWidth = dp(40); setPadding(0, 0, 0, 0); setOnClickListener { navigateHistory(activePane, false) } }
-        pathTitle = TextView(this).apply { textSize = 13f; maxLines = 1; setPadding(dp(6), dp(4), dp(6), dp(4)) }
-        searchInput = EditText(this).apply { hint = "جست‌وجوی فایل و پوشه"; setSingleLine(true); textSize = 13f; setPadding(dp(8), 0, dp(8), 0) }
+        navBack = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_arrow_back); contentDescription = "بازگشت"; minWidth = dp(40); setPadding(0, 0, 0, 0); setOnClickListener { navigateHistory(activePane, true) } }
+        navForward = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_arrow_forward); contentDescription = "جلو"; minWidth = dp(40); setPadding(0, 0, 0, 0); setOnClickListener { navigateHistory(activePane, false) } }
+        pathTitle = TextView(this).apply { textSize = 13f; maxLines = 1; setPadding(dp(6), dp(4), dp(6), dp(4)); setTextColor(onSurfaceColor) }
+        searchInput = EditText(this).apply { hint = "جست‌وجوی فایل و پوشه"; setSingleLine(true); textSize = 13f; setPadding(dp(8), 0, dp(8), 0); setTextColor(onSurfaceColor); setHintTextColor(surfaceVariantColor); background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@DualPaneActivity, R.drawable.search_field_bg) }
         navigation.addView(navBack, LinearLayout.LayoutParams(dp(40), dp(48)))
         navigation.addView(navForward, LinearLayout.LayoutParams(dp(40), dp(48)))
-        bookmarkButton = MaterialButton(this).apply { text = "☆"; minWidth = dp(34); setPadding(0, 0, 0, 0); contentDescription = "نشانک پوشه"; setOnClickListener { toggleBookmark() }; setOnLongClickListener { showBookmarks(); true } }
-        sortButton = MaterialButton(this).apply { text = "☷"; minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "مرتب‌سازی و فیلتر"; setOnClickListener { showSortOptions(activePane) }; setOnLongClickListener { showDisplaySettings(); true } }
-        layoutButton = MaterialButton(this).apply { text = "▥"; minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "تغییر حالت تقسیم صفحه"; setOnClickListener { toggleMode() } }
-        overflowButton = MaterialButton(this).apply { text = "⋮"; minWidth = dp(34); setPadding(0, 0, 0, 0); textSize = 22f; contentDescription = "گزینه‌های بیشتر"; setOnClickListener { showTopMenu(this) } }
+        bookmarkButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_pin); minWidth = dp(34); setPadding(0, 0, 0, 0); contentDescription = "نشانک پوشه"; setOnClickListener { toggleBookmark() }; setOnLongClickListener { showBookmarks(); true } }
+        sortButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_sort); minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "مرتب‌سازی و فیلتر"; setOnClickListener { showSortOptions(activePane) }; setOnLongClickListener { showDisplaySettings(); true } }
+        layoutButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_splitscreen); minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "تغییر حالت تقسیم صفحه"; setOnClickListener { toggleMode() } }
+        overflowButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_more_vert); minWidth = dp(34); setPadding(0, 0, 0, 0); contentDescription = "گزینه‌های بیشتر"; setOnClickListener { showTopMenu(this) } }
         navigation.addView(pathTitle, LinearLayout.LayoutParams(0, dp(48), 1f))
         navigation.addView(searchInput, LinearLayout.LayoutParams(0, dp(42), 1f))
         navigation.addView(sortButton, LinearLayout.LayoutParams(dp(36), dp(42)))
@@ -231,7 +234,7 @@ class DualPaneActivity : AppCompatActivity() {
         searchInput.setTextIfDifferent(p.query)
         val bookmarks = getBookmarks()
         bookmarkButton.text = if (p.current.absolutePath in bookmarks) "★" else "☆"
-        layoutButton.text = if (mode == LayoutMode.HORIZONTAL) "▥" else "▤"
+        layoutButton.setIconResource(if (mode == LayoutMode.HORIZONTAL) R.drawable.ic_splitscreen else R.drawable.ic_grid_view)
         layoutButton.contentDescription = if (mode == LayoutMode.HORIZONTAL) "تقسیم عمودی پنل‌ها" else "تقسیم افقی پنل‌ها"
         updateSelectionUi()
     }
@@ -572,15 +575,20 @@ class DualPaneActivity : AppCompatActivity() {
 
     private fun showTopMenu(anchor: View) {
         android.widget.PopupMenu(this, anchor).apply {
-            menu.add("نشانک این پوشه").setOnMenuItemClickListener { toggleBookmark(); true }
-            menu.add("پوشه‌های نشانک‌شده").setOnMenuItemClickListener { showBookmarks(); true }
-            menu.add("نمایش فایل‌ها").setOnMenuItemClickListener { showDisplaySettings(); true }
-            menu.add("تعداد ستون‌ها").setOnMenuItemClickListener { showLayoutSettings(); true }
-            menu.add("تم روشن/تیره").setOnMenuItemClickListener { toggleTheme(); true }
-            menu.add("ابزارها و قابلیت‌های بیشتر").setOnMenuItemClickListener {
+            menu.add("نشانک این پوشه").setIcon(R.drawable.ic_pin).setOnMenuItemClickListener { toggleBookmark(); true }
+            menu.add("پوشه‌های نشانک‌شده").setIcon(R.drawable.ic_folder).setOnMenuItemClickListener { showBookmarks(); true }
+            menu.add("نمایش فایل‌ها").setIcon(R.drawable.ic_list_view).setOnMenuItemClickListener { showDisplaySettings(); true }
+            menu.add("تعداد ستون‌ها").setIcon(R.drawable.ic_grid_view).setOnMenuItemClickListener { showLayoutSettings(); true }
+            menu.add("تم روشن/تیره").setIcon(R.drawable.ic_menu).setOnMenuItemClickListener { toggleTheme(); true }
+            menu.add("ابزارها و قابلیت‌های بیشتر").setIcon(R.drawable.ic_clean).setOnMenuItemClickListener {
                 showIntegratedTools()
                 true
             }
+            try {
+                val field = javaClass.getDeclaredField("mPopup")
+                field.isAccessible = true
+                (field.get(this) as? androidx.appcompat.view.menu.MenuPopupHelper)?.setForceShowIcon(true)
+            } catch (_: Exception) { }
             show()
         }
     }
