@@ -287,7 +287,9 @@ private fun SolinaHomeScreen(
                 }
                 item {
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            if (hasAccess) onBrowse() else onRequestPermission()
+                        },
                         shape = RoundedCornerShape(26.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
@@ -304,7 +306,9 @@ private fun SolinaHomeScreen(
                                     Text(if (hasAccess) "وضعیت فضای ذخیره‌سازی" else "برای مشاهده فایل‌ها دسترسی لازم است",
                                         color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                                 }
-                                TextButton(onClick = onBrowse) { Text("باز کردن") }
+                                TextButton(onClick = {
+                                    if (hasAccess) onBrowse() else onRequestPermission()
+                                }) { Text(if (hasAccess) "باز کردن" else "دسترسی") }
                             }
                             if (total > 0L) {
                                 LinearProgressIndicator(
