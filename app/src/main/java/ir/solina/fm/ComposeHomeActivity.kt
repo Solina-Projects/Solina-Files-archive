@@ -421,7 +421,7 @@ private fun SolinaHomeScreen(
                 }
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("دسترسی سریع", fontWeight = FontWeight.Bold, fontSize = 18.sp,
+                        Text("آخرین‌ها", fontWeight = FontWeight.Bold, fontSize = 18.sp,
                             modifier = Modifier.weight(1f))
                         TextButton(onClick = { recentFiles = scanHomeFiles() }) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(17.dp))
