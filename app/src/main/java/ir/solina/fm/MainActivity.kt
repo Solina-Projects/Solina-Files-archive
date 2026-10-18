@@ -211,25 +211,14 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        findViewById<com.google.android.material.bottomnavigation.BottomNavigationView?>(R.id.bottomNav)?.setOnItemSelectedListener { item ->
-            when (item.itemId) {
-                R.id.nav_browse -> true
-                R.id.nav_clean -> {
-                    showCleanDialog()
-                    false
-                }
-                R.id.nav_vault -> {
-                    startActivity(Intent(this, VaultActivity::class.java))
-                    false
-                }
-                R.id.nav_share -> {
-                    startActivity(Intent(this, WifiTransferActivity::class.java))
-                    false
-                }
-                else -> false
-            }
+        if (intent.getBooleanExtra("request_storage_permission", false)) {
+            intent.removeExtra("request_storage_permission")
+            if (!hasPermission()) window.decorView.post { requestPermission() }
         }
-        if (!hasPermission()) requestPermission()
+        if (intent.getBooleanExtra("open_clean_tools", false)) {
+            intent.removeExtra("open_clean_tools")
+            window.decorView.post { showCleanDialog() }
+        }
     }
 
     override fun onResume() {
@@ -376,9 +365,19 @@ class MainActivity : AppCompatActivity() {
 
     // ---------- permission ----------
 
-    private fun hasPermission(): Boolean = Environment.isExternalStorageManager()
+    private fun hasPermission(): Boolean =
+        android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R ||
+            Environment.isExternalStorageManager()
 
     private fun requestPermission() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+            val permissions = arrayOf(
+                android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+            )
+            androidx.core.app.ActivityCompat.requestPermissions(this, permissions, 4102)
+            return
+        }
         try {
             startActivity(
                 Intent(
@@ -386,8 +385,12 @@ class MainActivity : AppCompatActivity() {
                     Uri.parse("package:$packageName")
                 )
             )
-        } catch (e: Exception) {
-            startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+        } catch (_: Exception) {
+            try {
+                startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+            } catch (_: Exception) {
+                toast("تنظیمات دسترسی حافظه در این دستگاه در دسترس نیست")
+            }
         }
     }
 
