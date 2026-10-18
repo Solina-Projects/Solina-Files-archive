@@ -496,7 +496,9 @@ class DualPaneActivity : AppCompatActivity() {
                         startActivity(Intent(this, ArchiveToolsActivity::class.java).putExtra("archive_path", it.absolutePath))
                     }
                     "نصب APK" -> single?.let { installApk(it) }
-                    "تحلیل APK و DEX" -> startActivity(Intent(this, ApkToolsActivity::class.java))
+                    "تحلیل APK و DEX" -> single?.let { apk ->
+                        startActivity(Intent(this, ApkToolsActivity::class.java).putExtra("apk_path", apk.absolutePath))
+                    }
                 }
             }
             .setNegativeButton("بستن", null)
