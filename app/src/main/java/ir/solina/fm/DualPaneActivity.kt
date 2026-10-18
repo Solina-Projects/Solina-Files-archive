@@ -1127,27 +1127,46 @@ class DualPaneActivity : AppCompatActivity() {
     }
 
     private fun playVideo(file: File) {
-        try {
-            val video = VideoView(this)
-            video.setVideoPath(file.absolutePath)
-            val play = Button(this).apply { text = "پخش / توقف" }
-            val layout = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(8), dp(8), dp(8), dp(8))
-                addView(video, LinearLayout.LayoutParams(-1, dp(260)))
-                addView(play)
+        if (!file.isFile || !file.canRead()) {
+            toast("فایل ویدئویی قابل خواندن نیست")
+            return
+        }
+        val exoPlayer = try {
+            androidx.media3.exoplayer.ExoPlayer.Builder(this).build()
+        } catch (_: Exception) {
+            toast("راه‌اندازی موتور پخش ویدئو ناموفق بود")
+            return
+        }
+        val playerView = androidx.media3.ui.PlayerView(this).apply {
+            player = exoPlayer
+            useController = true
+            setShowBuffering(androidx.media3.ui.PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+        }
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            addView(playerView, LinearLayout.LayoutParams(-1, dp(280)))
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(file.name)
+            .setView(layout)
+            .setNegativeButton("بستن", null)
+            .create()
+        exoPlayer.setMediaItem(androidx.media3.common.MediaItem.fromUri(Uri.fromFile(file)))
+        exoPlayer.addListener(object : androidx.media3.common.Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                if (dialog.isShowing) toast("پخش ویدئو ناموفق بود: " + (error.errorCodeName ?: "قالب پشتیبانی‌نشده"))
             }
-            val dialog = AlertDialog.Builder(this).setTitle(file.name).setView(layout)
-                .setNegativeButton("بستن", null).create()
-            video.setOnPreparedListener { video.start() }
-            video.setOnErrorListener { _, _, _ -> toast("این قالب ویدئویی پشتیبانی نمی‌شود"); true }
-            play.setOnClickListener {
-                if (video.isPlaying) { video.pause(); play.text = "ادامه پخش" }
-                else { video.start(); play.text = "توقف" }
-            }
-            dialog.setOnDismissListener { video.stopPlayback() }
-            dialog.show()
-        } catch (_: Exception) { toast("پخش این ویدئو ممکن نیست؛ قالب یا سلامت فایل را بررسی کنید") }
+        })
+        dialog.setOnShowListener {
+            exoPlayer.prepare()
+            exoPlayer.play()
+        }
+        dialog.setOnDismissListener {
+            playerView.player = null
+            exoPlayer.release()
+        }
+        dialog.show()
     }
 
     private fun openExternal(file: File) {
