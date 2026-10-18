@@ -75,11 +75,16 @@ class DualPaneActivity : AppCompatActivity() {
         val onSurfaceColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurface, it, true) }.data
         val surfaceVariantColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorSurfaceVariant, it, true) }.data
         val screen = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(4), 0, dp(4), dp(4)); setBackgroundColor(surfaceColor) }
-        val navigation = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_LTR }
+        val navigation = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            setPadding(dp(2), 0, dp(2), 0)
+        }
         searchIconButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             setIconResource(android.R.drawable.ic_menu_search)
             contentDescription = "جست‌وجو"
-            minWidth = dp(36)
+            minWidth = dp(34)
             setPadding(0, 0, 0, 0)
             setOnClickListener {
                 searchInput.requestFocus()
@@ -87,17 +92,26 @@ class DualPaneActivity : AppCompatActivity() {
                 imm.showSoftInput(searchInput, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
             }
         }
-        searchInput = EditText(this).apply { hint = "جست‌وجوی فایل و پوشه"; setSingleLine(true); textSize = 13f; setPadding(dp(8), 0, dp(8), 0); setTextColor(onSurfaceColor); setHintTextColor(surfaceVariantColor); background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@DualPaneActivity, R.drawable.search_field_bg) }
-        navigation.addView(searchIconButton, LinearLayout.LayoutParams(dp(36), dp(42)))
+        searchInput = EditText(this).apply {
+            hint = "جست‌وجوی فایل و پوشه"
+            setSingleLine(true)
+            textSize = 13f
+            setPadding(dp(8), 0, dp(8), 0)
+            setTextColor(onSurfaceColor)
+            setHintTextColor(surfaceVariantColor)
+            background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@DualPaneActivity, R.drawable.search_field_bg)
+            contentDescription = "جست‌وجوی فایل و پوشه"
+        }
+        navigation.addView(searchIconButton, LinearLayout.LayoutParams(dp(34), dp(38)))
         bookmarkButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_pin); minWidth = dp(34); setPadding(0, 0, 0, 0); contentDescription = "نشانک پوشه"; setOnClickListener { toggleBookmark() }; setOnLongClickListener { showBookmarks(); true } }
         sortButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_sort); minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "مرتب‌سازی و فیلتر"; setOnClickListener { showSortOptions(activePane) }; setOnLongClickListener { showDisplaySettings(); true } }
         layoutButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_splitscreen); minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "تغییر حالت تقسیم صفحه"; setOnClickListener { toggleMode() } }
         overflowButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_more_vert); minWidth = dp(34); setPadding(0, 0, 0, 0); contentDescription = "گزینه‌های بیشتر"; setOnClickListener { showTopMenu(this) } }
-        navigation.addView(searchInput, LinearLayout.LayoutParams(0, dp(42), 1f))
-        navigation.addView(sortButton, LinearLayout.LayoutParams(dp(36), dp(42)))
-        navigation.addView(layoutButton, LinearLayout.LayoutParams(dp(36), dp(42)))
-        navigation.addView(overflowButton, LinearLayout.LayoutParams(dp(34), dp(42)))
-        screen.addView(navigation, LinearLayout.LayoutParams(-1, dp(52)))
+        navigation.addView(searchInput, LinearLayout.LayoutParams(0, dp(38), 1f))
+        navigation.addView(sortButton, LinearLayout.LayoutParams(dp(42), dp(40)))
+        navigation.addView(layoutButton, LinearLayout.LayoutParams(dp(42), dp(40)))
+        navigation.addView(overflowButton, LinearLayout.LayoutParams(dp(42), dp(40)))
+        screen.addView(navigation, LinearLayout.LayoutParams(-1, dp(44)))
         searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
@@ -115,14 +129,14 @@ class DualPaneActivity : AppCompatActivity() {
         button(selectionActions, "استخراج") { extractSelectedArchives() }
         button(selectionActions, "بیشتر") { showSelectedTools() }
         selectionScroll.addView(selectionActions)
-        screen.addView(selectionScroll, LinearLayout.LayoutParams(-1, dp(48)))
+        screen.addView(selectionScroll, LinearLayout.LayoutParams(-1, dp(46)))
         panesHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         screen.addView(panesHost, LinearLayout.LayoutParams(-1, 0, 1f))
         bottomActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; visibility = View.GONE }
         button(bottomActions, "کپی") { transfer(false) }
         button(bottomActions, "انتقال") { transfer(true) }
         button(bottomActions, "حذف") { deleteSelected(activePane) }
-        screen.addView(bottomActions, LinearLayout.LayoutParams(-1, dp(52)))
+        screen.addView(bottomActions, LinearLayout.LayoutParams(-1, dp(48)))
         setContentView(screen)
         left = createPane(base, 0)
         right = createPane(base, 1)
@@ -1294,10 +1308,36 @@ class DualPaneActivity : AppCompatActivity() {
     }
 
     private fun button(parent: LinearLayout, text: String, action: () -> Unit) {
-        val b = MaterialButton(this).apply { this.text = text; isAllCaps = false; setOnClickListener { action() } }
-        val params = if (::selectionActions.isInitialized && parent === selectionActions)
-            LinearLayout.LayoutParams(-2, -1)
-        else LinearLayout.LayoutParams(0, -1, 1f)
+        val iconRes = when (text) {
+            "انتخاب همه" -> R.drawable.ic_select_all
+            "برداشتن انتخاب" -> R.drawable.ic_close
+            "✎ A تغییر نام" -> R.drawable.ic_edit
+            "فشرده‌سازی" -> R.drawable.ic_archive
+            "استخراج" -> R.drawable.ic_unarchive
+            "بیشتر" -> R.drawable.ic_more_vert
+            "کپی" -> R.drawable.ic_content_copy
+            "انتقال" -> R.drawable.ic_content_cut
+            "حذف" -> R.drawable.ic_delete
+            else -> R.drawable.ic_file
+        }
+        val b = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            this.text = ""
+            isAllCaps = false
+            setIconResource(iconRes)
+            iconSize = dp(25)
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            insetTop = 0
+            insetBottom = 0
+            minWidth = dp(44)
+            minimumWidth = dp(44)
+            setPadding(dp(4), 0, dp(4), 0)
+            contentDescription = text
+            tooltipText = text
+            setOnClickListener { action() }
+        }
+        val params = if (parent === selectionActions)
+            LinearLayout.LayoutParams(dp(48), dp(44))
+        else LinearLayout.LayoutParams(0, dp(48), 1f)
         parent.addView(b, params)
     }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
