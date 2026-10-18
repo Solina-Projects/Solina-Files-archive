@@ -955,7 +955,7 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-    private fun showCleanDialog() {
+        private fun showCleanDialog() {
         val totalFreeBytes = currentVol.dir.freeSpace
         val freeGb = String.format(java.util.Locale.US, "%.1f", totalFreeBytes / (1024.0 * 1024.0 * 1024.0))
         com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
@@ -963,12 +963,12 @@ class MainActivity : AppCompatActivity() {
             .setMessage("فضای آزاد فعلی:  گیگابایت
 
 آیا مایلید کش موقت و فایل‌های زائد برنامه‌ها به صورت خودکار پاکسازی شوند؟")
-            .setPositiveButton("پاکسازی سریع") { _, _ ->
+            .setPositiveButton("پاکسازی سریع", android.content.DialogInterface.OnClickListener { _, _ ->
                 cacheDir.deleteRecursively()
                 externalCacheDir?.deleteRecursively()
                 toast("حافظه موقت با موفقیت پاکسازی شد")
                 refresh()
-            }
+            })
             .setNegativeButton("انصراف", null)
             .show()
     }
