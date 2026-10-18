@@ -36,12 +36,7 @@ class FileListAdapter(
         fun bind(file: File) {
             name.text = file.name
             
-            val iconRes = if (file.isDirectory) {
-                R.drawable.ic_folder
-            } else {
-                FileTypeVisuals.getIconForExtension(file.extension)
-            }
-            icon.setImageResource(iconRes)
+            FileTypeVisuals.applyTo(icon, file)
 
             val dateStr = formatDate(file.lastModified())
             info.text = if (file.isDirectory) {
