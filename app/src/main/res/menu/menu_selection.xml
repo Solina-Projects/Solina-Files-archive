@@ -24,7 +24,6 @@
     <item
         android:id="@+id/action_extract"
         android:icon="@drawable/ic_unarchive"
-        android:icon="@drawable/ic_unarchive"
         android:title="استخراج"
         android:visible="false"
         app:showAsAction="always" />
