@@ -7,6 +7,7 @@ import android.os.StatFs
 import android.text.format.Formatter
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -64,6 +65,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -84,6 +86,13 @@ import java.io.File
 import java.util.Locale
 
 class ComposeHomeActivity : ComponentActivity() {
+    private var resumeVersion by mutableIntStateOf(0)
+
+    override fun onResume() {
+        super.onResume()
+        resumeVersion++
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -119,6 +128,7 @@ class ComposeHomeActivity : ComponentActivity() {
             )
             MaterialTheme(colorScheme = scheme) {
                 SolinaHomeScreen(
+                    permissionRefreshKey = resumeVersion,
                     onBrowse = { openBrowser() },
                     onRequestPermission = { requestStoragePermission() },
                     onCleanTools = { openCleanTools() },
@@ -195,6 +205,7 @@ private fun formatSize(context: android.content.Context, bytes: Long): String =
 
 @Composable
 private fun SolinaHomeScreen(
+    permissionRefreshKey: Int,
     onBrowse: () -> Unit,
     onRequestPermission: () -> Unit,
     onCleanTools: () -> Unit,
@@ -208,8 +219,18 @@ private fun SolinaHomeScreen(
 ) {
     val context = LocalContext.current
     var search by remember { mutableStateOf("") }
-    var recentFiles by remember { mutableStateOf(scanHomeFiles()) }
-    val hasAccess = Environment.isExternalStorageManager()
+    val hasAccess = remember(permissionRefreshKey) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+    }
+    var recentFiles by remember(permissionRefreshKey) {
+        mutableStateOf(if (hasAccess) scanHomeFiles() else emptyList())
+    }
     val root = Environment.getExternalStorageDirectory()
     val (total, free) = remember {
         try {
