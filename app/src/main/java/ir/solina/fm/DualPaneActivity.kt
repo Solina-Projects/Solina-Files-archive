@@ -47,9 +47,7 @@ class DualPaneActivity : AppCompatActivity() {
         var sortMode: SortMode = SortMode.NAME
     )
     private lateinit var panesHost: LinearLayout
-    private lateinit var pathTitle: TextView
-    private lateinit var navBack: MaterialButton
-    private lateinit var navForward: MaterialButton
+    private lateinit var searchIconButton: MaterialButton
     private lateinit var searchInput: EditText
     private lateinit var bookmarkButton: MaterialButton
     private lateinit var sortButton: MaterialButton
@@ -78,17 +76,23 @@ class DualPaneActivity : AppCompatActivity() {
         val surfaceVariantColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorSurfaceVariant, it, true) }.data
         val screen = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(4), 0, dp(4), dp(4)); setBackgroundColor(surfaceColor) }
         val navigation = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_LTR }
-        navBack = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_arrow_back); contentDescription = "بازگشت"; minWidth = dp(40); setPadding(0, 0, 0, 0); setOnClickListener { navigateHistory(activePane, true) } }
-        navForward = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_arrow_forward); contentDescription = "جلو"; minWidth = dp(40); setPadding(0, 0, 0, 0); setOnClickListener { navigateHistory(activePane, false) } }
-        pathTitle = TextView(this).apply { textSize = 13f; maxLines = 1; setPadding(dp(6), dp(4), dp(6), dp(4)); setTextColor(onSurfaceColor) }
+        searchIconButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            setIconResource(android.R.drawable.ic_menu_search)
+            contentDescription = "جست‌وجو"
+            minWidth = dp(36)
+            setPadding(0, 0, 0, 0)
+            setOnClickListener {
+                searchInput.requestFocus()
+                val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                imm.showSoftInput(searchInput, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+            }
+        }
         searchInput = EditText(this).apply { hint = "جست‌وجوی فایل و پوشه"; setSingleLine(true); textSize = 13f; setPadding(dp(8), 0, dp(8), 0); setTextColor(onSurfaceColor); setHintTextColor(surfaceVariantColor); background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@DualPaneActivity, R.drawable.search_field_bg) }
-        navigation.addView(navBack, LinearLayout.LayoutParams(dp(40), dp(48)))
-        navigation.addView(navForward, LinearLayout.LayoutParams(dp(40), dp(48)))
+        navigation.addView(searchIconButton, LinearLayout.LayoutParams(dp(36), dp(42)))
         bookmarkButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_pin); minWidth = dp(34); setPadding(0, 0, 0, 0); contentDescription = "نشانک پوشه"; setOnClickListener { toggleBookmark() }; setOnLongClickListener { showBookmarks(); true } }
         sortButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_sort); minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "مرتب‌سازی و فیلتر"; setOnClickListener { showSortOptions(activePane) }; setOnLongClickListener { showDisplaySettings(); true } }
         layoutButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_splitscreen); minWidth = dp(36); setPadding(0, 0, 0, 0); contentDescription = "تغییر حالت تقسیم صفحه"; setOnClickListener { toggleMode() } }
         overflowButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_more_vert); minWidth = dp(34); setPadding(0, 0, 0, 0); contentDescription = "گزینه‌های بیشتر"; setOnClickListener { showTopMenu(this) } }
-        navigation.addView(pathTitle, LinearLayout.LayoutParams(0, dp(48), 1f))
         navigation.addView(searchInput, LinearLayout.LayoutParams(0, dp(42), 1f))
         navigation.addView(sortButton, LinearLayout.LayoutParams(dp(36), dp(42)))
         navigation.addView(layoutButton, LinearLayout.LayoutParams(dp(36), dp(42)))
@@ -134,7 +138,7 @@ class DualPaneActivity : AppCompatActivity() {
         }
         val path = TextView(this).apply {
             textSize = 12f
-            maxLines = 2
+            maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
             setPadding(dp(6), dp(6), dp(6), dp(6))
             setOnClickListener {
@@ -199,7 +203,7 @@ class DualPaneActivity : AppCompatActivity() {
 
     private fun refresh(index: Int) {
         val p = pane(index)
-        p.path.text = (if (index == 0) "چپ: " else "راست: ") + p.current.absolutePath
+        p.path.text = (if (index == 0) "چپ • " else "راست • ") + p.current.name.ifBlank { "/" }
         val unsorted = p.current.listFiles()
             ?.filter { (it.isFile || it.isDirectory) && (showHiddenFiles || !it.name.startsWith(".")) }
             ?: emptyList()
@@ -225,13 +229,10 @@ class DualPaneActivity : AppCompatActivity() {
                     resolveThemeColor(com.google.android.material.R.attr.colorSecondaryContainer), 38
                 ) else 0x00000000
             )
-            pane.path.text = (if (index == 0) "پنل چپ  •  " else "پنل راست  •  ") + pane.current.absolutePath
+            pane.path.text = (if (index == 0) "چپ • " else "راست • ") + pane.current.name.ifBlank { "/" }
+            pane.path.contentDescription = pane.current.absolutePath
         }
         val p = pane(activePane)
-        pathTitle.text = p.current.name.ifBlank { p.current.absolutePath }
-        pathTitle.contentDescription = p.current.absolutePath
-        navBack.isEnabled = p.backHistory.isNotEmpty() || p.current.parentFile != null
-        navForward.isEnabled = p.forwardHistory.isNotEmpty()
         searchInput.setTextIfDifferent(p.query)
         val bookmarks = getBookmarks()
         bookmarkButton.text = if (p.current.absolutePath in bookmarks) "★" else "☆"
@@ -1322,7 +1323,8 @@ class DualPaneActivity : AppCompatActivity() {
                 setPadding(dp(8), dp(7), dp(8), dp(7))
                 isClickable = true
                 isFocusable = true
-                background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@DualPaneActivity, R.drawable.item_bg)
+                background = if (mode == LayoutMode.VERTICAL) null else
+                    androidx.appcompat.content.res.AppCompatResources.getDrawable(this@DualPaneActivity, R.drawable.item_bg)
             }
             val check = CheckBox(this@DualPaneActivity)
             val icon = ImageView(this@DualPaneActivity).apply {
@@ -1331,6 +1333,11 @@ class DualPaneActivity : AppCompatActivity() {
                 val tv = android.util.TypedValue()
                 theme.resolveAttribute(com.google.android.material.R.attr.colorPrimary, tv, true)
                 imageTintList = android.content.res.ColorStateList.valueOf(tv.data)
+                background = if (mode == LayoutMode.VERTICAL) android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    cornerRadius = dp(8).toFloat()
+                    setColor(resolveThemeColor(com.google.android.material.R.attr.colorSurfaceVariant))
+                } else null
             }
             val textBlock = LinearLayout(this@DualPaneActivity).apply {
                 orientation = LinearLayout.VERTICAL
