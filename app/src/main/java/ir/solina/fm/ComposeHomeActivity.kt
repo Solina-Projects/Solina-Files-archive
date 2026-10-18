@@ -462,7 +462,9 @@ private fun SolinaHomeScreen(
                     item { Text("فایل اخیری پیدا نشد.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp) }
                 } else {
                     items(recentFiles, key = { it.absolutePath }) { file ->
-                        RecentFileRow(file = file, onClick = { onOpenFile(file.absolutePath) })
+                        RecentFileRow(file = file, onClick = {
+                            if (file.isDirectory) onOpenFolder(file.absolutePath, null) else onOpenFile(file.absolutePath)
+                        })
                     }
                 }
             }
