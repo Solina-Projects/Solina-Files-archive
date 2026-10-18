@@ -799,6 +799,7 @@ class MainActivity : AppCompatActivity() {
         val toolsList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         toolsScroll.addView(toolsList, ViewGroup.LayoutParams(-1, -2))
         val toolItems = listOf(
+            Triple(R.id.action_dual_pane, "مدیریت دوپنجره‌ای", R.drawable.ic_splitscreen),
             Triple(R.id.action_storage_analysis, "تحلیل فضای پوشه", R.drawable.ic_hard_drive),
             Triple(R.id.action_vault, "خزانه رمزگذاری‌شده", R.drawable.ic_lock),
             Triple(R.id.action_root, "مدیریت فایل با دسترسی ریشه", R.drawable.ic_phone),
