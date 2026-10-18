@@ -587,6 +587,7 @@ class MainActivity : AppCompatActivity() {
             R.id.action_root -> startActivity(Intent(this, RootExplorerActivity::class.java))
             R.id.action_network -> startActivity(Intent(this, NetworkStorageActivity::class.java))
             R.id.action_apk_tools -> startActivity(Intent(this, ApkToolsActivity::class.java))
+            R.id.action_installed_apps -> startActivity(Intent(this, InstalledAppsActivity::class.java))
             R.id.action_hex_editor -> selected.firstOrNull()?.let { file ->
                 startActivity(Intent(this, DocumentViewerActivity::class.java).putExtra("file_path", file.absolutePath))
             }
@@ -956,13 +957,11 @@ class MainActivity : AppCompatActivity() {
 
 
         private fun showCleanDialog() {
-        val totalFreeBytes = currentVol.dir.freeSpace
+        val totalFreeBytes = (currentVol?.dir ?: current).freeSpace
         val freeGb = String.format(java.util.Locale.US, "%.1f", totalFreeBytes / (1024.0 * 1024.0 * 1024.0))
         MaterialAlertDialogBuilder(this)
             .setTitle("پاکسازی هوشمند حافظه (Clean)")
-            .setMessage("فضای آزاد فعلی: " + freeGb + " گیگابایت
-
-آیا مایلید کش موقت و فایل‌های زائد برنامه‌ها به صورت خودکار پاکسازی شوند؟")
+            .setMessage("فضای آزاد فعلی: $freeGb گیگابایت\n\nآیا مایلید کش موقت و فایل‌های زائد برنامه‌ها به صورت خودکار پاکسازی شوند؟")
             .setPositiveButton("پاکسازی سریع") { _: android.content.DialogInterface, _: Int ->
                 cacheDir.deleteRecursively()
                 externalCacheDir?.deleteRecursively()
