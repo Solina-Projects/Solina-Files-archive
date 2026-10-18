@@ -484,11 +484,11 @@ class MainActivity : AppCompatActivity() {
         val unsorted = (raw ?: emptyArray()).filter {
             !it.name.startsWith(".solina-trash-") && (showHidden || !it.name.startsWith("."))
         }
-        val activityCache = HashMap<String, Long>()
-        val scanBudget = intArrayOf(20000)
+        // Avoid recursively walking descendants for every refresh/search keystroke.
+        // Use filesystem modification times for a fast, predictable listing.
+        val activityCache = unsorted.associate { it.absolutePath to it.lastModified() }
         val byRecentActivity = unsorted.sortedWith(
-            compareByDescending<File> { latestActivityTime(it, activityCache, scanBudget) }
-                .thenByDescending { it.lastModified() }
+            compareByDescending<File> { it.lastModified() }
                 .thenBy { it.name.lowercase(Locale.ROOT) }
         )
         activityTimes = activityCache
