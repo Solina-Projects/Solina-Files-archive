@@ -10,7 +10,7 @@
         android:id="@+id/action_deselect_all"
         android:icon="@drawable/ic_close"
         android:title="لغو انتخاب"
-        app:showAsAction="always" />
+        app:showAsAction="never" />
     <item
         android:id="@+id/action_rename"
         android:icon="@drawable/ic_edit"
