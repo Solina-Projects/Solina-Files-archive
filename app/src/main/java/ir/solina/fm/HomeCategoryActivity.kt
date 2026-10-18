@@ -58,6 +58,13 @@ import java.util.Date
 import java.util.Locale
 
 class HomeCategoryActivity : ComponentActivity() {
+    private var resumeVersion by mutableIntStateOf(0)
+
+    override fun onResume() {
+        super.onResume()
+        resumeVersion++
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val title = intent.getStringExtra("category_title") ?: "فایل‌ها"
@@ -67,6 +74,7 @@ class HomeCategoryActivity : ComponentActivity() {
                 CategoryFilesScreen(
                     title = title,
                     category = category,
+                    permissionRefreshKey = resumeVersion,
                     onBack = { finish() },
                     onRequestPermission = {
                         startActivity(Intent(this, MainActivity::class.java)
@@ -92,7 +100,7 @@ private val categoryAudioExtensions = setOf(
     "mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi", "wma", "amr", "aiff"
 )
 private val categoryArchiveExtensions = setOf(
-    "zip", "7z", "rar", "tar", "gz", "bz2", "xz", "zst", "tgz", "tbz2", "iso", "cab", "jar", "war", "apk"
+    "zip", "7z", "rar", "tar", "gz", "bz2", "xz", "zst", "tgz", "tbz2", "iso", "cab", "jar", "war"
 )
 private val categoryDocumentExtensions = setOf(
     "pdf", "doc", "docx", "docm", "odt", "rtf", "txt", "text", "md", "markdown", "log",
@@ -155,6 +163,7 @@ private fun scanCategoryFiles(category: String): List<File> {
 private fun CategoryFilesScreen(
     title: String,
     category: String,
+    permissionRefreshKey: Int,
     onBack: () -> Unit,
     onRequestPermission: () -> Unit,
     onOpenFile: (String) -> Unit
@@ -163,7 +172,7 @@ private fun CategoryFilesScreen(
     var loading by remember(category) { mutableStateOf(true) }
     var refreshKey by remember { mutableIntStateOf(0) }
     val context = androidx.compose.ui.platform.LocalContext.current
-    val hasAccess = remember(refreshKey) {
+    val hasAccess = remember(refreshKey, permissionRefreshKey) {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()
         } else {
