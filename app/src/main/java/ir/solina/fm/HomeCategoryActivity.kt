@@ -30,6 +30,9 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -226,21 +229,28 @@ private fun CategoryFilesScreen(
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Row(
+            Surface(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 1.dp
             ) {
-                TextButton(onClick = onBack) { Text("بازگشت") }
-                Text(
-                    title,
-                    modifier = Modifier.weight(1f).padding(start = 8.dp),
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                TextButton(onClick = { refreshKey++ }) {
-                    Icon(Icons.Default.Refresh, contentDescription = "تازه‌سازی", modifier = Modifier.size(18.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onBack) { Text("بازگشت") }
+                    Text(
+                        title,
+                        modifier = Modifier.weight(1f).padding(start = 4.dp),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    TextButton(onClick = { refreshKey++ }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "تازه‌سازی", modifier = Modifier.size(18.dp))
+                    }
                 }
             }
             Text(
@@ -249,6 +259,11 @@ private fun CategoryFilesScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 12.sp
             )
+            if (loading && hasAccess) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+            }
             when {
                 !hasAccess -> Column(
                     modifier = Modifier.fillMaxWidth().padding(20.dp),
@@ -259,11 +274,33 @@ private fun CategoryFilesScreen(
                     Button(onClick = onRequestPermission) { Text("اعطای دسترسی") }
                 }
                 loading -> Text("لطفاً صبر کنید…", modifier = Modifier.padding(20.dp))
-                files.isEmpty() -> Text(
-                    "فایلی در این دسته پیدا نشد.",
-                    modifier = Modifier.padding(20.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                files.isEmpty() -> Card(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Default.InsertDriveFile,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Text("فایلی در این دسته پیدا نشد.", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "پس از افزودن فایل، اینجا نمایش داده می‌شود.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 20.dp),
