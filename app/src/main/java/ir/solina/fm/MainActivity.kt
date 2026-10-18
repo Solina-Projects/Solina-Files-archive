@@ -1808,7 +1808,16 @@ class MainActivity : AppCompatActivity() {
             val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
             val multiColumn = prefs.getBoolean("layout_mode_multi", gridLayout)
             val singlePreset = prefs.getInt("single_layout_preset", 0).coerceIn(0, 6)
-            val multiPreset = prefs.getInt("multi_layout_preset", 1).coerceIn(0, 5)
+            val legacyPreset = prefs.getInt("layout_preset", 0).coerceIn(0, 7)
+            val legacyMultiPreset = when (legacyPreset) {
+                0, 1, 2 -> 0
+                3 -> 1
+                4 -> 2
+                5 -> 3
+                6 -> 4
+                else -> 5
+            }
+            val multiPreset = prefs.getInt("multi_layout_preset", legacyMultiPreset).coerceIn(0, 5)
             val iconScale = if (multiColumn)
                 floatArrayOf(3.0f, 2.5f, 2.25f, 2.0f, 1.5f, 1.0f)[multiPreset]
             else floatArrayOf(1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 2.25f, 2.5f)[singlePreset]
