@@ -71,7 +71,7 @@ class HomeCategoryActivity : ComponentActivity() {
         val title = intent.getStringExtra("category_title") ?: "فایل‌ها"
         val category = intent.getStringExtra("category_filter") ?: "recent"
         setContent {
-            MaterialTheme {
+            SolinaComposeTheme {
                 CategoryFilesScreen(
                     title = title,
                     category = category,
