@@ -1318,7 +1318,7 @@ class DualPaneActivity : AppCompatActivity() {
         val iconRes = when (text) {
             "انتخاب همه" -> R.drawable.ic_select_all
             "برداشتن انتخاب" -> R.drawable.ic_close
-            "✎ A تغییر نام" -> R.drawable.ic_edit
+            "✎ A تغییر نام", "✎ تغییر نام", "تغییر نام" -> R.drawable.ic_edit
             "فشرده‌سازی" -> R.drawable.ic_archive
             "استخراج" -> R.drawable.ic_unarchive
             "بیشتر" -> R.drawable.ic_more_vert
