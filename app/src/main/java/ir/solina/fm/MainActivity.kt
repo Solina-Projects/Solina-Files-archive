@@ -1803,7 +1803,7 @@ class MainActivity : AppCompatActivity() {
                     holder.name.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
                     holder.info.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
                 }
-                holder.icon.layoutParams = FrameLayout.LayoutParams(
+                holder.icon.layoutParams = android.widget.FrameLayout.LayoutParams(
                     dp((26 * iconScale).toInt()), dp((26 * iconScale).toInt()), android.view.Gravity.CENTER
                 )
             }
