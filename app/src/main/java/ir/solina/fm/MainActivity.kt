@@ -314,7 +314,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderStorageQuickBar() {
         if (!::storageQuickBar.isInitialized) return
+        // Keep the home screen uncluttered; storage switching remains available
+        // through the "حافظه دستگاه" selector and the storage sheet.
         storageQuickBar.removeAllViews()
+        storageQuickBar.visibility = View.GONE
+        return
         volumes.forEach { volume ->
             val item = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
