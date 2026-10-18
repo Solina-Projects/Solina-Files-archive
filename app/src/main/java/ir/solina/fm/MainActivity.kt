@@ -315,20 +315,26 @@ class MainActivity : AppCompatActivity() {
 
     private fun applyFileLayout() {
         val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
+        val multiColumn = prefs.getBoolean("layout_mode_multi", gridLayout)
         val fallbackColumns = prefs.getInt("grid_columns", if (gridLayout) 2 else 1).coerceIn(1, 4)
-        val preset = prefs.getInt("layout_preset", presetForColumns(fallbackColumns)).coerceIn(0, 7)
-        val columns = layoutColumns(preset)
-        gridLayout = columns > 1
+        val oldPreset = prefs.getInt("layout_preset", presetForColumns(fallbackColumns)).coerceIn(0, 7)
+        val multiPreset = prefs.getInt("multi_layout_preset", when (oldPreset) {
+            2, 3 -> oldPreset - 2
+            4, 5 -> oldPreset - 2
+            6, 7 -> oldPreset - 2
+            else -> 0
+        }.coerceIn(0, 5))
+        val columns = if (multiColumn) multiLayoutColumns(multiPreset) else 1
+        gridLayout = multiColumn
         list.layoutManager = if (columns > 1) GridLayoutManager(this, columns) else LinearLayoutManager(this)
         layoutModeButton.setIconResource(if (gridLayout) R.drawable.ic_list_view else R.drawable.ic_grid_view)
         layoutModeButton.text = ""
-        layoutModeButton.contentDescription = if (gridLayout) "تغییر به چیدمان فهرستی" else "تغییر به چیدمان شبکه‌ای"
+        layoutModeButton.contentDescription = if (gridLayout) "تغییر به چیدمان تک‌ستونه" else "تغییر به چیدمان چندستونه"
     }
 
-    private fun layoutColumns(preset: Int): Int = when (preset.coerceIn(0, 7)) {
-        0, 1 -> 1
-        2, 3 -> 2
-        4, 5 -> 3
+    private fun multiLayoutColumns(preset: Int): Int = when (preset.coerceIn(0, 5)) {
+        0, 1 -> 2
+        2, 3 -> 3
         else -> 4
     }
 
@@ -1164,49 +1170,84 @@ class MainActivity : AppCompatActivity() {
 
     private fun showLayoutSettings() {
         val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
-        val fallbackColumns = prefs.getInt("grid_columns", if (gridLayout) 2 else 1).coerceIn(1, 4)
-        val currentPreset = prefs.getInt("layout_preset", presetForColumns(fallbackColumns)).coerceIn(0, 7)
-        val preview = TextView(this).apply {
-            text = layoutDescription(currentPreset)
-            textSize = 15f
+        val singleValues = arrayOf("سایز فعلی • ۱۰۰٪ / ۱۰۰٪", "۱۲۵٪ / ۱۰۰٪", "۱۵۰٪ / ۱۰۰٪", "۱۷۵٪ / ۱۰۵٪", "۲۰۰٪ / ۱۱۰٪", "۲۲۵٪ / ۱۱۰٪", "۲۵۰٪ / ۱۱۰٪")
+        val multiValues = arrayOf("۲ ستون • ۳۰۰٪ / ۱۱۵٪", "۲ ستون • ۲۵۰٪ / ۱۱۰٪", "۳ ستون • ۲۲۵٪ / ۱۱۰٪", "۳ ستون • ۲۰۰٪ / ۱۰۵٪", "۴ ستون • ۱۵۰٪ / ۱۰۵٪", "۴ ستون • ۱۰۰٪ / ۱۰۰٪")
+        var singlePreset = prefs.getInt("single_layout_preset", 0).coerceIn(0, 6)
+        var multiPreset = prefs.getInt("multi_layout_preset", 1).coerceIn(0, 5)
+        val currentMulti = prefs.getBoolean("layout_mode_multi", gridLayout)
+
+        val singleTitle = TextView(this).apply {
+            text = "☰  تک‌ستونه"
+            textSize = 16f
             setTextColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.solina_on_surface))
-            gravity = android.view.Gravity.CENTER
-            setPadding(dp(8), dp(4), dp(8), dp(8))
+            setPadding(dp(4), dp(8), dp(4), dp(2))
         }
-        val seek = SeekBar(this).apply {
-            max = 7
-            progress = currentPreset
-            contentDescription = "تغییر تعداد ستون‌ها و اندازه آیکن و قلم"
+        val singleValue = TextView(this).apply { textSize = 13f; gravity = android.view.Gravity.CENTER; setPadding(dp(4), dp(2), dp(4), dp(2)) }
+        val singleSeek = SeekBar(this).apply { max = 6; progress = singlePreset; contentDescription = "اندازه تک‌ستونه" }
+        val multiTitle = TextView(this).apply {
+            text = "▦  چندستونه"
+            textSize = 16f
+            setTextColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.solina_on_surface))
+            setPadding(dp(4), dp(12), dp(4), dp(2))
         }
-        seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+        val multiValue = TextView(this).apply { textSize = 13f; gravity = android.view.Gravity.CENTER; setPadding(dp(4), dp(2), dp(4), dp(2)) }
+        val multiSeek = SeekBar(this).apply { max = 5; progress = multiPreset; contentDescription = "اندازه چندستونه" }
+        fun updateSingle() {
+            singleValue.text = singleValues[singlePreset]
+            prefs.edit().putInt("single_layout_preset", singlePreset).putBoolean("layout_mode_multi", false)
+                .putInt("grid_columns", 1).putBoolean("grid_layout", false).apply()
+            gridLayout = false
+            applyFileLayout()
+            adapter.notifyDataSetChanged()
+        }
+        fun updateMulti() {
+            multiValue.text = multiValues[multiPreset]
+            val columns = multiLayoutColumns(multiPreset)
+            prefs.edit().putInt("multi_layout_preset", multiPreset).putBoolean("layout_mode_multi", true)
+                .putInt("grid_columns", columns).putBoolean("grid_layout", true).apply()
+            gridLayout = true
+            applyFileLayout()
+            adapter.notifyDataSetChanged()
+        }
+        singleSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(bar: SeekBar?, value: Int, fromUser: Boolean) {
-                preview.text = layoutDescription(value)
+                if (fromUser) { singlePreset = value.coerceIn(0, 6); updateSingle() }
+                singleValue.text = singleValues[value.coerceIn(0, 6)]
             }
             override fun onStartTrackingTouch(bar: SeekBar?) {}
             override fun onStopTrackingTouch(bar: SeekBar?) {}
         })
+        multiSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: SeekBar?, value: Int, fromUser: Boolean) {
+                if (fromUser) { multiPreset = value.coerceIn(0, 5); updateMulti() }
+                multiValue.text = multiValues[value.coerceIn(0, 5)]
+            }
+            override fun onStartTrackingTouch(bar: SeekBar?) {}
+            override fun onStopTrackingTouch(bar: SeekBar?) {}
+        })
+        singleValue.text = singleValues[singlePreset]
+        multiValue.text = multiValues[multiPreset]
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(8), dp(20), dp(4))
-            addView(preview, LinearLayout.LayoutParams(-1, -2))
-            addView(seek, LinearLayout.LayoutParams(-1, -2))
+            setPadding(dp(20), dp(6), dp(20), dp(8))
+            addView(singleTitle, LinearLayout.LayoutParams(-1, -2))
+            addView(singleValue, LinearLayout.LayoutParams(-1, -2))
+            addView(singleSeek, LinearLayout.LayoutParams(-1, -2))
+            addView(multiTitle, LinearLayout.LayoutParams(-1, -2))
+            addView(multiValue, LinearLayout.LayoutParams(-1, -2))
+            addView(multiSeek, LinearLayout.LayoutParams(-1, -2))
         }
         MaterialAlertDialogBuilder(this)
             .setTitle("چیدمان فایل‌ها")
-            .setMessage("با جابه‌جایی نوار، تعداد ستون‌ها و اندازه آیکن‌ها و نوشته‌ها را انتخاب کن.")
+            .setMessage("با حرکت هر نوار، اندازه و چیدمان همان بخش فوراً تغییر می‌کند؛ نیازی به تأیید نیست.")
             .setView(panel)
-            .setPositiveButton("اعمال") { _, _ ->
-                val preset = seek.progress.coerceIn(0, 7)
-                val columns = layoutColumns(preset)
-                prefs.edit().putInt("layout_preset", preset)
-                    .putInt("grid_columns", columns)
-                    .putBoolean("grid_layout", columns > 1).apply()
-                gridLayout = columns > 1
-                applyFileLayout()
-                adapter.notifyDataSetChanged()
-            }
-            .setNegativeButton("لغو", null)
+            .setNegativeButton("بستن", null)
             .show()
+        if (currentMulti) {
+            multiValue.text = multiValues[multiPreset]
+        } else {
+            singleValue.text = singleValues[singlePreset]
+        }
     }
 
     private fun layoutDescription(preset: Int): String = when (preset.coerceIn(0, 7)) {
@@ -1765,14 +1806,19 @@ class MainActivity : AppCompatActivity() {
             holder as VH
             val file = items[position]
             val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
-            val fallbackColumns = prefs.getInt("grid_columns", if (gridLayout) 2 else 1).coerceIn(1, 4)
-            val preset = prefs.getInt("layout_preset", presetForColumns(fallbackColumns)).coerceIn(0, 7)
-            val iconScale = floatArrayOf(1.0f, 1.2f, 1.35f, 1.45f, 1.6f, 1.7f, 1.85f, 2.0f)[preset]
-            val fontScale = floatArrayOf(1.0f, 1.05f, 1.10f, 1.15f, 1.20f, 1.25f, 1.30f, 1.30f)[preset]
+            val multiColumn = prefs.getBoolean("layout_mode_multi", gridLayout)
+            val singlePreset = prefs.getInt("single_layout_preset", 0).coerceIn(0, 6)
+            val multiPreset = prefs.getInt("multi_layout_preset", 1).coerceIn(0, 5)
+            val iconScale = if (multiColumn)
+                floatArrayOf(3.0f, 2.5f, 2.25f, 2.0f, 1.5f, 1.0f)[multiPreset]
+            else floatArrayOf(1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 2.25f, 2.5f)[singlePreset]
+            val fontScale = if (multiColumn)
+                floatArrayOf(1.15f, 1.10f, 1.10f, 1.05f, 1.05f, 1.0f)[multiPreset]
+            else floatArrayOf(1.0f, 1.0f, 1.0f, 1.05f, 1.10f, 1.10f, 1.10f)[singlePreset]
             holder.name.text = file.name
             holder.name.textSize = 15f * fontScale
             holder.info.textSize = 12f * fontScale
-            holder.info.visibility = if (layoutColumns(preset) <= 2) View.VISIBLE else View.GONE
+            holder.info.visibility = if (!multiColumn) View.VISIBLE else View.GONE
             FileTypeVisuals.applyTo(holder.icon, file)
             val latestChange = activityTimes[file.absolutePath] ?: file.lastModified()
             val date = formatDate(latestChange)
