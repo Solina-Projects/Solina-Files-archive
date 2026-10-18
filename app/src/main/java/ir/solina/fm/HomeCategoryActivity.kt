@@ -4,7 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Environment
 import android.os.storage.StorageManager
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -61,7 +61,7 @@ import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
 
-class HomeCategoryActivity : ComponentActivity() {
+class HomeCategoryActivity : AppCompatActivity() {
     private var resumeVersion by mutableIntStateOf(0)
 
     override fun onResume() {
@@ -254,7 +254,7 @@ private fun CategoryFilesScreen(
                 }
             }
             Text(
-                if (loading) "در حال بررسی فایل‌های حافظه…" else "مرتب‌شده از جدیدترین به قدیمی‌ترین • ${files.size} فایل",
+                if (loading) "در حال بررسی فایل‌های حافظه…" else "مرتب‌شده از جدیدترین به قدیمی‌ترین • ${files.size} فایل • ${android.text.format.Formatter.formatFileSize(context, files.sumOf { it.length() })}",
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 12.sp
