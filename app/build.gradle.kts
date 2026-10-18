@@ -79,6 +79,7 @@ dependencies {
     // Media playback engine (Strata-compatible Media3)
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-session:1.5.1")
+    implementation("androidx.media3:media3-ui:1.5.1")
 
     // Archives & Compression
     implementation("net.lingala.zip4j:zip4j:2.11.5")
