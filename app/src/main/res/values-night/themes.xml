@@ -36,7 +36,8 @@
         <item name="shapeAppearanceCornerExtraLarge">@style/ShapeAppearance.Material3.Corner.ExtraLarge</item>
 
         <item name="android:colorAccent">@color/solina_primary</item>
-        <item name="android:windowBackground">?attr/colorSurface</item>
+        <item name="android:colorBackground">@color/solina_background</item>
+        <item name="android:windowBackground">@color/solina_background</item>
         <item name="android:statusBarColor">?attr/colorSurface</item>
         <item name="android:navigationBarColor">?attr/colorSurface</item>
         <item name="android:windowLightStatusBar">false</item>
