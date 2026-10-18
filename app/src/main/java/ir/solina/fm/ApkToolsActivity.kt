@@ -101,7 +101,7 @@ class ApkToolsActivity : AppCompatActivity() {
                             out.appendLine("DEX بزرگ‌تر از حد مجاز ۶۴ مگابایت است؛ از این فایل صرف‌نظر شد.")
                             return@forEach
                         }
-                        val bytes = zip.getInputStream(entry).use { it.readNBytes(64 * 1024 * 1024 + 1) }
+                        val bytes = zip.getInputStream(entry).use { readLimited(it, 64 * 1024 * 1024) }
                         if (bytes.size > 64 * 1024 * 1024) {
                             out.appendLine("DEX بزرگ‌تر از حد مجاز است؛ از این فایل صرف‌نظر شد.")
                             return@forEach
@@ -313,6 +313,22 @@ class ApkToolsActivity : AppCompatActivity() {
         return contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
             if (it.moveToFirst()) it.getString(0) else "APK"
         } ?: "APK"
+    }
+
+    /** Reads at most maxBytes + 1 bytes so oversized entries can be rejected safely. */
+    private fun readLimited(input: java.io.InputStream, maxBytes: Int): ByteArray {
+        val output = java.io.ByteArrayOutputStream(minOf(8192, maxBytes))
+        val buffer = ByteArray(8192)
+        var total = 0
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            val accepted = minOf(read, maxBytes + 1 - total)
+            if (accepted > 0) output.write(buffer, 0, accepted)
+            total += accepted
+            if (total > maxBytes) break
+        }
+        return output.toByteArray()
     }
 
     private fun sha256(file: File): String {
