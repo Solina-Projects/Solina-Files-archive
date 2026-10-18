@@ -932,10 +932,10 @@ class DualPaneActivity : AppCompatActivity() {
             val original = BitmapFactory.decodeFile(file.absolutePath)
             if (original == null) { toast("تصویر خراب است یا قالب آن پشتیبانی نمی‌شود"); return }
             var edited = original
-            val image = ImageView(this).apply {
-                setImageBitmap(edited); adjustViewBounds = true
-                scaleType = ImageView.ScaleType.FIT_CENTER
+            val image = ZoomableImageView(this).apply {
+                setImageBitmap(edited)
                 setPadding(dp(8), dp(8), dp(8), dp(8))
+                contentDescription = file.name
             }
             val dialog = AlertDialog.Builder(this).setTitle(file.name).setView(image)
                 .setNeutralButton("چرخش ۹۰°", null)
