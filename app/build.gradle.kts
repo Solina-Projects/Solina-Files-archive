@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "ir.solina.fm"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "ir.solina.fm"

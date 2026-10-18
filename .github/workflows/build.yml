@@ -48,7 +48,10 @@ jobs:
           retention-days: 14
 
       - name: Send Telegram Alert on Failure
-        if: ${{ failure() }}
+        if: ${{ failure() && env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != '' }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         uses: appleboy/telegram-action@master
         continue-on-error: true
         with:
