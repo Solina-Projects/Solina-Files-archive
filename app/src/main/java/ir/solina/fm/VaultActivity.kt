@@ -121,17 +121,21 @@ class VaultActivity : AppCompatActivity() {
         }
         if (requestCode != 501 || resultCode != RESULT_OK || data?.data == null) return
         if (!unlocked) { authenticate(); return }
+        var partialTarget: File? = null
         try {
             val uri = data.data!!
             val name = contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
                 if (it.moveToFirst()) it.getString(0) else null
             } ?: "file-${System.currentTimeMillis()}"
             val target = uniqueVaultFile(name)
+            partialTarget = target
             val key = ensureKey()
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.ENCRYPT_MODE, key)
             val iv = cipher.iv
-            contentResolver.openInputStream(uri)!!.use { input ->
+            val sourceStream = contentResolver.openInputStream(uri)
+                ?: throw IllegalStateException("فایل انتخاب‌شده قابل خواندن نیست")
+            sourceStream.use { input ->
                 FileOutputStream(target).use { output ->
                     output.write(byteArrayOf('S'.code.toByte(), 'V'.code.toByte(), 'L'.code.toByte(), '1'.code.toByte()))
                     output.write(iv.size)
@@ -140,9 +144,13 @@ class VaultActivity : AppCompatActivity() {
                 }
             }
             prefs.edit().putString(target.name, name).apply()
+            partialTarget = null
             renderFiles()
             toast("فایل رمزگذاری و به خزانه اضافه شد")
-        } catch (_: Exception) { toast("رمزگذاری فایل ناموفق بود") }
+        } catch (_: Exception) {
+            partialTarget?.delete()
+            toast("رمزگذاری فایل ناموفق بود؛ فایل ناقص از خزانه پاک‌سازی شد")
+        }
     }
 
     private fun uniqueVaultFile(name: String): File {
