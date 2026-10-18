@@ -48,7 +48,6 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
@@ -56,7 +55,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -281,11 +279,10 @@ private fun SolinaHomeScreen(
                             }
                             if (total > 0L) {
                                 LinearProgressIndicator(
-                                    progress = { progress.coerceIn(0f, 1f) },
+                                    progress = progress.coerceIn(0f, 1f),
                                     modifier = Modifier.fillMaxWidth().height(9.dp).clip(CircleShape),
                                     color = SolinaBlue,
-                                    trackColor = Color(0xFFE5E7EB),
-                                    strokeCap = ProgressIndicatorDefaults.LinearStrokeCap
+                                    trackColor = Color(0xFFE5E7EB)
                                 )
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Column {
