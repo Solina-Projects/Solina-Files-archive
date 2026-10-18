@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Refresh
@@ -186,18 +187,42 @@ private fun categoryDirectory(name: String?): File? {
 
 private fun scanHomeFiles(): List<File> {
     val root = Environment.getExternalStorageDirectory()
-    val dirs = listOf(
-        Environment.DIRECTORY_DOWNLOADS,
-        Environment.DIRECTORY_DOCUMENTS,
-        Environment.DIRECTORY_PICTURES,
-        Environment.DIRECTORY_MOVIES,
-        Environment.DIRECTORY_MUSIC
-    ).mapNotNull { categoryDirectory(it) }.filter { it.exists() && it.isDirectory }
-    val candidates = (dirs.flatMap { it.listFiles()?.toList().orEmpty() } +
-        root.listFiles()?.toList().orEmpty())
-        .filter { it.isFile && !it.name.startsWith(".") }
-        .distinctBy { it.absolutePath }
-    return candidates.sortedByDescending { it.lastModified() }.take(8)
+    val candidates = LinkedHashMap<String, File>()
+    val stack = ArrayDeque<Pair<File, Int>>()
+    stack.add(root to 0)
+    var visited = 0
+    while (stack.isNotEmpty() && visited < 20000) {
+        val (dir, depth) = stack.removeLast()
+        val children = try { dir.listFiles() } catch (_: SecurityException) { null } ?: continue
+        for (child in children) {
+            if (child.name.startsWith(".") || child.name.startsWith(".solina-trash-")) continue
+            visited++
+            candidates[child.absolutePath] = child
+            if (child.isDirectory && depth < 32 && visited < 20000) stack.add(child to depth + 1)
+            if (visited >= 20000) break
+        }
+    }
+    val cache = HashMap<String, Long>()
+    val budget = intArrayOf(20000)
+    fun latestActivity(file: File, depth: Int = 0): Long {
+        cache[file.absolutePath]?.let { return it }
+        var latest = file.lastModified()
+        if (file.isDirectory && depth < 32 && budget[0] > 0) {
+            val children = try { file.listFiles() } catch (_: SecurityException) { null }
+            children?.forEach { child ->
+                if (budget[0] <= 0 || child.name.startsWith(".")) return@forEach
+                budget[0]--
+                latest = maxOf(latest, latestActivity(child, depth + 1))
+            }
+        }
+        cache[file.absolutePath] = latest
+        return latest
+    }
+    return candidates.values.sortedWith(
+        compareByDescending<File> { latestActivity(it) }
+            .thenByDescending { it.lastModified() }
+            .thenBy { it.name.lowercase(Locale.ROOT) }
+    )
 }
 
 private fun formatSize(context: android.content.Context, bytes: Long): String =
@@ -416,8 +441,21 @@ private fun SolinaHomeScreen(
                 } else if (recentFiles.isEmpty()) {
                     item { Text("فایل اخیری پیدا نشد.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp) }
                 } else {
-                    items(recentFiles, key = { it.absolutePath }) { file ->
+                    items(recentFiles.take(10), key = { it.absolutePath }) { file ->
                         RecentFileRow(file = file, onClick = { onOpenFile(file.absolutePath) })
+                    }
+                    if (recentFiles.size > 10) {
+                        item(key = "recent-items-divider") {
+                            Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp)) {
+                                Text("سایر موارد", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 6.dp))
+                                Divider(color = MaterialTheme.colorScheme.outlineVariant)
+                            }
+                        }
+                        items(recentFiles.drop(10), key = { it.absolutePath }) { file ->
+                            RecentFileRow(file = file, onClick = { onOpenFile(file.absolutePath) })
+                        }
                     }
                 }
             }
@@ -461,14 +499,15 @@ private fun CategoryTile(
 
 @Composable
 private fun RecentFileRow(file: File, onClick: () -> Unit) {
-    val icon = when (file.extension.lowercase(Locale.ROOT)) {
-        "jpg", "jpeg", "png", "webp", "gif", "bmp", "heic" -> Icons.Default.Image
-        "mp4", "mkv", "mov", "webm", "3gp" -> Icons.Default.VideoLibrary
-        "mp3", "m4a", "aac", "wav", "ogg", "flac", "opus" -> Icons.Default.MusicNote
-        "apk" -> Icons.Default.Android
-        "zip", "7z", "rar", "tar", "gz" -> Icons.Default.Archive
-        "pdf", "doc", "docx", "txt", "xls", "xlsx", "ppt", "pptx" -> Icons.Default.Description
-        else -> Icons.Default.Folder
+    val icon = when {
+        file.isDirectory -> Icons.Default.Folder
+        file.extension.lowercase(Locale.ROOT) in setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic") -> Icons.Default.Image
+        file.extension.lowercase(Locale.ROOT) in setOf("mp4", "mkv", "mov", "webm", "3gp") -> Icons.Default.VideoLibrary
+        file.extension.lowercase(Locale.ROOT) in setOf("mp3", "m4a", "aac", "wav", "ogg", "flac", "opus") -> Icons.Default.MusicNote
+        file.extension.lowercase(Locale.ROOT) == "apk" -> Icons.Default.Android
+        file.extension.lowercase(Locale.ROOT) in setOf("zip", "7z", "rar", "tar", "gz") -> Icons.Default.Archive
+        file.extension.lowercase(Locale.ROOT) in setOf("pdf", "doc", "docx", "txt", "xls", "xlsx", "ppt", "pptx") -> Icons.Default.Description
+        else -> Icons.Default.InsertDriveFile
     }
     Row(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
@@ -483,7 +522,12 @@ private fun RecentFileRow(file: File, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(file.name, fontSize = 14.sp, fontWeight = FontWeight.Medium,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(formatSize(LocalContext.current, file.length()), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val context = LocalContext.current
+            val dateTime = remember(file.absolutePath, file.lastModified()) {
+                java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(file.lastModified()))
+            }
+            val details = if (file.isDirectory) "پوشه • $dateTime" else "${formatSize(context, file.length())} • $dateTime"
+            Text(details, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Icon(Icons.Default.ChevronRight, contentDescription = "باز کردن", tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
