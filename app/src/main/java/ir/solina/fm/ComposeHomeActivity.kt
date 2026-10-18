@@ -72,6 +72,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -82,11 +83,6 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import java.io.File
 import java.util.Locale
 
-private val SolinaBlue = Color(0xFF0B57D0)
-private val SolinaBackground = Color(0xFFF7F8FC)
-private val SolinaInk = Color(0xFF202124)
-private val SolinaMuted = Color(0xFF5F6368)
-
 class ComposeHomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -94,15 +90,34 @@ class ComposeHomeActivity : ComponentActivity() {
             val isDark = (resources.configuration.uiMode and
                 android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
                 android.content.res.Configuration.UI_MODE_NIGHT_YES
-            MaterialTheme(
-                colorScheme = if (isDark) darkColorScheme(primary = Color(0xFF9DBDFF))
-                else lightColorScheme(
-                    primary = SolinaBlue,
-                    background = SolinaBackground,
-                    surface = Color.White,
-                    onSurface = SolinaInk
-                )
-            ) {
+            val scheme = if (isDark) darkColorScheme(
+                primary = colorResource(R.color.solina_primary),
+                onPrimary = colorResource(R.color.solina_on_primary),
+                primaryContainer = colorResource(R.color.solina_primary_container),
+                onPrimaryContainer = colorResource(R.color.solina_on_primary_container),
+                secondary = colorResource(R.color.solina_secondary),
+                onSecondary = colorResource(R.color.solina_on_secondary),
+                background = colorResource(R.color.solina_background),
+                surface = colorResource(R.color.solina_surface),
+                onSurface = colorResource(R.color.solina_on_surface),
+                surfaceVariant = colorResource(R.color.solina_surface_variant),
+                onSurfaceVariant = colorResource(R.color.solina_on_surface_variant),
+                error = colorResource(R.color.solina_error)
+            ) else lightColorScheme(
+                primary = colorResource(R.color.solina_primary),
+                onPrimary = colorResource(R.color.solina_on_primary),
+                primaryContainer = colorResource(R.color.solina_primary_container),
+                onPrimaryContainer = colorResource(R.color.solina_on_primary_container),
+                secondary = colorResource(R.color.solina_secondary),
+                onSecondary = colorResource(R.color.solina_on_secondary),
+                background = colorResource(R.color.solina_background),
+                surface = colorResource(R.color.solina_surface),
+                onSurface = colorResource(R.color.solina_on_surface),
+                surfaceVariant = colorResource(R.color.solina_surface_variant),
+                onSurfaceVariant = colorResource(R.color.solina_on_surface_variant),
+                error = colorResource(R.color.solina_error)
+            )
+            MaterialTheme(colorScheme = scheme) {
                 SolinaHomeScreen(
                     onBrowse = { openBrowser() },
                     onRequestPermission = { requestStoragePermission() },
@@ -238,11 +253,11 @@ private fun SolinaHomeScreen(
                             Text("مدیریت فایل‌ها", fontSize = 25.sp, fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface)
                             Spacer(Modifier.height(4.dp))
-                            Text("همه‌چیز مرتب و در دسترس", fontSize = 13.sp, color = SolinaMuted)
+                            Text("همه‌چیز مرتب و در دسترس", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Surface(shape = CircleShape, color = Color(0xFFE8F0FE), modifier = Modifier.size(46.dp)) {
+                        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(46.dp)) {
                             Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Folder, contentDescription = null, tint = SolinaBlue,
+                                Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(25.dp))
                             }
                         }
@@ -279,15 +294,15 @@ private fun SolinaHomeScreen(
                     ) {
                         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(shape = RoundedCornerShape(13.dp), color = Color(0xFFE8F0FE)) {
-                                    Icon(Icons.Default.Storage, contentDescription = null, tint = SolinaBlue,
+                                Surface(shape = RoundedCornerShape(13.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+                                    Icon(Icons.Default.Storage, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.padding(10.dp).size(22.dp))
                                 }
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text("حافظه دستگاه", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                                     Text(if (hasAccess) "وضعیت فضای ذخیره‌سازی" else "برای مشاهده فایل‌ها دسترسی لازم است",
-                                        color = SolinaMuted, fontSize = 12.sp)
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                                 }
                                 TextButton(onClick = onBrowse) { Text("باز کردن") }
                             }
@@ -295,21 +310,21 @@ private fun SolinaHomeScreen(
                                 LinearProgressIndicator(
                                     progress = progress.coerceIn(0f, 1f),
                                     modifier = Modifier.fillMaxWidth().height(9.dp).clip(CircleShape),
-                                    color = SolinaBlue,
-                                    trackColor = Color(0xFFE5E7EB)
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Column {
-                                        Text("استفاده‌شده", color = SolinaMuted, fontSize = 11.sp)
+                                        Text("استفاده‌شده", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                                         Text(formatSize(context, used), fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                     }
                                     Column(horizontalAlignment = Alignment.End) {
-                                        Text("فضای آزاد", color = SolinaMuted, fontSize = 11.sp)
+                                        Text("فضای آزاد", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                                         Text(formatSize(context, free), fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                     }
                                 }
                             } else {
-                                Text("اطلاعات حافظه در دسترس نیست", color = SolinaMuted, fontSize = 13.sp)
+                                Text("اطلاعات حافظه در دسترس نیست", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                             }
                         }
                     }
@@ -362,7 +377,7 @@ private fun SolinaHomeScreen(
                         }
                     }
                 } else if (recentFiles.isEmpty()) {
-                    item { Text("فایل اخیری پیدا نشد.", color = SolinaMuted, fontSize = 13.sp) }
+                    item { Text("فایل اخیری پیدا نشد.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp) }
                 } else {
                     items(recentFiles, key = { it.absolutePath }) { file ->
                         RecentFileRow(file = file, onClick = { onOpenFile(file.absolutePath) })
@@ -412,10 +427,10 @@ private fun CategoryTile(
                 Text(category.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(3.dp))
-                Text(category.subtitle, fontSize = 10.sp, color = SolinaMuted,
+                Text(category.subtitle, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 13.sp)
             }
-            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = SolinaMuted,
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp))
         }
     }
@@ -437,19 +452,19 @@ private fun RecentFileRow(file: File, onClick: () -> Unit) {
             .clickable(onClick = onClick).padding(vertical = 8.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFFE8F0FE)) {
-            Icon(icon, contentDescription = null, tint = SolinaBlue,
+        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(10.dp).size(22.dp))
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(file.name, fontSize = 14.sp, fontWeight = FontWeight.Medium,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(formatSize(LocalContext.current, file.length()), fontSize = 12.sp, color = SolinaMuted)
+            Text(formatSize(LocalContext.current, file.length()), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Icon(Icons.Default.ChevronRight, contentDescription = "باز کردن", tint = SolinaMuted)
+        Icon(Icons.Default.ChevronRight, contentDescription = "باز کردن", tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-    Divider(color = Color(0xFFECEFF3))
+    Divider(color = MaterialTheme.colorScheme.surfaceVariant)
 }
 
 @Composable
@@ -461,7 +476,7 @@ private fun QuickTool(label: String, icon: ImageVector, modifier: Modifier, onCl
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
-        Icon(icon, contentDescription = null, tint = SolinaBlue, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
         Text(label, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
