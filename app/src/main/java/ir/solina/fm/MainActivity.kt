@@ -725,14 +725,13 @@ class MainActivity : AppCompatActivity() {
     private fun showRightDrawer() {
         loadVolumes()
         val dialog = android.app.Dialog(this)
-        val night = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
         val surface = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorSurface, it, true) }.data
         val onSurface = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurface, it, true) }.data
         val muted = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurfaceVariant, it, true) }.data
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(18), dp(12), dp(12))
+            setPadding(dp(10), dp(10), dp(10), dp(10))
             setBackgroundColor(surface)
         }
         root.addView(TextView(this).apply {
@@ -759,8 +758,14 @@ class MainActivity : AppCompatActivity() {
                 Kind.SD -> R.drawable.ic_sd_card
                 Kind.USB -> R.drawable.ic_usb
             }
-            row.findViewById<ImageView>(R.id.volIcon).setImageResource(iconRes)
-            row.findViewById<TextView>(R.id.volName).text = v.name
+            row.setPadding(dp(6), dp(4), dp(6), dp(4))
+            row.minimumHeight = dp(48)
+            row.findViewById<ImageView>(R.id.volIcon).apply {
+                setImageResource(iconRes)
+                layoutParams = layoutParams.apply { width = dp(26); height = dp(26) }
+            }
+            row.findViewById<TextView>(R.id.volName).apply { text = v.name; textSize = 12f }
+            row.findViewById<TextView>(R.id.volStats).textSize = 10f
             var total = 0L
             var free = 0L
             try {
@@ -769,8 +774,10 @@ class MainActivity : AppCompatActivity() {
                 free = stat.availableBytes
             } catch (_: Exception) {}
             val used = (total - free).coerceAtLeast(0L)
-            row.findViewById<LinearProgressIndicator>(R.id.volBar).progress =
-                if (total > 0L) ((used * 100L) / total).toInt() else 0
+            row.findViewById<LinearProgressIndicator>(R.id.volBar).apply {
+                progress = if (total > 0L) ((used * 100L) / total).toInt() else 0
+                layoutParams = layoutParams.apply { height = dp(4) }
+            }
             row.findViewById<TextView>(R.id.volStats).text =
                 getString(R.string.storage_stats, fmt(used), fmt(free), fmt(total))
             row.isActivated = currentVol?.dir?.path == v.dir.path
@@ -781,7 +788,7 @@ class MainActivity : AppCompatActivity() {
             }
             volumeList.addView(row)
         }
-        root.addView(scroll, LinearLayout.LayoutParams(-1, dp(170)))
+        root.addView(scroll, LinearLayout.LayoutParams(-1, dp(150)))
         root.addView(TextView(this).apply {
             text = "ابزارها"
             textSize = 13f
