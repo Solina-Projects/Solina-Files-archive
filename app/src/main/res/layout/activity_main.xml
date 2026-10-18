@@ -248,7 +248,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/grantButton"
-                style="@style/Widget.Material3.Button.FilledButton"
+                style="@style/Widget.Material3.Button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
