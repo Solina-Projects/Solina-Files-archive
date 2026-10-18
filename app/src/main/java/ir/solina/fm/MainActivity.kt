@@ -587,6 +587,7 @@ class MainActivity : AppCompatActivity() {
             R.id.action_root -> startActivity(Intent(this, RootExplorerActivity::class.java))
             R.id.action_network -> startActivity(Intent(this, NetworkStorageActivity::class.java))
             R.id.action_apk_tools -> startActivity(Intent(this, ApkToolsActivity::class.java))
+            R.id.action_installed_apps -> startActivity(Intent(this, InstalledAppsActivity::class.java))
             R.id.action_hex_editor -> selected.firstOrNull()?.let { file ->
                 startActivity(Intent(this, DocumentViewerActivity::class.java).putExtra("file_path", file.absolutePath))
             }
