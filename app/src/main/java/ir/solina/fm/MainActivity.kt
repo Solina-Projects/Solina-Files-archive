@@ -69,6 +69,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var mainBar: MaterialToolbar
     private lateinit var selectionBar: MaterialToolbar
+    private lateinit var navigationBar: View
     private lateinit var storageButton: MaterialButton
     private lateinit var storageQuickBar: LinearLayout
     private lateinit var sortFilterButton: MaterialButton
@@ -135,6 +136,7 @@ class MainActivity : AppCompatActivity() {
 
         mainBar = findViewById(R.id.mainBar)
         selectionBar = findViewById(R.id.selectionBar)
+        navigationBar = findViewById(R.id.navigationBar)
         storageButton = findViewById(R.id.storageButton)
         storageQuickBar = findViewById(R.id.storageQuickBar)
         sortFilterButton = findViewById(R.id.sortFilterButton)
@@ -179,13 +181,9 @@ class MainActivity : AppCompatActivity() {
         overflowButton.setOnClickListener { showTopMenu(it) }
         drawerButton.setOnClickListener { showRightDrawer() }
         dualPaneButton.setOnClickListener { startActivity(Intent(this, DualPaneActivity::class.java)) }
-        gridLayout = getSharedPreferences("solina_preferences", MODE_PRIVATE).getBoolean("grid_layout", false)
-        layoutModeButton.setOnClickListener {
-            gridLayout = !gridLayout
-            getSharedPreferences("solina_preferences", MODE_PRIVATE).edit().putBoolean("grid_layout", gridLayout).apply()
-            applyFileLayout()
-            adapter.notifyDataSetChanged()
-        }
+        val savedColumns = getSharedPreferences("solina_preferences", MODE_PRIVATE).getInt("grid_columns", 1)
+        gridLayout = savedColumns > 1
+        layoutModeButton.setOnClickListener { showLayoutSettings() }
         mainBar.visibility = View.GONE
         navBack.setOnClickListener { navigateHistory(back = true) }
         navForward.setOnClickListener { navigateHistory(back = false) }
@@ -315,7 +313,8 @@ class MainActivity : AppCompatActivity() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun applyFileLayout() {
-        list.layoutManager = if (gridLayout) GridLayoutManager(this, 2) else LinearLayoutManager(this)
+        val columns = getSharedPreferences("solina_preferences", MODE_PRIVATE).getInt("grid_columns", if (gridLayout) 2 else 1).coerceIn(1, 4)
+        list.layoutManager = if (columns > 1) GridLayoutManager(this, columns) else LinearLayoutManager(this)
         layoutModeButton.setIconResource(if (gridLayout) R.drawable.ic_list_view else R.drawable.ic_grid_view)
         layoutModeButton.text = ""
         layoutModeButton.contentDescription = if (gridLayout) "تغییر به چیدمان فهرستی" else "تغییر به چیدمان شبکه‌ای"
@@ -554,9 +553,10 @@ class MainActivity : AppCompatActivity() {
         val sel = selected.isNotEmpty()
         mainBar.visibility = View.GONE
         selectionBar.visibility = if (sel) View.VISIBLE else View.GONE
+        navigationBar.visibility = if (sel) View.GONE else View.VISIBLE
         bottomActions.visibility = if (sel) View.VISIBLE else View.GONE
         if (sel) {
-            selectionBar.title = getString(R.string.selected_count, selected.size)
+            selectionBar.title = ""
             selectionBar.menu.findItem(R.id.action_rename).isVisible = selected.size == 1
             selectionBar.menu.findItem(R.id.action_extract).isVisible =
                 selected.any { it.isFile && it.extension.equals("zip", ignoreCase = true) }
@@ -577,6 +577,7 @@ class MainActivity : AppCompatActivity() {
             R.id.action_refresh -> refresh()
             R.id.action_bookmark -> toggleBookmark()
             R.id.action_bookmarks -> showBookmarks()
+            R.id.action_pinned -> showPinnedItems()
             R.id.action_sort -> showSortOptions()
             R.id.action_storage_analysis -> analyzeStorage()
             R.id.action_theme -> toggleTheme()
@@ -611,10 +612,27 @@ class MainActivity : AppCompatActivity() {
         val popup = android.widget.PopupMenu(this, anchor)
         for (index in 0 until mainBar.menu.size()) {
             val original = mainBar.menu.getItem(index)
-            if (original.itemId == R.id.action_dual_pane || original.itemId == R.id.action_theme) continue
+            if (original.itemId == R.id.action_dual_pane || original.itemId == R.id.action_theme || original.itemId == R.id.action_sort) continue
             val item = popup.menu.add(original.groupId, original.itemId, original.order, original.title)
             item.isCheckable = original.isCheckable
             item.isChecked = if (original.itemId == R.id.action_hidden) showHidden else original.isChecked
+            val icon = when (original.itemId) {
+                R.id.action_new_folder -> R.drawable.ic_folder
+                R.id.action_refresh -> R.drawable.ic_clean
+                R.id.action_bookmark, R.id.action_bookmarks, R.id.action_pinned -> R.drawable.ic_pin
+                R.id.action_storage_analysis -> R.drawable.ic_hard_drive
+                R.id.action_vault -> R.drawable.ic_lock
+                R.id.action_root -> R.drawable.ic_phone
+                R.id.action_network, R.id.action_wifi_transfer -> R.drawable.ic_share
+                R.id.action_apk_tools, R.id.action_installed_apps -> R.drawable.ic_file_apk
+                R.id.action_file_tools, R.id.action_text_editor -> R.drawable.ic_edit
+                R.id.action_recycle_bin -> R.drawable.ic_delete
+                R.id.action_recent_files -> R.drawable.ic_file
+                R.id.action_advanced_settings -> R.drawable.ic_menu
+                R.id.action_hidden -> R.drawable.ic_file
+                else -> 0
+            }
+            if (icon != 0) item.setIcon(icon)
         }
         popup.setOnMenuItemClickListener { item ->
             if (item.itemId == R.id.action_hidden) {
@@ -625,6 +643,11 @@ class MainActivity : AppCompatActivity() {
                 true
             } else onMainMenu(item)
         }
+        try {
+            val field = popup.javaClass.getDeclaredField("mPopup")
+            field.isAccessible = true
+            (field.get(popup) as? androidx.appcompat.view.menu.MenuPopupHelper)?.setForceShowIcon(true)
+        } catch (_: Exception) { }
         popup.show()
     }
 
@@ -738,6 +761,7 @@ class MainActivity : AppCompatActivity() {
                 updateSelectionUi()
             }
             R.id.action_deselect_all -> clearSelection()
+            R.id.action_pin -> pinSelected()
             R.id.action_compress -> compressSelected()
             R.id.action_extract -> extractSelectedArchives()
             R.id.action_text_editor -> selected.firstOrNull()?.let { file ->
@@ -1026,6 +1050,40 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun getPinnedItems(): MutableSet<String> =
+        getSharedPreferences("solina_preferences", MODE_PRIVATE)
+            .getStringSet("pinned_items", emptySet())?.toMutableSet() ?: mutableSetOf()
+
+    private fun pinSelected() {
+        if (selected.isEmpty()) return
+        val pins = getPinnedItems()
+        var added = 0
+        var removed = 0
+        selected.forEach { file ->
+            if (pins.remove(file.absolutePath)) removed++ else { pins.add(file.absolutePath); added++ }
+        }
+        getSharedPreferences("solina_preferences", MODE_PRIVATE).edit().putStringSet("pinned_items", pins).apply()
+        toast(when {
+            added > 0 && removed > 0 -> "موارد انتخاب‌شده به‌روزرسانی شدند"
+            added > 0 -> "موارد انتخاب‌شده پین شدند"
+            else -> "پین موارد انتخاب‌شده برداشته شد"
+        })
+        clearSelection()
+    }
+
+    private fun showPinnedItems() {
+        val files = getPinnedItems().map { File(it) }.filter { it.exists() }.sortedBy { it.name.lowercase(Locale.ROOT) }
+        if (files.isEmpty()) { toast("مورد پین‌شده‌ای وجود ندارد"); return }
+        MaterialAlertDialogBuilder(this)
+            .setTitle("موارد پین‌شده")
+            .setItems(files.map { (if (it.isDirectory) "📁 " else "📄 ") + it.name }.toTypedArray()) { _, which ->
+                val file = files[which]
+                if (file.isDirectory) navigate(file) else openFile(file)
+            }
+            .setNegativeButton("بستن", null)
+            .show()
+    }
+
     private fun getBookmarks(): MutableSet<String> =
         getSharedPreferences("solina_preferences", MODE_PRIVATE).getStringSet("bookmarks", emptySet())?.toMutableSet() ?: mutableSetOf()
 
@@ -1059,6 +1117,54 @@ class MainActivity : AppCompatActivity() {
                 getSharedPreferences("solina_preferences", MODE_PRIVATE).edit().putStringSet("bookmarks", bookmarks).apply()
                 toast("نشانک حذف شد")
             }.setNegativeButton(R.string.cancel, null).show()
+    }
+
+    private fun showLayoutSettings() {
+        val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
+        val currentColumns = prefs.getInt("grid_columns", if (gridLayout) 2 else 1).coerceIn(1, 4)
+        val preview = TextView(this).apply {
+            text = layoutDescription(currentColumns)
+            textSize = 15f
+            setTextColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.solina_on_surface))
+            gravity = android.view.Gravity.CENTER
+            setPadding(dp(8), dp(4), dp(8), dp(8))
+        }
+        val seek = SeekBar(this).apply {
+            max = 3
+            progress = currentColumns - 1
+            contentDescription = "تغییر ترکیب نمایش پوشه‌ها و فایل‌ها"
+        }
+        seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: SeekBar?, value: Int, fromUser: Boolean) { preview.text = layoutDescription(value + 1) }
+            override fun onStartTrackingTouch(bar: SeekBar?) {}
+            override fun onStopTrackingTouch(bar: SeekBar?) {}
+        })
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), dp(4))
+            addView(preview, LinearLayout.LayoutParams(-1, -2))
+            addView(seek, LinearLayout.LayoutParams(-1, -2))
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle("چیدمان فایل‌ها")
+            .setMessage("نوار را جابه‌جا کن تا از فهرست ساده تا شبکهٔ چهارستونه انتخاب شود.")
+            .setView(panel)
+            .setPositiveButton("اعمال") { _, _ ->
+                val columns = seek.progress + 1
+                prefs.edit().putInt("grid_columns", columns).putBoolean("grid_layout", columns > 1).apply()
+                gridLayout = columns > 1
+                applyFileLayout()
+                adapter.notifyDataSetChanged()
+            }
+            .setNegativeButton("لغو", null)
+            .show()
+    }
+
+    private fun layoutDescription(columns: Int): String = when (columns) {
+        1 -> "فهرست فشرده"
+        2 -> "شبکهٔ دو ستونه"
+        3 -> "شبکهٔ سه ستونه"
+        else -> "شبکهٔ چهار ستونه"
     }
 
     private fun showSortOptions() {
