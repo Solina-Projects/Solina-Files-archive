@@ -2,9 +2,9 @@ name: Build & Test Solina Files
 
 on:
   push:
-    branches: [ main, feature/advanced-file-manager ]
+    branches: [ main, feature/advanced-file-manager, feature/strata-dual-pane-integration ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, feature/strata-dual-pane-integration ]
   workflow_dispatch:
 
 concurrency:
