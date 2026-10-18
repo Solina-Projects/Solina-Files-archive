@@ -82,7 +82,7 @@ class InstalledAppsActivity : AppCompatActivity() {
             list.addView(TextView(this).apply {
                 text = if (apps.isEmpty()) "برنامهٔ قابل‌اجرا پیدا نشد." else "نتیجه‌ای برای جست‌وجو پیدا نشد."
                 gravity = Gravity.CENTER
-                setPadding(dp(24))
+                setPadding(dp(24), dp(24), dp(24), dp(24))
             }, LinearLayout.LayoutParams(-1, dp(100)))
             return
         }
@@ -90,7 +90,7 @@ class InstalledAppsActivity : AppCompatActivity() {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(8))
+                setPadding(dp(8), dp(8), dp(8), dp(8))
                 isClickable = true
                 isFocusable = true
                 background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@InstalledAppsActivity, R.drawable.item_bg)
