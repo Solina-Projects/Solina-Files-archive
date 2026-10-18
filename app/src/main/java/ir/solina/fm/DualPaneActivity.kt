@@ -476,6 +476,9 @@ class DualPaneActivity : AppCompatActivity() {
             labels += "نصب APK"
             labels += "تحلیل APK و DEX"
         }
+        if (single != null && single.isFile) {
+            labels += "نمایش هگز"
+        }
         AlertDialog.Builder(this)
             .setTitle(if (selectedFiles.size == 1) selectedFiles.first().name else "${selectedFiles.size} مورد انتخاب‌شده")
             .setItems(labels.toTypedArray()) { _, which ->
@@ -498,6 +501,9 @@ class DualPaneActivity : AppCompatActivity() {
                     "نصب APK" -> single?.let { installApk(it) }
                     "تحلیل APK و DEX" -> single?.let { apk ->
                         startActivity(Intent(this, ApkToolsActivity::class.java).putExtra("apk_path", apk.absolutePath))
+                    }
+                    "نمایش هگز" -> single?.let { file ->
+                        startActivity(Intent(this, HexViewerActivity::class.java).putExtra("file_path", file.absolutePath))
                     }
                 }
             }
