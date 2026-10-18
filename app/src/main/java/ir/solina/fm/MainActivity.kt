@@ -98,7 +98,8 @@ class MainActivity : AppCompatActivity() {
     private var current: File = Environment.getExternalStorageDirectory()
     private var showHidden = false
     private var gridLayout = false
-    private var sortMode = SortMode.NAME
+    private var sortMode = SortMode.MODIFIED
+    private var activityTimes: Map<String, Long> = emptyMap()
     private var allFiles: List<File> = emptyList()
     private val backHistory = ArrayDeque<File>()
     private val forwardHistory = ArrayDeque<File>()
@@ -437,6 +438,22 @@ class MainActivity : AppCompatActivity() {
         refresh()
     }
 
+    private fun latestActivityTime(file: File, cache: MutableMap<String, Long>, budget: IntArray, depth: Int = 0): Long {
+        val key = file.absolutePath
+        cache[key]?.let { return it }
+        var latest = file.lastModified()
+        if (file.isDirectory && depth < 32 && budget[0] > 0) {
+            val children = try { file.listFiles() } catch (_: SecurityException) { null }
+            children?.forEach { child ->
+                if (budget[0] <= 0 || child.name.startsWith(".solina-trash-")) return@forEach
+                budget[0]--
+                latest = maxOf(latest, latestActivityTime(child, cache, budget, depth + 1))
+            }
+        }
+        cache[key] = latest
+        return latest
+    }
+
     private fun refresh() {
         updateBars()
         if (!hasPermission()) {
@@ -449,10 +466,18 @@ class MainActivity : AppCompatActivity() {
         val unsorted = (raw ?: emptyArray()).filter {
             !it.name.startsWith(".solina-trash-") && (showHidden || !it.name.startsWith("."))
         }
+        val activityCache = HashMap<String, Long>()
+        val scanBudget = intArrayOf(20000)
+        val byRecentActivity = unsorted.sortedWith(
+            compareByDescending<File> { latestActivityTime(it, activityCache, scanBudget) }
+                .thenByDescending { it.lastModified() }
+                .thenBy { it.name.lowercase(Locale.ROOT) }
+        )
+        activityTimes = activityCache
         allFiles = when (sortMode) {
             SortMode.NAME -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) }))
             SortMode.SIZE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { if (it.isDirectory) 0L else it.length() }))
-            SortMode.MODIFIED -> unsorted.sortedByDescending { it.lastModified() }
+            SortMode.MODIFIED -> byRecentActivity
             SortMode.TYPE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.extension.lowercase(Locale.ROOT) }, { it.name.lowercase(Locale.ROOT) }))
         }
         selected.retainAll(allFiles.toSet())
@@ -1549,8 +1574,9 @@ class MainActivity : AppCompatActivity() {
 
     // ---------- list adapter ----------
 
-    private inner class FileAdapter : RecyclerView.Adapter<FileAdapter.VH>() {
-
+    private inner class FileAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+        private val TYPE_FILE = 0
+        private val TYPE_RECENT_DIVIDER = 1
         var items: List<File> = emptyList()
 
         fun submit(newItems: List<File>) {
@@ -1565,18 +1591,48 @@ class MainActivity : AppCompatActivity() {
             val check: CheckBox = view.findViewById(R.id.fileCheck)
         }
 
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH =
-            VH(layoutInflater.inflate(R.layout.item_file, parent, false))
+        inner class DividerVH(view: View) : RecyclerView.ViewHolder(view)
 
-        override fun getItemCount(): Int = items.size
+        override fun getItemViewType(position: Int): Int =
+            if (items.size > 10 && position == 10) TYPE_RECENT_DIVIDER else TYPE_FILE
 
-        override fun onBindViewHolder(holder: VH, position: Int) {
-            val file = items[position]
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            if (viewType == TYPE_RECENT_DIVIDER) {
+                val context = parent.context
+                val container = LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(dp(12), dp(10), dp(12), dp(10))
+                }
+                val label = TextView(context).apply {
+                    text = "سایر موارد"
+                    textSize = 12f
+                    setTextColor(0xFF5B6FC7.toInt())
+                    setPadding(0, 0, 0, dp(6))
+                }
+                val line = View(context).apply {
+                    setBackgroundColor(0xFFB0B0B0.toInt())
+                    layoutParams = LinearLayout.LayoutParams(-1, dp(1))
+                }
+                container.addView(label)
+                container.addView(line)
+                return DividerVH(container)
+            }
+            return VH(layoutInflater.inflate(R.layout.item_file, parent, false))
+        }
+
+        override fun getItemCount(): Int = items.size + if (items.size > 10) 1 else 0
+
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            if (holder is DividerVH) return
+            holder as VH
+            val itemIndex = if (items.size > 10 && position > 10) position - 1 else position
+            val file = items[itemIndex]
             holder.name.text = file.name
             FileTypeVisuals.applyTo(holder.icon, file)
-            val date = formatDate(file.lastModified())
+            val latestChange = activityTimes[file.absolutePath] ?: file.lastModified()
+            val date = formatDate(latestChange)
             holder.info.text =
-                if (file.isDirectory) date else fmt(file.length()) + " • " + date
+                if (file.isDirectory) "پوشه • $date" else fmt(file.length()) + " • " + date
             val root = holder.itemView as? LinearLayout
             val iconFrame = (0 until (root?.childCount ?: 0)).mapNotNull { root?.getChildAt(it) }.firstOrNull { it is android.widget.FrameLayout } as? android.widget.FrameLayout
             val details = (0 until (root?.childCount ?: 0)).mapNotNull { root?.getChildAt(it) }.firstOrNull { it is LinearLayout } as? LinearLayout
