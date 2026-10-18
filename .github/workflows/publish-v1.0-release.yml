@@ -57,11 +57,17 @@ jobs:
           body: |
             Solina Files ${{ steps.version.outputs.tag }} — Android debug APK for testing.
 
-            - Source: main branch
-            - Includes searchable installed-app management and safer APK/DEX inspection.
-            - Improves file transfer reporting and removes incomplete vault files after encryption errors.
+            Highlights:
+            - Redesigned home storage summary with used/free space and file/folder counts.
+            - File categories show item counts and total sizes.
+            - Pinned files are grouped at the top of the list.
+            - Compact dual-pane navigation and icon-only selection actions.
+            - Drawer tool access and a fixed create button for folders, text files, and HTML files.
+            - Shared light/dark theme styling.
+
             - Minimum Android version: Android 11 (API 30).
             - APK type: debug build; not signed with a production release key.
+            - This release includes the staged Strata integration; it is not a complete port of every Strata feature.
           files: app/build/outputs/apk/debug/*.apk
           fail_on_unmatched_files: true
           make_latest: true
