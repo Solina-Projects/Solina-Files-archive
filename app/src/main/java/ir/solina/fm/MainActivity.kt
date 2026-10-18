@@ -1151,11 +1151,13 @@ class MainActivity : AppCompatActivity() {
         val defaultName = if (extension == "html") "index.html" else "new.txt"
         askText("نام فایل جدید", defaultName) { rawName ->
             var name = rawName.trim()
-            if (name.isBlank() || name == "." || name == ".." || name.contains("/") || name.contains("\\\\")) {
+            if (name.isBlank() || name == "." || name == ".." || name.contains("/")) {
                 toast("نام فایل معتبر نیست")
                 return@askText
             }
-            if (!name.contains(".")) name += ".$extension"
+            if (!name.endsWith(".$extension", ignoreCase = true)) {
+                name = if (name.contains(".")) name.substringBeforeLast('.') + ".$extension" else "$name.$extension"
+            }
             val target = File(current, name)
             if (target.exists()) {
                 toast(getString(R.string.name_exists))
@@ -1989,6 +1991,14 @@ class MainActivity : AppCompatActivity() {
             holder.name.text = if (pinned) "📌  ${file.name}" else file.name
             holder.name.textSize = 15f * fontScale
             holder.info.textSize = 12f * fontScale
+            holder.itemView.background = if (pinned && !selected.contains(file)) {
+                android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(12).toFloat()
+                    setColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.solina_primary_container))
+                }
+            } else {
+                androidx.appcompat.content.res.AppCompatResources.getDrawable(this@MainActivity, R.drawable.item_bg)
+            }
             holder.info.visibility = if (!multiColumn) View.VISIBLE else View.GONE
             FileTypeVisuals.applyTo(holder.icon, file)
             val latestChange = activityTimes[file.absolutePath] ?: file.lastModified()
