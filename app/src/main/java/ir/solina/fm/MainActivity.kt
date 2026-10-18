@@ -1905,9 +1905,13 @@ class MainActivity : AppCompatActivity() {
 
     private inner class FileAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         var items: List<File> = emptyList()
+        private var pinnedCount: Int = 0
+        private val pinnedHeaderType = 1
 
         fun submit(newItems: List<File>) {
             items = newItems
+            val pins = getPinnedItems()
+            pinnedCount = newItems.count { it.absolutePath in pins }
             notifyDataSetChanged()
         }
 
@@ -1918,14 +1922,36 @@ class MainActivity : AppCompatActivity() {
             val check: CheckBox = view.findViewById(R.id.fileCheck)
         }
 
-        override fun getItemCount(): Int = items.size
+        inner class PinnedHeaderVH(view: View) : RecyclerView.ViewHolder(view)
 
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder =
-            VH(layoutInflater.inflate(R.layout.item_file, parent, false))
+        override fun getItemCount(): Int = items.size + if (pinnedCount > 0) 1 else 0
+
+        override fun getItemViewType(position: Int): Int =
+            if (pinnedCount > 0 && position == 0) pinnedHeaderType else 0
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            if (viewType == pinnedHeaderType) {
+                val title = TextView(this@MainActivity).apply {
+                    text = "📌  پین‌شده‌ها"
+                    textSize = 13f
+                    setTypeface(typeface, android.graphics.Typeface.BOLD)
+                    setTextColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.solina_primary))
+                    setPadding(dp(14), dp(8), dp(14), dp(8))
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        cornerRadius = dp(12).toFloat()
+                        setColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.solina_primary_container))
+                    }
+                }
+                return PinnedHeaderVH(title)
+            }
+            return VH(layoutInflater.inflate(R.layout.item_file, parent, false))
+        }
 
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            if (holder is PinnedHeaderVH) return
             holder as VH
-            val file = items[position]
+            val file = items[position - if (pinnedCount > 0) 1 else 0]
+            val pinned = file.absolutePath in getPinnedItems()
             val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
             val multiColumn = prefs.getBoolean("layout_mode_multi", gridLayout)
             val singlePreset = prefs.getInt("single_layout_preset", 0).coerceIn(0, 6)
@@ -1945,15 +1971,15 @@ class MainActivity : AppCompatActivity() {
             val fontScale = if (multiColumn)
                 floatArrayOf(1.15f, 1.10f, 1.10f, 1.05f, 1.05f, 1.0f)[multiPreset]
             else floatArrayOf(1.0f, 1.0f, 1.0f, 1.05f, 1.10f, 1.10f, 1.10f)[singlePreset]
-            holder.name.text = file.name
+            holder.name.text = if (pinned) "📌  ${file.name}" else file.name
             holder.name.textSize = 15f * fontScale
             holder.info.textSize = 12f * fontScale
             holder.info.visibility = if (!multiColumn) View.VISIBLE else View.GONE
             FileTypeVisuals.applyTo(holder.icon, file)
             val latestChange = activityTimes[file.absolutePath] ?: file.lastModified()
             val date = formatDate(latestChange)
-            holder.info.text =
-                if (file.isDirectory) "پوشه • $date" else fmt(file.length()) + " • " + date
+            val detail = if (file.isDirectory) "پوشه • $date" else fmt(file.length()) + " • " + date
+            holder.info.text = if (pinned) "پین‌شده • $detail" else detail
             val root = holder.itemView as? LinearLayout
             val iconFrame = (0 until (root?.childCount ?: 0)).mapNotNull { root?.getChildAt(it) }.firstOrNull { it is android.widget.FrameLayout } as? android.widget.FrameLayout
             val details = (0 until (root?.childCount ?: 0)).mapNotNull { root?.getChildAt(it) }.firstOrNull { it is LinearLayout } as? LinearLayout
