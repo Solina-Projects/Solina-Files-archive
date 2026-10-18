@@ -183,11 +183,6 @@ private data class HomeCategory(
     val filter: String? = null
 )
 
-private fun categoryDirectory(name: String?): File? {
-    if (name.isNullOrBlank()) return null
-    return Environment.getExternalStoragePublicDirectory(name)
-}
-
 private fun formatSize(context: android.content.Context, bytes: Long): String =
     Formatter.formatFileSize(context, bytes)
 
@@ -217,7 +212,6 @@ private fun SolinaHomeScreen(
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         }
     }
-    val root = Environment.getExternalStorageDirectory()
     val categories = listOf(
         HomeCategory("دانلودها", "همه فایل‌های جدید از سراسر حافظه", Icons.Default.FolderOpen,
             Color(0xFF1A73E8), null, "recent"),
@@ -321,29 +315,6 @@ private fun SolinaHomeScreen(
                             TextButton(onClick = {
                                 if (hasAccess) onBrowse() else onRequestPermission()
                             }) { Text(if (hasAccess) "باز کردن" else "دسترسی") }
-                        }
-                    }
-                }
-                item {
-                    Text("پوشه‌های پرکاربرد", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Spacer(Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        val quickFolders = listOf(
-                            HomeCategory("دانلودها", "فایل‌های دریافت‌شده", Icons.Default.FolderOpen,
-                                Color(0xFF1A73E8), Environment.DIRECTORY_DOWNLOADS),
-                            HomeCategory("دوربین", "عکس‌های گرفته‌شده", Icons.Default.Image,
-                                Color(0xFFAF52DE), Environment.DIRECTORY_DCIM)
-                        )
-                        quickFolders.forEach { folder ->
-                            CategoryTile(
-                                category = folder,
-                                modifier = Modifier.weight(1f),
-                                onClick = {
-                                    val dir = categoryDirectory(folder.directory)
-                                    onOpenFolder(dir?.takeIf { it.exists() && it.isDirectory }?.absolutePath
-                                        ?: root.absolutePath, null)
-                                }
-                            )
                         }
                     }
                 }
