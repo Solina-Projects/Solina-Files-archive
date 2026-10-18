@@ -56,7 +56,21 @@ class ApkToolsActivity : AppCompatActivity() {
             val report = try {
                 val uri = data.data!!
                 val temp = File(cacheDir, "inspect-${System.currentTimeMillis()}.apk")
-                contentResolver.openInputStream(uri)!!.use { input -> temp.outputStream().use { input.copyTo(it) } }
+                try {
+                    val source = contentResolver.openInputStream(uri) ?: error("فایل انتخاب‌شده قابل خواندن نیست")
+                    source.use { input ->
+                        temp.outputStream().buffered().use { output ->
+                            val buffer = ByteArray(8192)
+                            var total = 0L
+                            while (true) {
+                                val read = input.read(buffer)
+                                if (read < 0) break
+                                total += read
+                                require(total <= 512L * 1024L * 1024L) { "حجم APK از حد مجاز ۵۱۲ مگابایت بیشتر است" }
+                                output.write(buffer, 0, read)
+                            }
+                        }
+                    }
                 val info = packageManager.getPackageArchiveInfo(temp.absolutePath,
                     PackageManager.GET_PERMISSIONS or PackageManager.GET_SIGNING_CERTIFICATES)
                 val out = StringBuilder()
@@ -79,11 +93,19 @@ class ApkToolsActivity : AppCompatActivity() {
                 } else out.appendLine("PackageManager نتوانست اطلاعات APK را تحلیل کند.")
                 out.appendLine("\n--- فایل‌های DEX ---")
                 ZipFile(temp).use { zip ->
-                    val dexFiles = zip.entries().asSequence().filter { !it.isDirectory && it.name.matches(Regex("classes(\\\\d*)\\\\.dex")) }.toList()
+                    val dexFiles = zip.entries().asSequence().filter { !it.isDirectory && it.name.matches(Regex("classes(\\d*)\\.dex")) }.toList()
                     out.appendLine("تعداد DEX: ${dexFiles.size}")
                     dexFiles.forEach { entry ->
                         out.appendLine("\n[${entry.name}]")
-                        val bytes = zip.getInputStream(entry).use { it.readBytes() }
+                        if (entry.size > 64L * 1024L * 1024L) {
+                            out.appendLine("DEX بزرگ‌تر از حد مجاز ۶۴ مگابایت است؛ از این فایل صرف‌نظر شد.")
+                            return@forEach
+                        }
+                        val bytes = zip.getInputStream(entry).use { it.readNBytes(64 * 1024 * 1024 + 1) }
+                        if (bytes.size > 64 * 1024 * 1024) {
+                            out.appendLine("DEX بزرگ‌تر از حد مجاز است؛ از این فایل صرف‌نظر شد.")
+                            return@forEach
+                        }
                         out.append(dexStructureReport(bytes))
                         val strings = Regex("[ -~]{5,}").findAll(bytes.toString(Charsets.ISO_8859_1))
                             .map { it.value }.distinct().take(120).toList()
@@ -91,9 +113,11 @@ class ApkToolsActivity : AppCompatActivity() {
                         strings.forEach { out.appendLine(it.take(300)) }
                     }
                 }
-                temp.delete()
                 out.toString()
-            } catch (e: Exception) { "تحلیل APK ناموفق بود: ${e.message}" }
+                } finally {
+                    temp.delete()
+                }
+            } catch (e: Exception) { "تحلیل APK ناموفق بود: ${e.localizedMessage ?: e.javaClass.simpleName}" }
             runOnUiThread { result.text = report }
         }.start()
     }
