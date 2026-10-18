@@ -204,7 +204,7 @@ private fun CategoryFilesScreen(
                 }
             }
             Text(
-                if (loading) "در حال بررسی فایل‌های حافظه…" else "مرتب‌شده از جدیدترین به قدیمی‌ترین • \${files.size} فایل",
+                if (loading) "در حال بررسی فایل‌های حافظه…" else "مرتب‌شده از جدیدترین به قدیمی‌ترین • ${files.size} فایل",
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 12.sp
@@ -284,7 +284,7 @@ private fun CategoryFileRow(file: File, onClick: () -> Unit) {
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                "\${android.text.format.Formatter.formatFileSize(context, file.length())} • $modified",
+                "${android.text.format.Formatter.formatFileSize(context, file.length())} • $modified",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp,
                 maxLines = 1,
