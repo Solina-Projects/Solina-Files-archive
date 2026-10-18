@@ -1,4 +1,4 @@
-# 📂 Solina Files (SolinaFM) v1.0.1
+# 📂 Solina Files (SolinaFM) v1.0.2
 
 [![Release](https://img.shields.io/github/v/release/Solina-Projects/Solina-Files?color=006B5F&logo=android&label=Solina%20Files)](https://github.com/Solina-Projects/Solina-Files/releases)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/Solina-Projects/Solina-Files/build.yml?branch=main&label=Build%20APK)](https://github.com/Solina-Projects/Solina-Files/actions)
@@ -28,7 +28,7 @@
 
 ## 📥 دانلود فایل APK آماده نصب
 
-👉 **[دانلود مستقیم Solina Files v1.0.1 APK](https://github.com/Solina-Projects/Solina-Files/releases/download/v1.0.1/app-debug.apk)**
+👉 **[دانلود مستقیم Solina Files v1.0.2 APK](https://github.com/Solina-Projects/Solina-Files/releases/download/v1.0.2/app-debug.apk)**
 
 ---
 
@@ -48,6 +48,11 @@ gradle assembleDebug --no-daemon
 **توسعه‌دهنده و صاحب‌امتیاز: تیم Solina**  
 با افتخار متن‌باز و توسعه داده شده با کاتلین.
 
+
+## تغییرات نسخه 1.0.2
+
+- اصلاح بررسی مسیر مقصد هنگام کپی پوشه و جلوگیری از گزارش موفقیت انتقال وقتی حذف مبدأ ناقص مانده باشد.
+- پاک‌سازی فایل‌های ناقص خزانه در صورت شکست رمزگذاری یا در دسترس نبودن جریان ورودی.
 
 ## تغییرات نسخه 1.0.1
 
