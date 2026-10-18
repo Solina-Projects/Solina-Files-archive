@@ -64,6 +64,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -85,6 +86,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalLayoutDirection
 import java.io.File
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class ComposeHomeActivity : ComponentActivity() {
     private var resumeVersion by mutableIntStateOf(0)
@@ -185,48 +188,58 @@ private fun categoryDirectory(name: String?): File? {
     return Environment.getExternalStoragePublicDirectory(name)
 }
 
-private var homeActivityTimes: Map<String, Long> = emptyMap()
+private data class HomeFolderStats(val bytes: Long = 0L, val files: Int = 0, val folders: Int = 0)
+private data class MutableHomeFolderStats(var bytes: Long = 0L, var files: Int = 0, var folders: Int = 0)
 
+private var homeActivityTimes: Map<String, Long> = emptyMap()
+private var homeFolderStats: Map<String, HomeFolderStats> = emptyMap()
+
+/** Bounded, single-pass scan. It deliberately runs on Dispatchers.IO, never during composition. */
 private fun scanHomeFiles(): List<File> {
     val root = Environment.getExternalStorageDirectory()
-    val candidates = LinkedHashMap<String, File>()
+    val candidates = ArrayList<File>()
+    val latestByPath = HashMap<String, Long>()
+    val statsByPath = HashMap<String, MutableHomeFolderStats>()
     val stack = ArrayDeque<Pair<File, Int>>()
     stack.add(root to 0)
     var visited = 0
     while (stack.isNotEmpty() && visited < 20000) {
         val (dir, depth) = stack.removeLast()
-        val children = try { dir.listFiles() } catch (_: SecurityException) { null } ?: continue
+        val children = try { dir.listFiles() } catch (_: Exception) { null } ?: continue
         for (child in children) {
             if (child.name.startsWith(".") || child.name.startsWith(".solina-trash-")) continue
             visited++
-            candidates[child.absolutePath] = child
+            val path = child.absolutePath
+            val modified = child.lastModified()
+            candidates.add(child)
+            latestByPath[path] = modified
+            var ancestor: File? = dir
+            var ancestorDepth = depth
+            while (ancestor != null && ancestorDepth >= 0) {
+                val ancestorPath = ancestor.absolutePath
+                latestByPath[ancestorPath] = maxOf(latestByPath[ancestorPath] ?: 0L, modified)
+                val stats = statsByPath.getOrPut(ancestorPath) { MutableHomeFolderStats() }
+                if (child.isFile) {
+                    stats.bytes += child.length()
+                    stats.files++
+                } else if (child.isDirectory && ancestorPath != path) {
+                    stats.folders++
+                }
+                if (ancestorPath == root.absolutePath) break
+                ancestor = ancestor.parentFile
+                ancestorDepth--
+            }
             if (child.isDirectory && depth < 32 && visited < 20000) stack.add(child to depth + 1)
             if (visited >= 20000) break
         }
     }
-    val cache = HashMap<String, Long>()
-    val budget = intArrayOf(20000)
-    fun latestActivity(file: File, depth: Int = 0): Long {
-        cache[file.absolutePath]?.let { return it }
-        var latest = file.lastModified()
-        if (file.isDirectory && depth < 32 && budget[0] > 0) {
-            val children = try { file.listFiles() } catch (_: SecurityException) { null }
-            children?.forEach { child ->
-                if (budget[0] <= 0 || child.name.startsWith(".")) return@forEach
-                budget[0]--
-                latest = maxOf(latest, latestActivity(child, depth + 1))
-            }
-        }
-        cache[file.absolutePath] = latest
-        return latest
-    }
-    val sorted = candidates.values.sortedWith(
-        compareByDescending<File> { latestActivity(it) }
+    homeActivityTimes = latestByPath
+    homeFolderStats = statsByPath.mapValues { (_, s) -> HomeFolderStats(s.bytes, s.files, s.folders) }
+    return candidates.sortedWith(
+        compareByDescending<File> { latestByPath[it.absolutePath] ?: it.lastModified() }
             .thenByDescending { it.lastModified() }
             .thenBy { it.name.lowercase(Locale.ROOT) }
-    )
-    homeActivityTimes = cache
-    return sorted
+    ).take(10)
 }
 
 private fun formatSize(context: android.content.Context, bytes: Long): String =
@@ -257,8 +270,11 @@ private fun SolinaHomeScreen(
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         }
     }
-    var recentFiles by remember(permissionRefreshKey) {
-        mutableStateOf(if (hasAccess) scanHomeFiles() else emptyList())
+    var recentFiles by remember { mutableStateOf<List<File>>(emptyList()) }
+    var refreshRecentKey by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(hasAccess, permissionRefreshKey, refreshRecentKey) {
+        recentFiles = if (hasAccess) withContext(Dispatchers.IO) { scanHomeFiles() } else emptyList()
     }
     val root = Environment.getExternalStorageDirectory()
     val (total, free) = remember {
@@ -423,7 +439,7 @@ private fun SolinaHomeScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("آخرین‌ها", fontWeight = FontWeight.Bold, fontSize = 18.sp,
                             modifier = Modifier.weight(1f))
-                        TextButton(onClick = { recentFiles = scanHomeFiles() }) {
+                        TextButton(onClick = { refreshRecentKey++ }) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(17.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("تازه‌سازی")
@@ -445,21 +461,8 @@ private fun SolinaHomeScreen(
                 } else if (recentFiles.isEmpty()) {
                     item { Text("فایل اخیری پیدا نشد.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp) }
                 } else {
-                    items(recentFiles.take(10), key = { it.absolutePath }) { file ->
+                    items(recentFiles, key = { it.absolutePath }) { file ->
                         RecentFileRow(file = file, onClick = { onOpenFile(file.absolutePath) })
-                    }
-                    if (recentFiles.size > 10) {
-                        item(key = "recent-items-divider") {
-                            Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp)) {
-                                Text("سایر موارد", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(bottom = 6.dp))
-                                Divider(color = MaterialTheme.colorScheme.outlineVariant)
-                            }
-                        }
-                        items(recentFiles.drop(10), key = { it.absolutePath }) { file ->
-                            RecentFileRow(file = file, onClick = { onOpenFile(file.absolutePath) })
-                        }
                     }
                 }
             }
@@ -530,7 +533,12 @@ private fun RecentFileRow(file: File, onClick: () -> Unit) {
             val dateTime = remember(file.absolutePath, file.lastModified()) {
                 java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(homeActivityTimes[file.absolutePath] ?: file.lastModified()))
             }
-            val details = if (file.isDirectory) "پوشه • $dateTime" else "${formatSize(context, file.length())} • $dateTime"
+            val details = if (file.isDirectory) {
+                val stats = homeFolderStats[file.absolutePath] ?: HomeFolderStats()
+                "پوشه • ${formatSize(context, stats.bytes)} • ${stats.files} فایل • ${stats.folders} پوشه • $dateTime"
+            } else {
+                "${formatSize(context, file.length())} • $dateTime"
+            }
             Text(details, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Icon(Icons.Default.ChevronRight, contentDescription = "باز کردن", tint = MaterialTheme.colorScheme.onSurfaceVariant)
