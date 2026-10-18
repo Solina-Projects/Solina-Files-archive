@@ -509,11 +509,16 @@ class MainActivity : AppCompatActivity() {
                 .thenBy { it.name.lowercase(Locale.ROOT) }
         )
         activityTimes = activityCache
-        allFiles = when (sortMode) {
+        val sortedFiles = when (sortMode) {
             SortMode.NAME -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) }))
             SortMode.SIZE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { if (it.isDirectory) 0L else it.length() }))
             SortMode.MODIFIED -> byRecentActivity
             SortMode.TYPE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.extension.lowercase(Locale.ROOT) }, { it.name.lowercase(Locale.ROOT) }))
+        }
+        val pinOrder = getPinnedOrder()
+        allFiles = sortedFiles.sortedBy { file ->
+            val index = pinOrder.indexOf(file.absolutePath)
+            if (index < 0) Int.MAX_VALUE else index
         }
         selected.retainAll(allFiles.toSet())
         val query = searchInput.text?.toString()?.trim()?.lowercase(Locale.ROOT).orEmpty()
@@ -1143,7 +1148,19 @@ class MainActivity : AppCompatActivity() {
             }
             try {
                 if (!target.createNewFile()) throw IllegalStateException("createNewFile failed")
-                if (extension == "html") target.writeText("<!doctype html>\\n<html lang=\\"fa\\">\\n<head>\\n  <meta charset=\\"utf-8\\">\\n  <meta name=\\"viewport\\" content=\\"width=device-width, initial-scale=1\\">\\n  <title>صفحه جدید</title>\\n</head>\\n<body>\\n  <h1>صفحه جدید</h1>\\n</body>\\n</html>\\n", Charsets.UTF_8)
+                if (extension == "html") target.writeText(
+                    """<!doctype html>
+<html lang="fa">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>صفحه جدید</title>
+</head>
+<body>
+  <h1>صفحه جدید</h1>
+</body>
+</html>""".trimIndent() + "\n", Charsets.UTF_8
+                )
                 refresh()
                 startActivity(Intent(this, TextEditorActivity::class.java).putExtra("file_path", target.absolutePath))
             } catch (_: Exception) {
@@ -1177,20 +1194,50 @@ class MainActivity : AppCompatActivity() {
         getSharedPreferences("solina_preferences", MODE_PRIVATE)
             .getStringSet("pinned_items", emptySet())?.toMutableSet() ?: mutableSetOf()
 
+    private fun getPinnedOrder(): MutableList<String> {
+        val prefs = getSharedPreferences("solina_preferences", MODE_PRIVATE)
+        val raw = prefs.getString("pinned_items_order", null)
+        val pins = getPinnedItems()
+        if (!raw.isNullOrBlank()) {
+            val order = runCatching {
+                val json = org.json.JSONArray(raw)
+                MutableList(json.length()) { index -> json.getString(index) }
+            }.getOrDefault(mutableListOf())
+            order.retainAll(pins)
+            pins.forEach { path -> if (path !in order) order.add(path) }
+            return order
+        }
+        return pins.sortedBy { File(it).name.lowercase(Locale.ROOT) }.toMutableList()
+    }
+
     private fun pinSelected() {
         if (selected.isEmpty()) return
         val pins = getPinnedItems()
+        val order = getPinnedOrder()
         var added = 0
         var removed = 0
-        selected.forEach { file ->
-            if (pins.remove(file.absolutePath)) removed++ else { pins.add(file.absolutePath); added++ }
+        selected.toList().asReversed().forEach { file ->
+            val path = file.absolutePath
+            if (pins.remove(path)) {
+                order.remove(path)
+                removed++
+            } else {
+                pins.add(path)
+                order.remove(path)
+                order.add(0, path)
+                added++
+            }
         }
-        getSharedPreferences("solina_preferences", MODE_PRIVATE).edit().putStringSet("pinned_items", pins).apply()
+        getSharedPreferences("solina_preferences", MODE_PRIVATE).edit()
+            .putStringSet("pinned_items", pins)
+            .putString("pinned_items_order", org.json.JSONArray(order).toString())
+            .apply()
         toast(when {
             added > 0 && removed > 0 -> "موارد انتخاب‌شده به‌روزرسانی شدند"
             added > 0 -> "موارد انتخاب‌شده پین شدند"
             else -> "پین موارد انتخاب‌شده برداشته شد"
         })
+        refresh()
         clearSelection()
     }
 
