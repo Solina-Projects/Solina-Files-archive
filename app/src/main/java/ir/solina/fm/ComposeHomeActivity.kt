@@ -319,16 +319,18 @@ private fun SolinaHomeScreen(
                         shape = RoundedCornerShape(14.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(if (nightMode) Icons.Default.LightMode else Icons.Default.DarkMode,
-                                contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(23.dp))
-                            Spacer(Modifier.width(10.dp))
-                            Text(if (nightMode) "تم روشن" else "تم تاریک", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Spacer(Modifier.weight(1f))
-                            Text("تغییر پوسته", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                        androidx.compose.runtime.CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(if (nightMode) Icons.Default.LightMode else Icons.Default.DarkMode,
+                                    contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(23.dp))
+                                Spacer(Modifier.width(10.dp))
+                                Text(if (nightMode) "تم روشن" else "تم تاریک", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Spacer(Modifier.weight(1f))
+                                Text("تغییر پوسته", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                            }
                         }
                     }
                 }
@@ -381,7 +383,7 @@ private fun SolinaHomeScreen(
                         ) {
                             Surface(shape = RoundedCornerShape(11.dp), color = MaterialTheme.colorScheme.primaryContainer) {
                                 Icon(Icons.Default.Storage, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(8.dp).size(20.dp))
+                                    modifier = Modifier.padding(9.dp).size(26.dp))
                             }
                             Spacer(Modifier.width(9.dp))
                             Column(Modifier.weight(1f)) {
