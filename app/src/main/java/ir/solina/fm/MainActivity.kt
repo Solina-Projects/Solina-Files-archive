@@ -91,6 +91,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var emptyText: TextView
     private lateinit var grantButton: MaterialButton
     private lateinit var pasteFab: ExtendedFloatingActionButton
+    private lateinit var createFab: com.google.android.material.floatingactionbutton.FloatingActionButton
 
     private val adapter = FileAdapter()
     private var volumes: List<Vol> = emptyList()
@@ -164,6 +165,7 @@ class MainActivity : AppCompatActivity() {
         emptyText = findViewById(R.id.emptyText)
         grantButton = findViewById(R.id.grantButton)
         pasteFab = findViewById(R.id.pasteFab)
+        createFab = findViewById(R.id.createFab)
 
         mainBar.inflateMenu(R.menu.menu_main)
         mainBar.setOnMenuItemClickListener { onMainMenu(it) }
@@ -198,6 +200,7 @@ class MainActivity : AppCompatActivity() {
         bottomDelete.setOnClickListener { confirmDelete() }
         grantButton.setOnClickListener { requestPermission() }
         pasteFab.setOnClickListener { paste() }
+        createFab.setOnClickListener { showCreateMenu() }
 
         list.adapter = adapter
         applyFileLayout()
@@ -359,8 +362,14 @@ class MainActivity : AppCompatActivity() {
                 Kind.SD -> R.drawable.ic_sd_card
                 Kind.USB -> R.drawable.ic_usb
             }
-            row.findViewById<ImageView>(R.id.volIcon).setImageResource(iconRes)
-            row.findViewById<TextView>(R.id.volName).text = v.name
+            row.minimumHeight = dp(54)
+            row.setPadding(dp(6), dp(3), dp(6), dp(3))
+            row.findViewById<ImageView>(R.id.volIcon).apply {
+                setImageResource(iconRes)
+                layoutParams = layoutParams.apply { width = dp(30); height = dp(30) }
+            }
+            row.findViewById<TextView>(R.id.volName).apply { text = v.name; textSize = 12f }
+            row.findViewById<TextView>(R.id.volStats).textSize = 10f
             var total = 0L
             var free = 0L
             try {
@@ -371,8 +380,10 @@ class MainActivity : AppCompatActivity() {
                 // volume not readable
             }
             val used = (total - free).coerceAtLeast(0L)
-            row.findViewById<LinearProgressIndicator>(R.id.volBar).progress =
-                if (total > 0L) ((used * 100L) / total).toInt() else 0
+            row.findViewById<LinearProgressIndicator>(R.id.volBar).apply {
+                progress = if (total > 0L) ((used * 100L) / total).toInt() else 0
+                layoutParams = layoutParams.apply { height = dp(4) }
+            }
             row.findViewById<TextView>(R.id.volStats).text =
                 getString(R.string.storage_stats, fmt(used), fmt(free), fmt(total))
             row.isActivated = currentVol?.dir?.path == v.dir.path
@@ -661,7 +672,13 @@ class MainActivity : AppCompatActivity() {
         val popup = android.widget.PopupMenu(this, anchor)
         for (index in 0 until mainBar.menu.size()) {
             val original = mainBar.menu.getItem(index)
-            if (original.itemId == R.id.action_dual_pane || original.itemId == R.id.action_theme || original.itemId == R.id.action_sort) continue
+            if (original.itemId in setOf(
+                    R.id.action_dual_pane, R.id.action_theme, R.id.action_sort, R.id.action_pinned,
+                    R.id.action_storage_analysis, R.id.action_vault, R.id.action_root, R.id.action_network,
+                    R.id.action_apk_tools, R.id.action_installed_apps, R.id.action_file_tools,
+                    R.id.action_recycle_bin, R.id.action_recent_files, R.id.action_advanced_settings,
+                    R.id.action_wifi_transfer, R.id.action_text_editor
+                )) continue
             val item = popup.menu.add(original.groupId, original.itemId, original.order, original.title)
             item.isCheckable = original.isCheckable
             item.isChecked = if (original.itemId == R.id.action_hidden) showHidden else original.isChecked
@@ -714,41 +731,17 @@ class MainActivity : AppCompatActivity() {
             setBackgroundColor(surface)
         }
         root.addView(TextView(this).apply {
-            text = "تنظیمات و حافظه"
-            textSize = 20f
+            text = "ابزارها و حافظه"
+            textSize = 19f
             setTextColor(onSurface)
-            setPadding(dp(8), dp(4), dp(8), dp(16))
+            setPadding(dp(8), dp(2), dp(8), dp(8))
         }, LinearLayout.LayoutParams(-1, -2))
-
-        val themeRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER_VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(12))
-            isClickable = true
-            isFocusable = true
-            background = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@MainActivity, R.drawable.item_bg)
-            contentDescription = if (night) "تغییر به تم روشن" else "تغییر به تم تیره"
-            setOnClickListener { dialog.dismiss(); toggleTheme() }
-        }
-        themeRow.addView(TextView(this).apply {
-            text = if (night) "☀" else "☾"
-            textSize = 24f
-            gravity = android.view.Gravity.CENTER
-            setTextColor(onSurface)
-        }, LinearLayout.LayoutParams(dp(36), dp(36)))
-        themeRow.addView(TextView(this).apply {
-            text = if (night) "تم روشن" else "تم تیره"
-            textSize = 16f
-            setTextColor(onSurface)
-            setPadding(dp(12), 0, 0, 0)
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        root.addView(themeRow, LinearLayout.LayoutParams(-1, -2))
 
         root.addView(TextView(this).apply {
             text = "انتخاب حافظه"
-            textSize = 16f
+            textSize = 13f
             setTextColor(onSurface)
-            setPadding(dp(8), dp(20), dp(8), dp(8))
+            setPadding(dp(8), dp(8), dp(8), dp(4))
         }, LinearLayout.LayoutParams(-1, -2))
 
         val scroll = android.widget.ScrollView(this).apply { isFillViewport = false }
@@ -783,7 +776,48 @@ class MainActivity : AppCompatActivity() {
             }
             volumeList.addView(row)
         }
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(scroll, LinearLayout.LayoutParams(-1, dp(170)))
+        root.addView(TextView(this).apply {
+            text = "ابزارها"
+            textSize = 13f
+            setTextColor(muted)
+            setPadding(dp(8), dp(8), dp(8), dp(4))
+        }, LinearLayout.LayoutParams(-1, -2))
+        val toolsScroll = android.widget.ScrollView(this).apply { isFillViewport = false }
+        val toolsList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        toolsScroll.addView(toolsList, ViewGroup.LayoutParams(-1, -2))
+        val toolItems = listOf(
+            Triple(R.id.action_storage_analysis, "تحلیل فضای پوشه", R.drawable.ic_hard_drive),
+            Triple(R.id.action_vault, "خزانه رمزگذاری‌شده", R.drawable.ic_lock),
+            Triple(R.id.action_root, "مدیریت فایل با دسترسی ریشه", R.drawable.ic_phone),
+            Triple(R.id.action_network, "اتصال به فضای شبکه", R.drawable.ic_share),
+            Triple(R.id.action_apk_tools, "تحلیل APK و DEX", R.drawable.ic_file_apk),
+            Triple(R.id.action_installed_apps, "برنامه‌های نصب‌شده", R.drawable.ic_file_apk),
+            Triple(R.id.action_file_tools, "ابزارهای تکمیلی فایل", R.drawable.ic_edit),
+            Triple(R.id.action_recycle_bin, "سطل بازیافت", R.drawable.ic_delete),
+            Triple(R.id.action_recent_files, "فایل‌های اخیر", R.drawable.ic_file),
+            Triple(R.id.action_advanced_settings, "تنظیمات تکمیلی", R.drawable.ic_menu),
+            Triple(R.id.action_wifi_transfer, "انتقال فایل با Wi-Fi", R.drawable.ic_share),
+            Triple(R.id.action_text_editor, "ویرایشگر متن و Smali", R.drawable.ic_edit)
+        )
+        toolItems.forEach { (id, label, iconRes) ->
+            val action = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonTextButtonStyle).apply {
+                text = label
+                isAllCaps = false
+                textSize = 13f
+                gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+                setIconResource(iconRes)
+                iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+                setPadding(dp(10), 0, dp(10), 0)
+                contentDescription = label
+                setOnClickListener {
+                    dialog.dismiss()
+                    mainBar.menu.findItem(id)?.let { onMainMenu(it) }
+                }
+            }
+            toolsList.addView(action, LinearLayout.LayoutParams(-1, dp(44)))
+        }
+        root.addView(toolsScroll, LinearLayout.LayoutParams(-1, 0, 1f))
         dialog.setContentView(root)
         dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
         dialog.show()
@@ -1076,6 +1110,46 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
+    }
+
+    private fun showCreateMenu() {
+        val options = arrayOf("پوشه جدید", "فایل متنی جدید (.txt)", "فایل HTML جدید (.html)")
+        MaterialAlertDialogBuilder(this)
+            .setTitle("ایجاد مورد جدید")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> newFolder()
+                    1 -> createTextFile("txt")
+                    2 -> createTextFile("html")
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun createTextFile(extension: String) {
+        val defaultName = if (extension == "html") "index.html" else "new.txt"
+        askText("نام فایل جدید", defaultName) { rawName ->
+            var name = rawName.trim()
+            if (name.isBlank() || name == "." || name == ".." || name.contains("/") || name.contains("\\\\")) {
+                toast("نام فایل معتبر نیست")
+                return@askText
+            }
+            if (!name.contains(".")) name += ".$extension"
+            val target = File(current, name)
+            if (target.exists()) {
+                toast(getString(R.string.name_exists))
+                return@askText
+            }
+            try {
+                if (!target.createNewFile()) throw IllegalStateException("createNewFile failed")
+                if (extension == "html") target.writeText("<!doctype html>\\n<html lang=\\"fa\\">\\n<head>\\n  <meta charset=\\"utf-8\\">\\n  <meta name=\\"viewport\\" content=\\"width=device-width, initial-scale=1\\">\\n  <title>صفحه جدید</title>\\n</head>\\n<body>\\n  <h1>صفحه جدید</h1>\\n</body>\\n</html>\\n", Charsets.UTF_8)
+                refresh()
+                startActivity(Intent(this, TextEditorActivity::class.java).putExtra("file_path", target.absolutePath))
+            } catch (_: Exception) {
+                toast("ساخت فایل انجام نشد")
+            }
+        }
     }
 
     private fun newFolder() {
