@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_browse"
+        android:icon="@drawable/ic_folder"
+        android:title="مرور فایل" />
+    <item
+        android:id="@+id/nav_clean"
+        android:icon="@drawable/ic_clean"
+        android:title="پاکسازی" />
+    <item
+        android:id="@+id/nav_vault"
+        android:icon="@drawable/ic_lock"
+        android:title="پوشه امن" />
+    <item
+        android:id="@+id/nav_share"
+        android:icon="@drawable/ic_share"
+        android:title="اشتراک‌گذاری" />
+</menu>

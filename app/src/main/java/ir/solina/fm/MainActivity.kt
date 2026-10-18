@@ -208,6 +208,24 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
+        findViewById<com.google.android.material.bottomnavigation.BottomNavigationView?>(R.id.bottomNav)?.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.nav_browse -> true
+                R.id.nav_clean -> {
+                    showCleanDialog()
+                    false
+                }
+                R.id.nav_vault -> {
+                    startActivity(Intent(this, VaultActivity::class.java))
+                    false
+                }
+                R.id.nav_share -> {
+                    startActivity(Intent(this, WifiTransferActivity::class.java))
+                    false
+                }
+                else -> false
+            }
+        }
         if (!hasPermission()) requestPermission()
     }
 
@@ -933,6 +951,25 @@ class MainActivity : AppCompatActivity() {
                 }.start()
             }
             .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+
+    private fun showCleanDialog() {
+        val totalFreeBytes = currentVol.dir.freeSpace
+        val freeGb = String.format(java.util.Locale.US, "%.1f", totalFreeBytes / (1024.0 * 1024.0 * 1024.0))
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("پاکسازی هوشمند حافظه (Clean)")
+            .setMessage("فضای آزاد فعلی:  گیگابایت
+
+آیا مایلید کش موقت و فایل‌های زائد برنامه‌ها به صورت خودکار پاکسازی شوند؟")
+            .setPositiveButton("پاکسازی سریع") { _, _ ->
+                cacheDir.deleteRecursively()
+                externalCacheDir?.deleteRecursively()
+                toast("حافظه موقت با موفقیت پاکسازی شد")
+                refresh()
+            }
+            .setNegativeButton("انصراف", null)
             .show()
     }
 
