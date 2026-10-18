@@ -185,6 +185,8 @@ private fun categoryDirectory(name: String?): File? {
     return Environment.getExternalStoragePublicDirectory(name)
 }
 
+private var homeActivityTimes: Map<String, Long> = emptyMap()
+
 private fun scanHomeFiles(): List<File> {
     val root = Environment.getExternalStorageDirectory()
     val candidates = LinkedHashMap<String, File>()
@@ -218,11 +220,13 @@ private fun scanHomeFiles(): List<File> {
         cache[file.absolutePath] = latest
         return latest
     }
-    return candidates.values.sortedWith(
+    val sorted = candidates.values.sortedWith(
         compareByDescending<File> { latestActivity(it) }
             .thenByDescending { it.lastModified() }
             .thenBy { it.name.lowercase(Locale.ROOT) }
     )
+    homeActivityTimes = cache
+    return sorted
 }
 
 private fun formatSize(context: android.content.Context, bytes: Long): String =
@@ -524,7 +528,7 @@ private fun RecentFileRow(file: File, onClick: () -> Unit) {
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             val context = LocalContext.current
             val dateTime = remember(file.absolutePath, file.lastModified()) {
-                java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(file.lastModified()))
+                java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(homeActivityTimes[file.absolutePath] ?: file.lastModified()))
             }
             val details = if (file.isDirectory) "پوشه • $dateTime" else "${formatSize(context, file.length())} • $dateTime"
             Text(details, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
