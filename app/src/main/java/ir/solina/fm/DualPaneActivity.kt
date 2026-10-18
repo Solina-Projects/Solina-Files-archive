@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.ClipData
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
-import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -66,7 +65,6 @@ class DualPaneActivity : AppCompatActivity() {
     private var showHiddenFiles = false
     private var iconDp = 38
     private var columns = 2
-    private var player: MediaPlayer? = null
     private var pendingInstallApk: File? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -960,45 +958,170 @@ class DualPaneActivity : AppCompatActivity() {
     }
 
     private fun playAudio(file: File) {
-        try {
-            player?.release()
-            val mp = MediaPlayer()
-            player = mp
-            mp.setDataSource(file.absolutePath)
-            val seek = SeekBar(this)
-            val play = Button(this).apply { text = "پخش / توقف" }
-            val layout = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(12), dp(8), dp(12), dp(8))
-                addView(TextView(this@DualPaneActivity).apply { text = file.name; setPadding(dp(4), dp(8), dp(4), dp(8)) })
-                addView(seek)
-                addView(play)
+        val audioExtensions = setOf("mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi")
+        if (!file.isFile || !file.canRead()) {
+            toast("فایل صوتی قابل خواندن نیست")
+            return
+        }
+
+        val title = TextView(this).apply {
+            text = file.nameWithoutExtension
+            textSize = 18f
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(12), dp(8), dp(8))
+        }
+        val positionLabel = TextView(this).apply {
+            text = "00:00 / --:--"
+            gravity = Gravity.CENTER
+            textSize = 12f
+        }
+        val seek = SeekBar(this)
+        val playPause = MaterialButton(this).apply { text = "پخش / مکث"; isAllCaps = false }
+        val previous = MaterialButton(this).apply { text = "قبلی"; isAllCaps = false }
+        val next = MaterialButton(this).apply { text = "بعدی"; isAllCaps = false }
+        val shuffle = MaterialButton(this).apply { text = "تصادفی: خاموش"; isAllCaps = false }
+        val repeat = MaterialButton(this).apply { text = "تکرار: خاموش"; isAllCaps = false }
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            addView(previous, LinearLayout.LayoutParams(0, dp(48), 1f))
+            addView(playPause, LinearLayout.LayoutParams(0, dp(48), 1.4f))
+            addView(next, LinearLayout.LayoutParams(0, dp(48), 1f))
+        }
+        val options = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            addView(shuffle, LinearLayout.LayoutParams(0, dp(44), 1f))
+            addView(repeat, LinearLayout.LayoutParams(0, dp(44), 1f))
+        }
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            addView(title, LinearLayout.LayoutParams(-1, -2))
+            addView(positionLabel, LinearLayout.LayoutParams(-1, -2))
+            addView(seek, LinearLayout.LayoutParams(-1, -2))
+            addView(controls, LinearLayout.LayoutParams(-1, -2))
+            addView(options, LinearLayout.LayoutParams(-1, -2))
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("پخش‌کنندهٔ صوتی")
+            .setView(layout)
+            .setNegativeButton("بستن", null)
+            .create()
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        var controller: androidx.media3.session.MediaController? = null
+        var mediaListener: androidx.media3.common.Player.Listener? = null
+        var future: com.google.common.util.concurrent.ListenableFuture<androidx.media3.session.MediaController>? = null
+        var repeatEnabled = false
+
+        fun timeLabel(ms: Long): String {
+            if (ms < 0L) return "--:--"
+            val seconds = ms / 1000L
+            return String.format(Locale.ROOT, "%02d:%02d", seconds / 60L, seconds % 60L)
+        }
+        lateinit var ticker: Runnable
+        ticker = Runnable {
+            val c = controller
+            if (dialog.isShowing && c != null) {
+                val duration = c.duration
+                val safeDuration = if (duration > 0L) duration else 0L
+                seek.max = safeDuration.coerceAtMost(Int.MAX_VALUE.toLong()).toInt().coerceAtLeast(1)
+                if (!seek.isPressed) seek.progress = c.currentPosition.coerceIn(0L, seek.max.toLong()).toInt()
+                positionLabel.text = "${timeLabel(c.currentPosition)} / ${timeLabel(duration)}"
+                handler.postDelayed(ticker, 500L)
             }
-            val dialog = AlertDialog.Builder(this).setTitle("پخش‌کننده صوتی").setView(layout)
-                .setNegativeButton("بستن", null).create()
-            mp.setOnPreparedListener { prepared ->
-                seek.max = prepared.duration.coerceAtLeast(1)
-                play.setOnClickListener {
-                    if (prepared.isPlaying) { prepared.pause(); play.text = "ادامه پخش" }
-                    else { prepared.start(); play.text = "توقف" }
+        }
+
+        dialog.setOnDismissListener {
+            handler.removeCallbacks(ticker)
+            val c = controller
+            if (c != null && mediaListener != null) c.removeListener(mediaListener!!)
+            future?.let { androidx.media3.session.MediaController.releaseFuture(it) }
+            controller = null
+        }
+        dialog.show()
+
+        val token = androidx.media3.session.SessionToken(
+            this,
+            android.content.ComponentName(this, StrataPlaybackService::class.java)
+        )
+        future = androidx.media3.session.MediaController.Builder(this, token).buildAsync()
+        future!!.addListener({
+            val f = future ?: return@addListener
+            val c = try { f.get() } catch (_: Exception) {
+                if (dialog.isShowing) toast("راه‌اندازی موتور پخش صوتی ناموفق بود")
+                return@addListener
+            }
+            if (!dialog.isShowing) {
+                androidx.media3.session.MediaController.releaseFuture(f)
+                return@addListener
+            }
+            controller = c
+            val siblings = (file.parentFile?.listFiles()?.filter {
+                it.isFile && it.canRead() && it.extension.lowercase(Locale.ROOT) in audioExtensions
+            } ?: listOf(file)).sortedBy { it.name.lowercase(Locale.ROOT) }
+            val startIndex = siblings.indexOfFirst { it.absolutePath == file.absolutePath }.coerceAtLeast(0)
+            val items = siblings.map { audio ->
+                androidx.media3.common.MediaItem.Builder()
+                    .setUri(Uri.fromFile(audio))
+                    .setMediaId(audio.absolutePath)
+                    .setMediaMetadata(
+                        androidx.media3.common.MediaMetadata.Builder()
+                            .setDisplayTitle(audio.nameWithoutExtension)
+                            .build()
+                    )
+                    .build()
+            }
+            c.setMediaItems(items, startIndex, 0L)
+            c.prepare()
+            c.play()
+
+            mediaListener = object : androidx.media3.common.Player.Listener {
+                override fun onMediaItemTransition(
+                    mediaItem: androidx.media3.common.MediaItem?,
+                    reason: Int
+                ) {
+                    title.text = c.mediaMetadata.title?.toString()
+                        ?: c.currentMediaItem?.mediaMetadata?.displayTitle?.toString()
+                        ?: file.nameWithoutExtension
                 }
-                seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                    override fun onProgressChanged(s: SeekBar, progress: Int, fromUser: Boolean) { if (fromUser) prepared.seekTo(progress) }
-                    override fun onStartTrackingTouch(s: SeekBar) {}
-                    override fun onStopTrackingTouch(s: SeekBar) {}
-                })
-                prepared.start()
-                play.text = "توقف"
+                override fun onMediaMetadataChanged(metadata: androidx.media3.common.MediaMetadata) {
+                    title.text = metadata.title?.toString()
+                        ?: metadata.displayTitle?.toString()
+                        ?: file.nameWithoutExtension
+                }
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    playPause.text = if (isPlaying) "مکث" else "ادامهٔ پخش"
+                }
             }
-            mp.setOnErrorListener { _, _, _ -> toast("این قالب صوتی پشتیبانی نمی‌شود"); true }
-            dialog.setOnDismissListener {
-                try { if (mp.isPlaying) mp.stop() } catch (_: Exception) {}
-                mp.release()
-                if (player === mp) player = null
+            c.addListener(mediaListener!!)
+            title.text = c.mediaMetadata.title?.toString()
+                ?: c.currentMediaItem?.mediaMetadata?.displayTitle?.toString()
+                ?: file.nameWithoutExtension
+            playPause.setOnClickListener {
+                if (c.isPlaying) c.pause() else c.play()
             }
-            dialog.show()
-            mp.prepareAsync()
-        } catch (_: Exception) { toast("پخش این فایل صوتی ممکن نیست؛ قالب یا سلامت فایل را بررسی کنید") }
+            previous.setOnClickListener { c.seekToPreviousMediaItem() }
+            next.setOnClickListener { c.seekToNextMediaItem() }
+            shuffle.setOnClickListener {
+                c.shuffleModeEnabled = !c.shuffleModeEnabled
+                shuffle.text = if (c.shuffleModeEnabled) "تصادفی: روشن" else "تصادفی: خاموش"
+            }
+            repeat.setOnClickListener {
+                repeatEnabled = !repeatEnabled
+                c.repeatMode = if (repeatEnabled) androidx.media3.common.Player.REPEAT_MODE_ALL
+                    else androidx.media3.common.Player.REPEAT_MODE_OFF
+                repeat.text = if (repeatEnabled) "تکرار: همه" else "تکرار: خاموش"
+            }
+            seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar, progress: Int, fromUser: Boolean) {
+                    if (fromUser) c.seekTo(progress.toLong())
+                }
+                override fun onStartTrackingTouch(bar: SeekBar) {}
+                override fun onStopTrackingTouch(bar: SeekBar) {}
+            })
+            handler.post(ticker)
+        }, androidx.core.content.ContextCompat.getMainExecutor(this))
     }
 
     private fun playVideo(file: File) {
@@ -1059,7 +1182,7 @@ class DualPaneActivity : AppCompatActivity() {
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
 
-    override fun onDestroy() { player?.release(); player = null; super.onDestroy() }
+    override fun onDestroy() { super.onDestroy() }
 
     private inner class PaneAdapter(private val paneIndex: Int) : RecyclerView.Adapter<PaneAdapter.Holder>() {
         var items: List<File> = emptyList()
