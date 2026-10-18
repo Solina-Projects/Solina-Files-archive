@@ -2,12 +2,10 @@ package ir.solina.fm
 
 import android.content.Context
 import android.graphics.Matrix
-import android.graphics.PointF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import androidx.appcompat.widget.AppCompatImageView
-import kotlin.math.max
 import kotlin.math.min
 
 /** Lightweight pinch-to-zoom and pan image surface for the in-app media viewer. */
@@ -15,7 +13,6 @@ class ZoomableImageView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
 ) : AppCompatImageView(context, attrs) {
-    private val imageMatrixValues = FloatArray(9)
     private val transform = Matrix()
     private var lastX = 0f
     private var lastY = 0f
