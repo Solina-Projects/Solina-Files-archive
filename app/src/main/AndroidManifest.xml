@@ -29,6 +29,7 @@
         <activity android:name=".RootExplorerActivity" android:exported="false" />
         <activity android:name=".NetworkStorageActivity" android:exported="false" />
         <activity android:name=".ApkToolsActivity" android:exported="false" />
+        <activity android:name=".HexViewerActivity" android:exported="false" />
         <activity android:name=".InstalledAppsActivity" android:exported="false" />
         <activity android:name=".FileToolsActivity" android:exported="false" />
         <activity android:name=".RecycleBinActivity" android:exported="false" />
