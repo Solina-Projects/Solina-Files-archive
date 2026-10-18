@@ -53,7 +53,9 @@ object FileOperationsManager {
                     return@forEachIndexed
                 }
 
-                if (src.isDirectory && destinationDir.canonicalPath.startsWith(src.canonicalPath)) {
+                val sourcePath = src.canonicalPath
+                val destinationPath = destinationDir.canonicalPath
+                if (src.isDirectory && (destinationPath == sourcePath || destinationPath.startsWith(sourcePath + File.separator))) {
                     failures++
                     errors.add("${src.name}: نمی‌توان پوشه را در زیرمجموعه خودش کپی کرد")
                     return@forEachIndexed
@@ -66,9 +68,13 @@ object FileOperationsManager {
                     if (moved) {
                         successes++
                     } else {
-                        if (src.copyRecursively(target, overwrite = true)) {
-                            src.deleteRecursively()
-                            successes++
+                        if (src.copyRecursively(target, overwrite = false)) {
+                            if (src.deleteRecursively()) {
+                                successes++
+                            } else {
+                                failures++
+                                errors.add("${src.name}: فایل کپی شد اما حذف نسخهٔ مبدأ کامل نشد")
+                            }
                         } else {
                             failures++
                             errors.add("${src.name}: انتقال ناموفق بود")
