@@ -3,7 +3,6 @@ package ir.solina.fm
 import android.content.Intent
 import android.os.Bundle
 import android.os.Environment
-import android.text.format.Formatter
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.core.content.ContextCompat
@@ -32,14 +31,12 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Android
-import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Search
@@ -57,9 +54,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -102,20 +97,10 @@ class ComposeHomeActivity : ComponentActivity() {
                         startActivity(Intent(this, MainActivity::class.java)
                             .putExtra("search_query", query))
                     },
-                    onOpenFolder = { path, category ->
-                        val intent = Intent(this, MainActivity::class.java)
-                            .putExtra("start_path", path)
-                        if (!category.isNullOrBlank()) intent.putExtra("file_category", category)
-                        startActivity(intent)
-                    },
                     onOpenCategory = { title, category ->
                         startActivity(Intent(this, HomeCategoryActivity::class.java)
                             .putExtra("category_title", title)
                             .putExtra("category_filter", category))
-                    },
-                    onOpenFile = { path ->
-                        startActivity(Intent(this, MainActivity::class.java)
-                            .putExtra("open_recent_path", path))
                     },
                     onDualPane = { startActivity(Intent(this, DualPaneActivity::class.java)) },
                     onVault = { startActivity(Intent(this, VaultActivity::class.java)) },
@@ -146,12 +131,8 @@ private data class HomeCategory(
     val subtitle: String,
     val icon: ImageVector,
     val tint: Color,
-    val directory: String?,
     val filter: String? = null
 )
-
-private fun formatSize(context: android.content.Context, bytes: Long): String =
-    Formatter.formatFileSize(context, bytes)
 
 @Composable
 private fun SolinaHomeScreen(
@@ -160,9 +141,7 @@ private fun SolinaHomeScreen(
     onRequestPermission: () -> Unit,
     onCleanTools: () -> Unit,
     onSearch: (String) -> Unit,
-    onOpenFolder: (String, String?) -> Unit,
     onOpenCategory: (String, String) -> Unit,
-    onOpenFile: (String) -> Unit,
     onDualPane: () -> Unit,
     onVault: () -> Unit,
     onShare: () -> Unit,
@@ -181,17 +160,17 @@ private fun SolinaHomeScreen(
     }
     val categories = listOf(
         HomeCategory("دانلودها", "همه فایل‌های جدید از سراسر حافظه", Icons.Default.FolderOpen,
-            Color(0xFF1A73E8), null, "recent"),
+            Color(0xFF1A73E8), "recent"),
         HomeCategory("تصاویر", "عکس‌ها و تصاویر", Icons.Default.Image,
-            Color(0xFFAF52DE), Environment.DIRECTORY_PICTURES, "images"),
+            Color(0xFFAF52DE), "images"),
         HomeCategory("ویدیوها", "فیلم‌ها و کلیپ‌ها", Icons.Default.VideoLibrary,
-            Color(0xFFE5484D), Environment.DIRECTORY_MOVIES, "videos"),
+            Color(0xFFE5484D), "videos"),
         HomeCategory("موسیقی", "فایل‌های صوتی", Icons.Default.MusicNote,
-            Color(0xFFE58B22), Environment.DIRECTORY_MUSIC, "audio"),
+            Color(0xFFE58B22), "audio"),
         HomeCategory("اسناد", "PDF، متن و آفیس", Icons.Default.Description,
-            Color(0xFF168A83), Environment.DIRECTORY_DOCUMENTS, "documents"),
+            Color(0xFF168A83), "documents"),
         HomeCategory("فایل‌های APK", "نصب و بررسی برنامه", Icons.Default.Android,
-            Color(0xFF27864B), null, "apk")
+            Color(0xFF27864B), "apk")
     )
 
     CompositionLocalProviderCompatRtl {
