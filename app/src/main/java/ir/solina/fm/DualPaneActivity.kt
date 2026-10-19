@@ -38,7 +38,7 @@ class DualPaneActivity : AppCompatActivity() {
     private enum class LayoutMode { VERTICAL, HORIZONTAL }
     private enum class SortMode { NAME, SIZE, MODIFIED, TYPE }
     private data class Pane(
-        val root: LinearLayout, val breadcrumbs: LinearLayout, val breadcrumbScroll: HorizontalScrollView,
+        val root: LinearLayout, val breadcrumbBar: BreadcrumbBar,
         val list: RecyclerView, val adapter: PaneAdapter, var current: File,
         val displayButton: MaterialButton,
         val selected: LinkedHashSet<File> = linkedSetOf(),
@@ -167,16 +167,7 @@ class DualPaneActivity : AppCompatActivity() {
                 updateTopBar()
             }
         }
-        val breadcrumbs = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val breadcrumbScroll = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            isFillViewport = false
-            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
-            addView(breadcrumbs, HorizontalScrollView.LayoutParams(-2, -1))
-        }
+        val breadcrumbBar = BreadcrumbBar(this)
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -221,7 +212,7 @@ class DualPaneActivity : AppCompatActivity() {
                 showPaneMenu(index, this)
             }
         }
-        header.addView(breadcrumbScroll, LinearLayout.LayoutParams(0, dp(44), 1f))
+        header.addView(breadcrumbBar, LinearLayout.LayoutParams(0, dp(44), 1f))
         header.addView(upButton, LinearLayout.LayoutParams(dp(34), dp(40)))
         header.addView(displayButton, LinearLayout.LayoutParams(dp(36), dp(40)))
         header.addView(panelMenuButton, LinearLayout.LayoutParams(dp(36), dp(40)))
@@ -237,58 +228,24 @@ class DualPaneActivity : AppCompatActivity() {
         list.setOnDragListener { _, event -> handleDropEvent(index, event, null) }
         val adapter = PaneAdapter(index)
         list.adapter = adapter
-        return Pane(root, breadcrumbs, breadcrumbScroll, list, adapter, start, displayButton)
+        return Pane(root, breadcrumbBar, list, adapter, start, displayButton)
     }
 
     private fun renderBreadcrumbs(index: Int) {
         val p = pane(index)
-        p.breadcrumbs.removeAllViews()
-        if (p.isEmpty) {
-            val choose = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonTextButtonStyle).apply {
-                text = if (index == 0) "چپ • انتخاب پوشه" else "راست • انتخاب پوشه"
-                isAllCaps = false
-                minHeight = dp(36)
-                setOnClickListener {
-                    activePane = index
-                    updateTopBar()
-                    chooseFolderForPane(index)
-                }
+        p.breadcrumbBar.setPath(
+            path = if (p.isEmpty) "" else p.current.absolutePath,
+            emptyLabel = if (index == 0) "چپ • انتخاب پوشه" else "راست • انتخاب پوشه",
+            onCrumbClick = { fullPath ->
+                activePane = index
+                val destination = if (fullPath.isBlank()) {
+                    Environment.getExternalStorageDirectory()
+                } else File(fullPath)
+                if (destination.isDirectory) navigateTo(index, destination)
+                else toast("این مسیر در دسترس نیست")
+                updateTopBar()
             }
-            p.breadcrumbs.addView(choose, LinearLayout.LayoutParams(-2, dp(40)))
-        } else {
-            val crumbs = PathUtils.parsePathToCrumbs(p.current.absolutePath)
-            crumbs.forEachIndexed { crumbIndex, crumb ->
-                if (crumbIndex > 0) {
-                    p.breadcrumbs.addView(TextView(this).apply {
-                        text = "›"
-                        textSize = 16f
-                        gravity = Gravity.CENTER
-                        setTextColor(resolveThemeColor(com.google.android.material.R.attr.colorOnSurfaceVariant))
-                    }, LinearLayout.LayoutParams(dp(18), dp(40)))
-                }
-                val button = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonTextButtonStyle).apply {
-                    text = crumb.name
-                    isAllCaps = false
-                    maxLines = 1
-                    minHeight = dp(36)
-                    minWidth = 0
-                    minimumWidth = 0
-                    setPadding(dp(5), 0, dp(5), 0)
-                    contentDescription = "رفتن به ${crumb.name}"
-                    setOnClickListener {
-                        activePane = index
-                        val destination = if (crumb.fullPath.isEmpty()) {
-                            Environment.getExternalStorageDirectory()
-                        } else File(crumb.fullPath)
-                        if (destination.isDirectory) navigateTo(index, destination)
-                        else toast("این مسیر در دسترس نیست")
-                        updateTopBar()
-                    }
-                }
-                p.breadcrumbs.addView(button, LinearLayout.LayoutParams(-2, dp(40)))
-            }
-            p.breadcrumbScroll.post { p.breadcrumbScroll.fullScroll(View.FOCUS_RIGHT) }
-        }
+        )
     }
 
     private fun showPaneMenu(index: Int, anchor: View) {
