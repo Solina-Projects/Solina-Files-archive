@@ -158,7 +158,13 @@ class DualPaneActivity : AppCompatActivity() {
     }
 
     private fun createPane(start: File, index: Int): Pane {
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(4), dp(4), dp(4), dp(4)) }
+        val root = SinglePaneView(this).apply {
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            setOnActivateListener {
+                activePane = index
+                updateTopBar()
+            }
+        }
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -223,8 +229,8 @@ class DualPaneActivity : AppCompatActivity() {
         listOf(left, right).forEachIndexed { index, p ->
             p.root.layoutParams = if (mode == LayoutMode.VERTICAL) LinearLayout.LayoutParams(-1, 0, 1f) else LinearLayout.LayoutParams(0, -1, 1f)
             p.root.setBackgroundColor(if (activePane == index) androidx.core.graphics.ColorUtils.setAlphaComponent(resolveThemeColor(com.google.android.material.R.attr.colorSecondaryContainer), 38) else 0x00000000)
+            (p.root as? SinglePaneView)?.setActive(activePane == index)
             p.root.alpha = if (activePane == index) 1f else 0.55f
-            p.root.setOnClickListener { activePane = index; updateTopBar() }
             panesHost.addView(p.root)
             if (mode == LayoutMode.HORIZONTAL && index == 0) {
                 panesHost.addView(View(this).apply { setBackgroundColor(androidx.core.graphics.ColorUtils.setAlphaComponent(resolveThemeColor(com.google.android.material.R.attr.colorOutline), 100)) },
