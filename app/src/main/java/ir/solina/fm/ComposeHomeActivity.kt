@@ -369,47 +369,103 @@ private fun SolinaHomeScreen(
                     )
                 }
                 item {
+                    val usedBytes = (homeStats.totalBytes - homeStats.freeBytes).coerceAtLeast(0L)
+                    val usedFraction = if (homeStats.totalBytes > 0L) {
+                        (usedBytes.toFloat() / homeStats.totalBytes.toFloat()).coerceIn(0f, 1f)
+                    } else 0f
                     Card(
                         modifier = Modifier.fillMaxWidth().clickable {
                             if (hasAccess) onBrowse() else onRequestPermission()
                         },
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Surface(shape = RoundedCornerShape(11.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-                                Icon(Icons.Default.Storage, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(9.dp).size(26.dp))
-                            }
-                            Spacer(Modifier.width(9.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("حافظه دستگاه", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                                Text(
-                                    if (!hasAccess) "برای مشاهده آمار، دسترسی لازم است"
-                                    else if (statsLoading) "در حال محاسبه اطلاعات حافظه…"
-                                    else "پر: ${android.text.format.Formatter.formatFileSize(context, (homeStats.totalBytes - homeStats.freeBytes).coerceAtLeast(0L))}  •  خالی: ${android.text.format.Formatter.formatFileSize(context, homeStats.freeBytes)}",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp,
-                                    maxLines = 2, overflow = TextOverflow.Ellipsis
-                                )
-                                if (hasAccess && !statsLoading && homeStats.totalBytes > 0L) {
-                                    LinearProgressIndicator(
-                                        progress = ((homeStats.totalBytes - homeStats.freeBytes).coerceAtLeast(0L).toFloat() / homeStats.totalBytes.toFloat()).coerceIn(0f, 1f),
-                                        modifier = Modifier.fillMaxWidth().padding(top = 5.dp).height(5.dp)
-                                    )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = RoundedCornerShape(18.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    modifier = Modifier.size(58.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Default.Storage,
+                                            contentDescription = "حافظه دستگاه",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(34.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text("حافظه دستگاه", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                                     Text(
-                                        "کل: ${android.text.format.Formatter.formatFileSize(context, homeStats.totalBytes)}  •  ${homeStats.folderCount} پوشه  •  ${homeStats.fileCount} فایل",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp,
-                                        maxLines = 2, overflow = TextOverflow.Ellipsis
+                                        when {
+                                            !hasAccess -> "برای مشاهده آمار، دسترسی لازم است"
+                                            statsLoading -> "در حال محاسبه اطلاعات حافظه…"
+                                            homeStats.totalBytes > 0L -> "استفاده‌شده: ${(usedFraction * 100).toInt()}٪"
+                                            else -> "اطلاعات حافظه در دسترس نیست"
+                                        },
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 12.sp
                                     )
                                 }
+                                TextButton(onClick = {
+                                    if (hasAccess) onBrowse() else onRequestPermission()
+                                }) { Text(if (hasAccess) "باز کردن" else "دسترسی") }
                             }
-                            TextButton(onClick = {
-                                if (hasAccess) onBrowse() else onRequestPermission()
-                            }) { Text(if (hasAccess) "باز کردن" else "دسترسی") }
+                            if (hasAccess && !statsLoading && homeStats.totalBytes > 0L) {
+                                LinearProgressIndicator(
+                                    progress = { usedFraction },
+                                    modifier = Modifier.fillMaxWidth().height(8.dp),
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    StorageMetric(
+                                        title = "استفاده‌شده",
+                                        value = android.text.format.Formatter.formatFileSize(context, usedBytes),
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    StorageMetric(
+                                        title = "فضای خالی",
+                                        value = android.text.format.Formatter.formatFileSize(context, homeStats.freeBytes),
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    StorageMetric(
+                                        title = "ظرفیت کل",
+                                        value = android.text.format.Formatter.formatFileSize(context, homeStats.totalBytes),
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.Folder, contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("${homeStats.folderCount} پوشه", fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Spacer(Modifier.width(14.dp))
+                                        Icon(Icons.Default.Description, contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("${homeStats.fileCount} فایل", fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -440,6 +496,30 @@ private fun SolinaHomeScreen(
 
             }
         }
+    }
+}
+
+@Composable
+private fun StorageMetric(title: String, value: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            title,
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            value,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
