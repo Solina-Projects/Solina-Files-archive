@@ -345,7 +345,7 @@ class MainActivity : AppCompatActivity() {
                 contentDescription = item.label
                 background = androidx.core.content.ContextCompat.getDrawable(
                     this@MainActivity,
-                    com.google.android.material.R.drawable.m3_radiobutton_ripple
+                    android.R.drawable.list_selector_background
                 )
             }
             val icon = TextView(this).apply {
@@ -359,14 +359,8 @@ class MainActivity : AppCompatActivity() {
                 textSize = 11f
                 maxLines = 1
                 gravity = android.view.Gravity.CENTER
-                setTextColor(androidx.core.content.ContextCompat.getColorStateList(
-                    this@MainActivity,
-                    R.color.quick_access_text
-                ) ?: android.content.res.ColorStateList.valueOf(
-                    androidx.core.content.ContextCompat.getColor(
-                        this@MainActivity,
-                        com.google.android.material.R.color.material_on_surface_emphasis_medium
-                    )
+                setTextColor(androidx.core.content.ContextCompat.getColor(
+                    this@MainActivity, android.R.color.darker_gray
                 ))
             }
             shortcut.addView(icon, LinearLayout.LayoutParams(dp(32), dp(30)))
