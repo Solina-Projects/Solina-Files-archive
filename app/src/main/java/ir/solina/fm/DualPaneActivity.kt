@@ -20,6 +20,7 @@ import android.widget.*
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.ViewModelProvider
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.GridLayoutManager
@@ -50,6 +51,7 @@ class DualPaneActivity : AppCompatActivity() {
         var isEmpty: Boolean = false
     )
     private lateinit var panesHost: DualPaneScreen
+    private lateinit var paneViewModel: DualPaneViewModel
     private lateinit var searchIconButton: MaterialButton
     private lateinit var searchInput: EditText
     private lateinit var bookmarkButton: MaterialButton
@@ -79,6 +81,8 @@ class DualPaneActivity : AppCompatActivity() {
             ?: preferences.getString(KEY_RIGHT_PATH, null)?.let(::File)?.takeIf { it.isDirectory }
             ?: base
         val savedLeft = preferences.getString(KEY_LEFT_PATH, null)?.let(::File)?.takeIf { it.isDirectory }
+        paneViewModel = ViewModelProvider(this)[DualPaneViewModel::class.java]
+        paneViewModel.initialize(requestedRight.absolutePath, savedLeft?.absolutePath)
         val surfaceColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorSurface, it, true) }.data
         val onSurfaceColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurface, it, true) }.data
         val surfaceVariantColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorSurfaceVariant, it, true) }.data
@@ -305,6 +309,7 @@ class DualPaneActivity : AppCompatActivity() {
 
     private fun refresh(index: Int) {
         val p = pane(index)
+        syncPaneStateToViewModel(index)
         renderBreadcrumbs(index)
         if (p.isEmpty) {
             p.adapter.items = emptyList()
@@ -452,6 +457,19 @@ class DualPaneActivity : AppCompatActivity() {
         pane(index).selected.clear()
         refresh(index)
         updateSelectionUi()
+    }
+
+    /** Keep the ViewModel selection/path state aligned with the existing native Views browser. */
+    private fun syncPaneStateToViewModel(index: Int) {
+        if (!::paneViewModel.isInitialized) return
+        val p = pane(index)
+        val paneId = if (index == 0) PaneState.LEFT_ID else PaneState.RIGHT_ID
+        if (p.isEmpty) {
+            paneViewModel.clearSelection(paneId)
+            return
+        }
+        paneViewModel.openFolder(paneId, p.current)
+        paneViewModel.selectFiles(paneId, p.selected.map { it.absolutePath })
     }
 
     private fun updateSelectionUi() {
@@ -831,39 +849,32 @@ class DualPaneActivity : AppCompatActivity() {
 
     private fun transfer(move: Boolean) {
         val sourceIndex = activePane
+        val destinationIndex = 1 - sourceIndex
         val source = pane(sourceIndex)
-        val destinationPane = other(sourceIndex)
+        val destinationPane = pane(destinationIndex)
         if (destinationPane.isEmpty) {
-            activePane = 1 - sourceIndex
+            activePane = destinationIndex
             updateTopBar()
-            toast("ابتدا پوشهٔ مقصد را در پنل چپ انتخاب کنید")
+            toast("ابتدا پوشهٔ مقصد را در پنل مقابل انتخاب کنید")
             chooseFolderForPane(activePane)
             return
         }
-        val dest = destinationPane.current
-        val files = source.selected.toList()
-        if (files.isEmpty()) { toast("ابتدا فایل یا پوشه را با نگه‌داشتن انتخاب کنید"); return }
-        if (files.any { it.isDirectory && (dest.absolutePath == it.absolutePath || dest.absolutePath.startsWith(it.absolutePath + File.separator)) }) {
-            toast("انتقال پوشه به داخل خودش مجاز نیست"); return
+        if (source.selected.isEmpty()) {
+            toast("ابتدا فایل یا پوشه‌ای را انتخاب کنید")
+            return
         }
-        Thread {
-            var failed = 0
-            files.forEach { src ->
-                try {
-                    val target = uniqueTarget(dest, src)
-                    if (move) {
-                        if (!src.renameTo(target)) {
-                            val copied = src.copyRecursively(target, overwrite = false); if (copied) src.deleteRecursively() else { target.deleteRecursively(); failed++ }
-                        }
-                    } else if (!src.copyRecursively(target, overwrite = false)) failed++
-                } catch (_: Exception) { failed++ }
-            }
-            runOnUiThread {
-                source.selected.clear(); refresh(sourceIndex); refresh(1 - sourceIndex)
-                updateSelectionUi()
-                toast(if (failed == 0) "عملیات با موفقیت انجام شد" else "$failed مورد ناموفق بود")
-            }
-        }.start()
+
+        // Synchronize both panes before asking the ViewModel to execute the operation.
+        syncPaneStateToViewModel(sourceIndex)
+        syncPaneStateToViewModel(destinationIndex)
+        val sourceId = if (sourceIndex == 0) PaneState.LEFT_ID else PaneState.RIGHT_ID
+        val destinationId = if (destinationIndex == 0) PaneState.LEFT_ID else PaneState.RIGHT_ID
+        paneViewModel.transferFiles(sourceId, destinationId, isMove = move) { outcome ->
+            refresh(sourceIndex)
+            refresh(destinationIndex)
+            updateSelectionUi()
+            toast(outcome.message)
+        }
     }
 
     private fun extractSelectedArchives() {
