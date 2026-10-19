@@ -149,7 +149,6 @@ class DualPaneActivity : AppCompatActivity() {
         screen.addView(panesHost, LinearLayout.LayoutParams(-1, 0, 1f))
         bottomActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; visibility = View.GONE }
         button(bottomActions, "کپی") { transfer(false) }
-        button(bottomActions, "انتقال") { transfer(true) }
         button(bottomActions, "به پنل مقابل") { transfer(true) }
         button(bottomActions, "حذف") { deleteSelected(activePane) }
         screen.addView(bottomActions, LinearLayout.LayoutParams(-1, dp(48)))
@@ -454,8 +453,8 @@ class DualPaneActivity : AppCompatActivity() {
         bottomActions.visibility = if (hasSelection) View.VISIBLE else View.GONE
         selectionActions.getChildAt(2)?.visibility = if (p.selected.size == 1) View.VISIBLE else View.GONE
         selectionActions.getChildAt(4)?.visibility = if (p.selected.any { it.isFile && it.extension.equals("zip", true) }) View.VISIBLE else View.GONE
-        // The one-tap cross-panel action is useful only when the opposite pane has a destination.
-        bottomActions.getChildAt(2)?.visibility =
+        // Keep the one-tap transfer visible only when the opposite pane has a destination.
+        bottomActions.getChildAt(1)?.visibility =
             if (hasSelection && !other(activePane).isEmpty) View.VISIBLE else View.GONE
     }
 
@@ -1436,7 +1435,7 @@ class DualPaneActivity : AppCompatActivity() {
             "استخراج" -> R.drawable.ic_unarchive
             "بیشتر" -> R.drawable.ic_more_vert
             "کپی" -> R.drawable.ic_content_copy
-            "انتقال", "به پنل مقابل" -> R.drawable.ic_content_cut
+            "به پنل مقابل" -> R.drawable.ic_content_cut
             "حذف" -> R.drawable.ic_delete
             else -> R.drawable.ic_file
         }
