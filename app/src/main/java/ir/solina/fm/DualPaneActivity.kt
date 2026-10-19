@@ -167,56 +167,39 @@ class DualPaneActivity : AppCompatActivity() {
                 updateTopBar()
             }
         }
-        val breadcrumbBar = BreadcrumbBar(this)
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(2), 0, dp(2), 0)
-        }
-        val upButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-            text = "↑"
-            textSize = 17f
-            minWidth = dp(34)
-            minimumWidth = dp(34)
-            setPadding(0, 0, 0, 0)
-            contentDescription = "رفتن به پوشه والد در پنل ${if (index == 0) "چپ" else "راست"}"
-            setOnClickListener {
+        lateinit var paneHeader: PaneHeader
+        paneHeader = PaneHeader(
+            context = this,
+            onNavigateUp = {
                 activePane = index
                 goUp(index)
                 updateTopBar()
-            }
-        }
-        val displayButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-            setIconResource(if (grid) R.drawable.ic_list_view else R.drawable.ic_grid_view)
-            minWidth = dp(36)
-            minimumWidth = dp(36)
-            setPadding(0, 0, 0, 0)
-            contentDescription = "تغییر نمایش فایل‌های همین پنل"
-            setOnClickListener {
+            },
+            onCrumbClick = { fullPath ->
+                activePane = index
+                val destination = if (fullPath.isBlank()) {
+                    Environment.getExternalStorageDirectory()
+                } else File(fullPath)
+                if (destination.isDirectory) navigateTo(index, destination)
+                else toast("این مسیر در دسترس نیست")
+                updateTopBar()
+            },
+            onToggleViewMode = {
                 activePane = index
                 val p = pane(index)
                 p.gridMode = !(p.gridMode ?: grid)
                 refresh(index)
                 updateTopBar()
-            }
-        }
-        val panelMenuButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-            setIconResource(R.drawable.ic_more_vert)
-            minWidth = dp(36)
-            minimumWidth = dp(36)
-            setPadding(0, 0, 0, 0)
-            contentDescription = "گزینه‌های پنل ${if (index == 0) "چپ" else "راست"}"
-            setOnClickListener {
+            },
+            onMenuClick = {
                 activePane = index
                 updateTopBar()
-                showPaneMenu(index, this)
+                showPaneMenu(index, paneHeader.menuButton)
             }
-        }
-        header.addView(breadcrumbBar, LinearLayout.LayoutParams(0, dp(44), 1f))
-        header.addView(upButton, LinearLayout.LayoutParams(dp(34), dp(40)))
-        header.addView(displayButton, LinearLayout.LayoutParams(dp(36), dp(40)))
-        header.addView(panelMenuButton, LinearLayout.LayoutParams(dp(36), dp(40)))
-        root.addView(header, LinearLayout.LayoutParams(-1, dp(48)))
+        )
+        val breadcrumbBar = paneHeader.breadcrumbBar
+        val displayButton = paneHeader.displayButton
+        root.addView(paneHeader, LinearLayout.LayoutParams(-1, dp(88)))
         val list = RecyclerView(this).apply {
             setOnClickListener {
                 activePane = index
