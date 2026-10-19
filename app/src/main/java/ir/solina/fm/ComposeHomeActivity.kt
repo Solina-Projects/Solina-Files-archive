@@ -398,7 +398,7 @@ private fun SolinaHomeScreen(
                         info = storageInfo,
                         onCardClick = { if (hasAccess) onBrowse() else onRequestPermission() },
                         modifier = Modifier,
-                        isLoading = statsLoading || viewModelStorageLoading || viewModelStorageInfo == null,
+                        isLoading = statsLoading || viewModelStorageLoading,
                         hasAccess = hasAccess,
                         fileCount = homeStats.fileCount,
                         folderCount = homeStats.folderCount
