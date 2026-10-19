@@ -334,39 +334,42 @@ class MainActivity : AppCompatActivity() {
             QuickAccessItem("movies", "ویدئو", "🎬", File(root, "Movies")),
             QuickAccessItem("camera", "دوربین", "📷", File(root, "DCIM"))
         )
+
+        val outlineColor = com.google.android.material.color.MaterialColors.getColor(
+            this, com.google.android.material.R.attr.colorOutline, 0xFF797979.toInt()
+        )
+        val surfaceColor = com.google.android.material.color.MaterialColors.getColor(
+            this, com.google.android.material.R.attr.colorSurface, android.graphics.Color.WHITE
+        )
+        val textColor = com.google.android.material.color.MaterialColors.getColor(
+            this, com.google.android.material.R.attr.colorOnSurface, android.graphics.Color.BLACK
+        )
+
         items.forEach { item ->
-            val shortcut = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = android.view.Gravity.CENTER
-                minimumWidth = dp(68)
-                setPadding(dp(8), dp(5), dp(8), dp(5))
-                isClickable = true
-                isFocusable = true
+            // Compact outlined pill: icon and label share one tap target.
+            val shortcut = MaterialButton(
+                this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle
+            ).apply {
+                text = "${item.icon}  ${item.label}"
+                textSize = 12f
+                isAllCaps = false
+                minHeight = dp(38)
+                minimumHeight = dp(38)
+                minWidth = 0
+                minimumWidth = dp(0)
+                insetTop = 0
+                insetBottom = 0
+                setPadding(dp(12), 0, dp(12), 0)
+                cornerRadius = dp(22)
+                strokeWidth = dp(1)
+                strokeColor = android.content.res.ColorStateList.valueOf(outlineColor)
+                backgroundTintList = android.content.res.ColorStateList.valueOf(surfaceColor)
+                setTextColor(textColor)
                 contentDescription = item.label
-                background = androidx.core.content.ContextCompat.getDrawable(
-                    this@MainActivity,
-                    android.R.drawable.list_selector_background
-                )
-            }
-            val icon = TextView(this).apply {
-                text = item.icon
-                textSize = 23f
                 gravity = android.view.Gravity.CENTER
-                includeFontPadding = false
+                stateListAnimator = null
             }
-            val label = TextView(this).apply {
-                text = item.label
-                textSize = 11f
-                maxLines = 1
-                gravity = android.view.Gravity.CENTER
-                setTextColor(androidx.core.content.ContextCompat.getColor(
-                    this@MainActivity, android.R.color.darker_gray
-                ))
-            }
-            shortcut.addView(icon, LinearLayout.LayoutParams(dp(32), dp(30)))
-            shortcut.addView(label, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ))
+
             shortcut.setOnClickListener {
                 if (item.directory.isDirectory) {
                     currentVol = volumes.firstOrNull { inside(item.directory, it.dir) } ?: currentVol
@@ -376,8 +379,8 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             quickAccessBar.addView(shortcut, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { marginEnd = dp(2) })
+                LinearLayout.LayoutParams.WRAP_CONTENT, dp(40)
+            ).apply { marginEnd = dp(8) })
         }
     }
 
