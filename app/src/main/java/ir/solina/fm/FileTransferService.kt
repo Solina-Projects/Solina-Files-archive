@@ -75,31 +75,48 @@ class FileTransferService : Service() {
         startForeground(NOTIFICATION_ID, notification)
 
         serviceScope.launch {
-            FileOperationsManager.executeTransfer(sources, destination, isMove) { progress ->
-                val updatedNotif = buildNotification(
-                    "در حال انتقال: ${progress.currentFileName} (${progress.processedCount}/${progress.totalCount})",
-                    progress.percent,
-                    100
+            try {
+                val result = FileOperationsManager.executeTransfer(sources, destination, isMove) { progress ->
+                    val updatedNotif = buildNotification(
+                        "در حال انتقال: ${progress.currentFileName} (${progress.processedCount}/${progress.totalCount})",
+                        progress.percent,
+                        100
+                    )
+                    notificationManager.notify(NOTIFICATION_ID, updatedNotif)
+                }
+                val summary = "تمام شد: ${result.successCount} موفق، ${result.failureCount} ناموفق"
+                val detail = result.errors.take(3).joinToString("؛ ")
+                notificationManager.notify(
+                    NOTIFICATION_ID,
+                    buildNotification(if (detail.isBlank()) summary else "$summary — $detail", 100, 100, ongoing = false)
                 )
-                notificationManager.notify(NOTIFICATION_ID, updatedNotif)
-            }
-
-            withContext(Dispatchers.Main) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
+            } catch (cancelled: CancellationException) {
+                // Cancellation is expected when the user/system stops the service.
+                throw cancelled
+            } catch (error: Exception) {
+                notificationManager.notify(
+                    NOTIFICATION_ID,
+                    buildNotification("انتقال ناموفق بود: ${error.localizedMessage ?: "خطای ناشناخته"}", 0, 100, ongoing = false)
+                )
+            } finally {
+                withContext(Dispatchers.Main) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                }
             }
         }
 
         return START_NOT_STICKY
     }
 
-    private fun buildNotification(text: String, current: Int, max: Int) =
+    private fun buildNotification(text: String, current: Int, max: Int, ongoing: Boolean = true) =
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_file)
             .setContentTitle("Solina Files — عملیات انتقال")
             .setContentText(text)
             .setProgress(max, current, false)
-            .setOngoing(true)
+            .setOngoing(ongoing)
+            .setAutoCancel(!ongoing)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
 
