@@ -38,13 +38,14 @@ class DualPaneActivity : AppCompatActivity() {
     private enum class LayoutMode { VERTICAL, HORIZONTAL }
     private enum class SortMode { NAME, SIZE, MODIFIED, TYPE }
     private data class Pane(
-        val root: LinearLayout, val path: TextView, val list: RecyclerView,
-        val adapter: PaneAdapter, var current: File,
+        val root: LinearLayout, val breadcrumbs: LinearLayout, val breadcrumbScroll: HorizontalScrollView,
+        val list: RecyclerView, val adapter: PaneAdapter, var current: File,
         val selected: LinkedHashSet<File> = linkedSetOf(),
         val backHistory: MutableList<File> = mutableListOf(),
         val forwardHistory: MutableList<File> = mutableListOf(),
         var query: String = "",
         var sortMode: SortMode = SortMode.NAME,
+        var gridMode: Boolean? = null,
         var isEmpty: Boolean = false
     )
     private lateinit var panesHost: DualPaneScreen
@@ -165,46 +166,64 @@ class DualPaneActivity : AppCompatActivity() {
                 updateTopBar()
             }
         }
+        val breadcrumbs = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val breadcrumbScroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            isFillViewport = false
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            addView(breadcrumbs, HorizontalScrollView.LayoutParams(-2, -1))
+        }
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(4), 0, dp(2), 0)
+            setPadding(dp(2), 0, dp(2), 0)
         }
-        val path = TextView(this).apply {
-            textSize = 12f
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
-            setPadding(dp(6), dp(6), dp(6), dp(6))
-            setOnClickListener {
-                activePane = index
-                updateTopBar()
-                if (pane(index).isEmpty) chooseFolderForPane(index) else showPathActions(index)
-            }
-            setOnLongClickListener {
-                activePane = index
-                updateTopBar()
-                val clipboard = android.content.ClipData.newPlainText("path", pane(index).current.absolutePath)
-                val manager = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                manager.setPrimaryClip(clipboard)
-                toast("مسیر پوشه کپی شد")
-                true
-            }
-        }
-        val upButton = MaterialButton(this).apply {
+        val upButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             text = "↑"
-            textSize = 18f
-            minWidth = dp(36)
-            minimumWidth = dp(36)
+            textSize = 17f
+            minWidth = dp(34)
+            minimumWidth = dp(34)
             setPadding(0, 0, 0, 0)
-            contentDescription = "رفتن به پوشه والد"
+            contentDescription = "رفتن به پوشه والد در پنل ${if (index == 0) "چپ" else "راست"}"
             setOnClickListener {
                 activePane = index
                 goUp(index)
                 updateTopBar()
             }
         }
-        header.addView(path, LinearLayout.LayoutParams(0, dp(48), 1f))
-        header.addView(upButton, LinearLayout.LayoutParams(dp(38), dp(40)))
+        val displayButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            setIconResource(if (grid) R.drawable.ic_list_view else R.drawable.ic_grid_view)
+            minWidth = dp(36)
+            minimumWidth = dp(36)
+            setPadding(0, 0, 0, 0)
+            contentDescription = "تغییر نمایش فایل‌های همین پنل"
+            setOnClickListener {
+                activePane = index
+                val p = pane(index)
+                p.gridMode = !(p.gridMode ?: grid)
+                refresh(index)
+                updateTopBar()
+            }
+        }
+        val panelMenuButton = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            setIconResource(R.drawable.ic_more_vert)
+            minWidth = dp(36)
+            minimumWidth = dp(36)
+            setPadding(0, 0, 0, 0)
+            contentDescription = "گزینه‌های پنل ${if (index == 0) "چپ" else "راست"}"
+            setOnClickListener {
+                activePane = index
+                updateTopBar()
+                showPaneMenu(index, this)
+            }
+        }
+        header.addView(breadcrumbScroll, LinearLayout.LayoutParams(0, dp(44), 1f))
+        header.addView(upButton, LinearLayout.LayoutParams(dp(34), dp(40)))
+        header.addView(displayButton, LinearLayout.LayoutParams(dp(36), dp(40)))
+        header.addView(panelMenuButton, LinearLayout.LayoutParams(dp(36), dp(40)))
         root.addView(header, LinearLayout.LayoutParams(-1, dp(48)))
         val list = RecyclerView(this).apply {
             setOnClickListener {
@@ -217,7 +236,93 @@ class DualPaneActivity : AppCompatActivity() {
         list.setOnDragListener { _, event -> handleDropEvent(index, event, null) }
         val adapter = PaneAdapter(index)
         list.adapter = adapter
-        return Pane(root, path, list, adapter, start)
+        return Pane(root, breadcrumbs, breadcrumbScroll, list, adapter, start)
+    }
+
+    private fun renderBreadcrumbs(index: Int) {
+        val p = pane(index)
+        p.breadcrumbs.removeAllViews()
+        if (p.isEmpty) {
+            val choose = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonTextButtonStyle).apply {
+                text = if (index == 0) "چپ • انتخاب پوشه" else "راست • انتخاب پوشه"
+                isAllCaps = false
+                minHeight = dp(36)
+                setOnClickListener {
+                    activePane = index
+                    updateTopBar()
+                    chooseFolderForPane(index)
+                }
+            }
+            p.breadcrumbs.addView(choose, LinearLayout.LayoutParams(-2, dp(40)))
+        } else {
+            val crumbs = PathUtils.parsePathToCrumbs(p.current.absolutePath)
+            crumbs.forEachIndexed { crumbIndex, crumb ->
+                if (crumbIndex > 0) {
+                    p.breadcrumbs.addView(TextView(this).apply {
+                        text = "›"
+                        textSize = 16f
+                        gravity = Gravity.CENTER
+                        setTextColor(resolveThemeColor(com.google.android.material.R.attr.colorOnSurfaceVariant))
+                    }, LinearLayout.LayoutParams(dp(18), dp(40)))
+                }
+                val button = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonTextButtonStyle).apply {
+                    text = crumb.name
+                    isAllCaps = false
+                    maxLines = 1
+                    minHeight = dp(36)
+                    minWidth = 0
+                    minimumWidth = 0
+                    setPadding(dp(5), 0, dp(5), 0)
+                    contentDescription = "رفتن به ${crumb.name}"
+                    setOnClickListener {
+                        activePane = index
+                        val destination = if (crumb.fullPath.isEmpty()) {
+                            Environment.getExternalStorageDirectory()
+                        } else File(crumb.fullPath)
+                        if (destination.isDirectory) navigateTo(index, destination)
+                        else toast("این مسیر در دسترس نیست")
+                        updateTopBar()
+                    }
+                }
+                p.breadcrumbs.addView(button, LinearLayout.LayoutParams(-2, dp(40)))
+            }
+            p.breadcrumbScroll.post { p.breadcrumbScroll.fullScroll(View.FOCUS_RIGHT) }
+        }
+    }
+
+    private fun showPaneMenu(index: Int, anchor: View) {
+        val p = pane(index)
+        android.widget.PopupMenu(this, anchor).apply {
+            menu.add("به‌روزرسانی پوشه").setOnMenuItemClickListener {
+                refresh(index); true
+            }
+            menu.add(if (p.gridMode ?: grid) "نمایش فهرستی" else "نمایش شبکه‌ای").setIcon(
+                if (p.gridMode ?: grid) R.drawable.ic_list_view else R.drawable.ic_grid_view
+            ).setOnMenuItemClickListener {
+                p.gridMode = !(p.gridMode ?: grid)
+                refresh(index)
+                updateTopBar()
+                true
+            }
+            menu.add("مرتب‌سازی فایل‌های این پنل").setOnMenuItemClickListener {
+                activePane = index
+                showSortSettings()
+                true
+            }
+            menu.add("کپی مسیر کامل").setOnMenuItemClickListener {
+                val pathText = if (p.isEmpty) "" else p.current.absolutePath
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("path", pathText))
+                toast("مسیر پنل کپی شد")
+                true
+            }
+            menu.add("نشانک این پوشه").setIcon(R.drawable.ic_pin).setOnMenuItemClickListener {
+                activePane = index
+                toggleBookmark()
+                true
+            }
+            show()
+        }
     }
 
     private fun pane(index: Int) = if (index == 0) left else right
@@ -250,11 +355,11 @@ class DualPaneActivity : AppCompatActivity() {
 
     private fun refresh(index: Int) {
         val p = pane(index)
-        p.path.text = if (p.isEmpty) "چپ • انتخاب پوشه" else (if (index == 0) "چپ • " else "راست • ") + p.current.name.ifBlank { "/" }
+        renderBreadcrumbs(index)
         if (p.isEmpty) {
             p.adapter.items = emptyList()
             p.adapter.notifyDataSetChanged()
-            p.list.layoutManager = if (grid) GridLayoutManager(this, columns) else LinearLayoutManager(this)
+            p.list.layoutManager = if (p.gridMode ?: grid) GridLayoutManager(this, columns) else LinearLayoutManager(this)
             if (index == activePane) updateTopBar()
             return
         }
@@ -284,8 +389,8 @@ class DualPaneActivity : AppCompatActivity() {
                 ) else 0x00000000
             )
             pane.root.alpha = if (activePane == index) 1f else 0.55f
-            pane.path.text = if (pane.isEmpty) "چپ • انتخاب پوشه" else (if (index == 0) "چپ • " else "راست • ") + pane.current.name.ifBlank { "/" }
-            pane.path.contentDescription = if (pane.isEmpty) "برای انتخاب پوشه لمس کنید" else pane.current.absolutePath
+            (pane.root as? SinglePaneView)?.setActive(activePane == index)
+            renderBreadcrumbs(index)
         }
         val p = pane(activePane)
         searchInput.setTextIfDifferent(p.query)
