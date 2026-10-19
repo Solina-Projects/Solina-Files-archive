@@ -317,10 +317,8 @@ private fun SolinaHomeScreen(
 
     val toolItems = listOf(
         CategoryItem("dual-pane", "نمایش دوگانه", "مدیریت هم‌زمان دو مسیر", Icons.Default.GridView, onClick = onDualPane),
-        CategoryItem("clean", "پاک‌سازی", "بررسی فایل‌های اضافی", Icons.Default.CleaningServices, onClick = onCleanTools),
         CategoryItem("transfer", "انتقال بی‌سیم", "ارسال و دریافت در شبکه", Icons.Default.Wifi, onClick = onShare),
-        CategoryItem("vault", "خزانه", "دسترسی به فایل‌های امن", Icons.Default.Lock, onClick = onVault),
-        CategoryItem("settings", "تنظیمات", "شخصی‌سازی برنامه", Icons.Default.Settings, onClick = onSettings)
+        CategoryItem("vault", "خزانه", "دسترسی به فایل‌های امن", Icons.Default.Lock, onClick = onVault)
     )
 
 
@@ -504,10 +502,40 @@ private fun SolinaHomeScreen(
                     }
                 }
                 item { Text("ابزارها", fontWeight = FontWeight.Bold, fontSize = 16.sp) }
-                items(toolItems.chunked(2)) { rowTools ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        rowTools.forEach { tool -> CategoryCard(item = tool, modifier = Modifier.weight(1f)) }
-                        if (rowTools.size == 1) Spacer(Modifier.weight(1f))
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        toolItems.forEach { tool ->
+                            Surface(
+                                modifier = Modifier.weight(1f).clickable(onClick = tool.onClick),
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp, horizontal = 6.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = tool.icon,
+                                        contentDescription = tool.title,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                    Text(
+                                        text = tool.title,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
                 item {
