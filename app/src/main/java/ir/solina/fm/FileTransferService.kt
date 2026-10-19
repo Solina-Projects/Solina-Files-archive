@@ -94,7 +94,7 @@ class FileTransferService : Service() {
             } catch (error: Exception) {
                 completionMessage = "انتقال ناموفق بود: ${error.localizedMessage ?: "خطای ناشناخته"}"
             } finally {
-                withContext(Dispatchers.Main) {
+                withContext(NonCancellable + Dispatchers.Main) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     completionMessage?.let { message ->
                         notificationManager.notify(
