@@ -109,4 +109,7 @@ dependencies {
 
     // System Tools & Root / Shizuku
     implementation("dev.rikka.shizuku:api:13.1.5")
+
+    // Local JVM unit tests
+    testImplementation("junit:junit:4.13.2")
 }
