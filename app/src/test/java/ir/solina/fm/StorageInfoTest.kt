@@ -14,7 +14,7 @@ class StorageInfoTest {
     @Test
     fun clampsInvalidValuesToValidCapacityRange() {
         assertEquals(0, StorageInfo(totalBytes = 0L, usedBytes = 20L).usagePercent)
-        assertEquals(0L, StorageInfo(totalBytes = 100L, usedBytes = -10L).freeBytes)
+        assertEquals(100L, StorageInfo(totalBytes = 100L, usedBytes = -10L).freeBytes)
         assertEquals(0, StorageInfo(totalBytes = 100L, usedBytes = -10L).usagePercent)
         assertEquals(100, StorageInfo(totalBytes = 100L, usedBytes = 120L).usagePercent)
         assertEquals(0L, StorageInfo(totalBytes = -1L, usedBytes = 20L).freeBytes)
