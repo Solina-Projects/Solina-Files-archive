@@ -47,7 +47,7 @@ class DualPaneActivity : AppCompatActivity() {
         var sortMode: SortMode = SortMode.NAME,
         var isEmpty: Boolean = false
     )
-    private lateinit var panesHost: LinearLayout
+    private lateinit var panesHost: DualPaneScreen
     private lateinit var searchIconButton: MaterialButton
     private lateinit var searchInput: EditText
     private lateinit var bookmarkButton: MaterialButton
@@ -143,7 +143,7 @@ class DualPaneActivity : AppCompatActivity() {
         button(selectionActions, "بیشتر") { showSelectedTools() }
         selectionScroll.addView(selectionActions)
         screen.addView(selectionScroll, LinearLayout.LayoutParams(-1, dp(46)))
-        panesHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        panesHost = DualPaneScreen(this)
         screen.addView(panesHost, LinearLayout.LayoutParams(-1, 0, 1f))
         bottomActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; visibility = View.GONE }
         button(bottomActions, "کپی") { transfer(false) }
@@ -224,20 +224,27 @@ class DualPaneActivity : AppCompatActivity() {
     private fun other(index: Int) = pane(1 - index)
 
     private fun renderPanes() {
-        panesHost.removeAllViews()
-        panesHost.orientation = if (mode == LayoutMode.VERTICAL) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
-        listOf(left, right).forEachIndexed { index, p ->
-            p.root.layoutParams = if (mode == LayoutMode.VERTICAL) LinearLayout.LayoutParams(-1, 0, 1f) else LinearLayout.LayoutParams(0, -1, 1f)
-            p.root.setBackgroundColor(if (activePane == index) androidx.core.graphics.ColorUtils.setAlphaComponent(resolveThemeColor(com.google.android.material.R.attr.colorSecondaryContainer), 38) else 0x00000000)
-            (p.root as? SinglePaneView)?.setActive(activePane == index)
-            p.root.alpha = if (activePane == index) 1f else 0.55f
-            panesHost.addView(p.root)
-            if (mode == LayoutMode.HORIZONTAL && index == 0) {
-                panesHost.addView(View(this).apply { setBackgroundColor(androidx.core.graphics.ColorUtils.setAlphaComponent(resolveThemeColor(com.google.android.material.R.attr.colorOutline), 100)) },
-                    LinearLayout.LayoutParams(dp(1), -1))
-            }
+        listOf(left, right).forEachIndexed { index, pane ->
+            pane.root.setBackgroundColor(
+                if (activePane == index) androidx.core.graphics.ColorUtils.setAlphaComponent(
+                    resolveThemeColor(com.google.android.material.R.attr.colorSecondaryContainer), 38
+                ) else 0x00000000
+            )
+            (pane.root as? SinglePaneView)?.setActive(activePane == index)
+            pane.root.alpha = if (activePane == index) 1f else 0.55f
             refresh(index)
         }
+        val dividerColor = androidx.core.graphics.ColorUtils.setAlphaComponent(
+            resolveThemeColor(com.google.android.material.R.attr.colorOutline), 100
+        )
+        panesHost.setPanes(
+            left.root,
+            right.root,
+            if (mode == LayoutMode.HORIZONTAL) DualPaneScreen.Arrangement.SIDE_BY_SIDE
+            else DualPaneScreen.Arrangement.STACKED,
+            dividerColor,
+            dp(1)
+        )
         updateTopBar()
     }
 
