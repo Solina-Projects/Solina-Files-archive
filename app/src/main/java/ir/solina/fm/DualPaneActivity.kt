@@ -23,6 +23,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.FileProvider
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -312,8 +313,7 @@ class DualPaneActivity : AppCompatActivity() {
         syncPaneStateToViewModel(index)
         renderBreadcrumbs(index)
         if (p.isEmpty) {
-            p.adapter.items = emptyList()
-            p.adapter.notifyDataSetChanged()
+            p.adapter.submitItems(emptyList(), emptySet())
             p.list.layoutManager = if (p.gridMode ?: grid) GridLayoutManager(this, columns) else LinearLayoutManager(this)
             if (index == activePane) updateTopBar()
             return
@@ -330,8 +330,7 @@ class DualPaneActivity : AppCompatActivity() {
         p.selected.retainAll(allFiles.toSet())
         val query = p.query.trim().lowercase(Locale.ROOT)
         val files = allFiles.filter { query.isEmpty() || it.name.lowercase(Locale.ROOT).contains(query) }
-        p.adapter.items = files
-        p.adapter.notifyDataSetChanged()
+        p.adapter.submitItems(files, p.selected.mapTo(mutableSetOf()) { it.absolutePath })
         p.list.layoutManager = if (p.gridMode ?: grid) GridLayoutManager(this, columns) else LinearLayoutManager(this)
         if (index == activePane) updateTopBar()
     }
@@ -1487,6 +1486,66 @@ class DualPaneActivity : AppCompatActivity() {
 
     private inner class PaneAdapter(private val paneIndex: Int) : RecyclerView.Adapter<PaneAdapter.Holder>() {
         var items: List<File> = emptyList()
+            private set
+        private var selectedPaths: Set<String> = emptySet()
+        private var presentationKey: String = ""
+
+        init {
+            setHasStableIds(true)
+        }
+
+        override fun getItemId(position: Int): Long =
+            stableIdFor(items[position].absolutePath)
+
+        /**
+         * Apply only the insert/remove/move/change operations DiffUtil detects.
+         * Selection and presentation state are included so changing one row does not
+         * require rebinding the entire directory.
+         */
+        fun submitItems(nextItems: List<File>, nextSelectedPaths: Set<String>) {
+            val oldItems = items
+            val oldSelectedPaths = selectedPaths
+            val oldPresentationKey = presentationKey
+            val nextPresentationKey = listOf(
+                mode.name, pane(paneIndex).gridMode ?: grid, details, iconDp, columns
+            ).joinToString("|")
+
+            val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+                override fun getOldListSize(): Int = oldItems.size
+                override fun getNewListSize(): Int = nextItems.size
+
+                override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
+                    oldItems[oldItemPosition].absolutePath == nextItems[newItemPosition].absolutePath
+
+                override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                    val oldFile = oldItems[oldItemPosition]
+                    val newFile = nextItems[newItemPosition]
+                    return oldFile.name == newFile.name &&
+                        oldFile.isDirectory == newFile.isDirectory &&
+                        oldFile.length() == newFile.length() &&
+                        oldFile.lastModified() == newFile.lastModified() &&
+                        (oldFile.absolutePath in oldSelectedPaths) ==
+                            (newFile.absolutePath in nextSelectedPaths) &&
+                        oldPresentationKey == nextPresentationKey
+                }
+            }, true)
+
+            items = nextItems.toList()
+            selectedPaths = nextSelectedPaths.toSet()
+            presentationKey = nextPresentationKey
+            diff.dispatchUpdatesTo(this)
+        }
+
+        private fun stableIdFor(path: String): Long {
+            // 64-bit FNV-1a over the full path; DiffUtil still compares the exact path
+            // so a rare hash collision cannot make two different entries identical.
+            var hash = -0x340d631b7bdddcdbL
+            path.forEach { character ->
+                hash = hash xor character.code.toLong()
+                hash *= 0x100000001b3L
+            }
+            return hash
+        }
 
         inner class Holder(
             val row: LinearLayout,
