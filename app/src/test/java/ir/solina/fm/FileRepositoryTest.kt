@@ -19,12 +19,12 @@ class FileRepositoryTest {
     private fun sourceFile(name: String = "sample.txt", content: String = "hello"): File =
         File(tempFolder.newFolder("source"), name).apply { writeText(content) }
 
-    private fun destination(): File = tempFolder.newFolder("destination")
+    private fun newDestination(): File = tempFolder.newFolder("destination")
 
     @Test
     fun copyExistingFileCopiesContentsAndKeepsSource() {
         val source = sourceFile()
-        val result = repository.copyFile(source.path, destination().path)
+        val result = repository.copyFile(source.path, newDestination().path)
 
         assertTrue(result.isFile)
         assertEquals("hello", result.readText())
@@ -36,7 +36,7 @@ class FileRepositoryTest {
         val missing = File(tempFolder.root, "missing.txt")
 
         try {
-            repository.copyFile(missing.path, destination().path)
+            repository.copyFile(missing.path, newDestination().path)
             throw AssertionError("Expected FileNotFoundException")
         } catch (_: FileNotFoundException) {
             // Expected.
@@ -46,7 +46,7 @@ class FileRepositoryTest {
     @Test
     fun copyDuplicateNameCreatesNumberedFileWithoutOverwritingExistingFile() {
         val source = sourceFile("report.pdf", "new")
-        val destination = destination()
+        val destination = newDestination()
         File(destination, "report.pdf").writeText("old")
         File(destination, "report(1).pdf").writeText("older")
 
@@ -61,7 +61,7 @@ class FileRepositoryTest {
     fun moveExistingFileCreatesDestinationAndRemovesSource() {
         val source = sourceFile("data.json", "{}")
 
-        val result = repository.moveFile(source.path, destination().path)
+        val result = repository.moveFile(source.path, newDestination().path)
 
         assertTrue(result.isFile)
         assertEquals("{}", result.readText())
@@ -71,7 +71,7 @@ class FileRepositoryTest {
     @Test
     fun moveDuplicateNameKeepsBothVersions() {
         val source = sourceFile("data.txt", "source")
-        val destination = destination()
+        val destination = newDestination()
         File(destination, "data.txt").writeText("existing")
 
         val result = repository.moveFile(source.path, destination.path)
@@ -89,7 +89,7 @@ class FileRepositoryTest {
             override fun renameEntry(source: File, destination: File): Boolean = false
         }
 
-        val result = repository.moveFile(source.path, destination().path)
+        val result = repository.moveFile(source.path, newDestination().path)
 
         assertEquals("payload", result.readText())
         assertFalse(source.exists())
@@ -105,7 +105,7 @@ class FileRepositoryTest {
         }
 
         try {
-            repository.moveFile(source.path, destination().path)
+            repository.moveFile(source.path, newDestination().path)
             throw AssertionError("Expected IOException")
         } catch (_: IOException) {
             assertTrue(source.exists())
@@ -115,7 +115,7 @@ class FileRepositoryTest {
     @Test
     fun copyFailureSimulatingFullDiskCleansPartialDestinationAndKeepsSource() {
         val source = sourceFile("large.bin", "original")
-        val destination = destination()
+        val destination = newDestination()
         val repository = object : FileRepository() {
             override fun copyEntry(source: File, destination: File) {
                 destination.writeText("partial")
@@ -136,7 +136,7 @@ class FileRepositoryTest {
     @Test
     fun moveCopyFailureKeepsSourceAndDoesNotLeavePartialDestination() {
         val source = sourceFile("large.bin", "original")
-        val destination = destination()
+        val destination = newDestination()
         val repository = object : FileRepository() {
             override fun renameEntry(source: File, destination: File): Boolean = false
 
