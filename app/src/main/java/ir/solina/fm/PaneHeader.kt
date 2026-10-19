@@ -1,7 +1,6 @@
 package ir.solina.fm
 
 import android.content.Context
-import android.graphics.Color
 import android.util.AttributeSet
 import android.view.Gravity
 import android.view.View
@@ -76,7 +75,7 @@ class PaneHeader @JvmOverloads constructor(
         addView(breadcrumbBar, LayoutParams(LayoutParams.MATCH_PARENT, dp(42)))
 
         addView(View(context).apply {
-            setBackgroundColor(resolveThemeColor(MaterialR.attr.colorOutlineVariant, 0x33808080))
+            setBackgroundColor(resolveThemeColor(MaterialR.attr.colorOnSurfaceVariant, 0x33808080))
             alpha = 0.5f
         }, LayoutParams(LayoutParams.MATCH_PARENT, dp(1)))
     }
