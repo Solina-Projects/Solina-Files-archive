@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -122,6 +123,9 @@ private fun categoryMatches(file: File, category: String): Boolean {
         "documents" -> ext in categoryDocumentExtensions || ext in categoryArchiveExtensions
         "apk" -> ext == "apk"
         "recent", "downloads", "" -> true
+    "recent7" -> file.lastModified() >= System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
+    "large" -> file.length() > 100L * 1024 * 1024
+    "starred" -> false // handled with the persistent starred-path store during scanning
         else -> true
     }
 }
@@ -176,7 +180,12 @@ private fun scanCategoryFiles(context: android.content.Context, category: String
         for (child in children) {
             if (child.name.startsWith(".solina-trash-")) continue
             try {
-                if (child.isFile && categoryMatches(child, category)) {
+                val matches = if (category.equals("starred", ignoreCase = true)) {
+                    StarredFilesStore.contains(context, child.absolutePath)
+                } else {
+                    categoryMatches(child, category)
+                }
+                if (child.isFile && matches) {
                     found.add(child)
                 } else if (child.isDirectory) {
                     stack.addLast(child)
@@ -307,7 +316,15 @@ private fun CategoryFilesScreen(
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     items(files, key = { it.absolutePath }) { file ->
-                        CategoryFileRow(file = file, onClick = { onOpenFile(file.absolutePath) })
+                        CategoryFileRow(
+                            file = file,
+                            isStarred = StarredFilesStore.contains(context, file.absolutePath),
+                            onClick = { onOpenFile(file.absolutePath) },
+                            onToggleStar = {
+                                StarredFilesStore.toggle(context, file.absolutePath)
+                                refreshKey++
+                            }
+                        )
                     }
                 }
             }
@@ -316,7 +333,12 @@ private fun CategoryFilesScreen(
 }
 
 @Composable
-private fun CategoryFileRow(file: File, onClick: () -> Unit) {
+private fun CategoryFileRow(
+    file: File,
+    isStarred: Boolean,
+    onClick: () -> Unit,
+    onToggleStar: () -> Unit
+) {
     val extension = file.extension.lowercase(Locale.ROOT)
     val icon: ImageVector = when {
         extension in categoryImageExtensions -> Icons.Default.Image
@@ -367,6 +389,11 @@ private fun CategoryFileRow(file: File, onClick: () -> Unit) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+        TextButton(onClick = onToggleStar) {
+            Icon(Icons.Default.Star, contentDescription = if (isStarred) "برداشتن ستاره" else "ستاره‌دار کردن",
+                tint = if (isStarred) Color(0xFFFFB300) else MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(20.dp))
         }
     }
     Divider(color = MaterialTheme.colorScheme.surfaceVariant)
