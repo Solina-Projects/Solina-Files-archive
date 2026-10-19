@@ -100,7 +100,9 @@ class VaultActivity : AppCompatActivity() {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         val existing = store.getKey(keyAlias, null) as? SecretKey
         if (existing != null) return existing
-        if (vaultDir.listFiles()?.any { it.isFile && it.extension == "svault" } == true) {
+        val existingVaultFiles = vaultDir.listFiles()
+            ?: throw IllegalStateException("فهرست فایل‌های خزانه قابل خواندن نیست؛ ساخت کلید جدید متوقف شد")
+        if (existingVaultFiles.any { it.isFile && it.extension == "svault" }) {
             throw IllegalStateException("کلید رمزگذاری قبلی پیدا نشد؛ ساخت کلید جدید داده‌های موجود را بازیابی نمی‌کند")
         }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
