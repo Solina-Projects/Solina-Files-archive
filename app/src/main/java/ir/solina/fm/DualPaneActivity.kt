@@ -21,6 +21,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.DiffUtil
@@ -34,6 +35,9 @@ import net.lingala.zip4j.ZipFile
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Optional two-pane file manager with independent navigation and selection. */
 class DualPaneActivity : AppCompatActivity() {
@@ -71,6 +75,14 @@ class DualPaneActivity : AppCompatActivity() {
     private var iconDp = 38
     private var columns = 2
     private var pendingInstallApk: File? = null
+    private val searchEngine = SearchEngine()
+    private var searchJob: Job? = null
+    private var searchActive = false
+    private var searchResults: List<File> = emptyList()
+    private val selectedSearchTypes = linkedSetOf<FileType>()
+    private var recentOnly = false
+    private var largerThanTenMb = false
+    private lateinit var searchFilterRow: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val savedNightMode = getSharedPreferences("solina_preferences", MODE_PRIVATE).getInt("night_mode", 0)
@@ -132,11 +144,23 @@ class DualPaneActivity : AppCompatActivity() {
         navigation.addView(layoutButton, LinearLayout.LayoutParams(dp(42), dp(40)))
         navigation.addView(overflowButton, LinearLayout.LayoutParams(dp(42), dp(40)))
         screen.addView(navigation, LinearLayout.LayoutParams(-1, dp(44)))
+        val filterScroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+        }
+        searchFilterRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(2), dp(4), dp(2))
+        }
+        filterScroll.addView(searchFilterRow, ViewGroup.LayoutParams(-2, dp(40)))
+        screen.addView(filterScroll, LinearLayout.LayoutParams(-1, dp(42)))
+        buildSearchFilterChips()
         searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 pane(activePane).query = s?.toString().orEmpty()
-                refresh(activePane)
+                scheduleAdvancedSearch()
             }
             override fun afterTextChanged(s: Editable?) {}
         })
@@ -308,6 +332,87 @@ class DualPaneActivity : AppCompatActivity() {
         updateTopBar()
     }
 
+    /** Render compact filter chips under the search field. */
+    private fun buildSearchFilterChips() {
+        if (!::searchFilterRow.isInitialized) return
+        searchFilterRow.removeAllViews()
+        fun addChip(label: String, checked: Boolean, onClick: () -> Unit) {
+            val chip = com.google.android.material.chip.Chip(this).apply {
+                text = label
+                isCheckable = true
+                isChecked = checked
+                isClickable = true
+                setOnClickListener { onClick() }
+            }
+            searchFilterRow.addView(chip, LinearLayout.LayoutParams(-2, dp(36)).apply {
+                marginStart = dp(3)
+                marginEnd = dp(3)
+            })
+        }
+        addChip("همه", selectedSearchTypes.isEmpty() && !recentOnly && !largerThanTenMb) {
+            selectedSearchTypes.clear()
+            recentOnly = false
+            largerThanTenMb = false
+            buildSearchFilterChips()
+            scheduleAdvancedSearch()
+        }
+        listOf(
+            FileType.IMAGE to "تصاویر",
+            FileType.VIDEO to "ویدئو",
+            FileType.AUDIO to "صوت",
+            FileType.DOCUMENT to "اسناد",
+            FileType.ARCHIVE to "فشرده",
+            FileType.APK to "APK"
+        ).forEach { (type, label) ->
+            addChip(label, type in selectedSearchTypes) {
+                if (!selectedSearchTypes.add(type)) selectedSearchTypes.remove(type)
+                buildSearchFilterChips()
+                scheduleAdvancedSearch()
+            }
+        }
+        addChip("۷ روز اخیر", recentOnly) {
+            recentOnly = !recentOnly
+            buildSearchFilterChips()
+            scheduleAdvancedSearch()
+        }
+        addChip("بیش از ۱۰ مگابایت", largerThanTenMb) {
+            largerThanTenMb = !largerThanTenMb
+            buildSearchFilterChips()
+            scheduleAdvancedSearch()
+        }
+    }
+
+    /** Debounced whole-storage search; traversal runs on the engine's IO dispatcher. */
+    private fun scheduleAdvancedSearch() {
+        searchJob?.cancel()
+        val criteria = SearchCriteria(
+            queryText = pane(activePane).query,
+            fileTypes = if (selectedSearchTypes.isEmpty()) setOf(FileType.ALL) else selectedSearchTypes.toSet(),
+            minSizeBytes = if (largerThanTenMb) 10L * 1024L * 1024L else 0L,
+            modifiedSinceDays = if (recentOnly) 7 else null,
+            searchInSubfolders = true
+        )
+        if (criteria.isEmpty()) {
+            searchActive = false
+            searchResults = emptyList()
+            refresh(activePane)
+            return
+        }
+        searchActive = true
+        searchResults = emptyList()
+        refresh(activePane)
+        searchJob = lifecycleScope.launch {
+            delay(450)
+            val root = Environment.getExternalStorageDirectory().absolutePath
+            val found = runCatching { searchEngine.search(root, criteria) }.getOrDefault(emptyList())
+            if (!isFinishing && !isDestroyed) {
+                searchResults = found.filter { showHiddenFiles || !it.name.startsWith(".") }
+                refresh(activePane)
+                toast("${searchResults.size} نتیجه")
+            }
+        }
+    }
+
     private fun refresh(index: Int) {
         val p = pane(index)
         syncPaneStateToViewModel(index)
@@ -318,17 +423,21 @@ class DualPaneActivity : AppCompatActivity() {
             if (index == activePane) updateTopBar()
             return
         }
-        val unsorted = p.current.listFiles()
-            ?.filter { (it.isFile || it.isDirectory) && (showHiddenFiles || !it.name.startsWith(".")) }
-            ?: emptyList()
-        val allFiles = when (p.sortMode) {
-            SortMode.NAME -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) }))
-            SortMode.SIZE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.length() }))
-            SortMode.MODIFIED -> unsorted.sortedByDescending { it.lastModified() }
-            SortMode.TYPE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.extension.lowercase(Locale.ROOT) }, { it.name.lowercase(Locale.ROOT) }))
+        val allFiles = if (searchActive && index == activePane) {
+            searchResults
+        } else {
+            val unsorted = p.current.listFiles()
+                ?.filter { (it.isFile || it.isDirectory) && (showHiddenFiles || !it.name.startsWith(".")) }
+                ?: emptyList()
+            when (p.sortMode) {
+                SortMode.NAME -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) }))
+                SortMode.SIZE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.length() }))
+                SortMode.MODIFIED -> unsorted.sortedByDescending { it.lastModified() }
+                SortMode.TYPE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.extension.lowercase(Locale.ROOT) }, { it.name.lowercase(Locale.ROOT) }))
+            }
         }
         p.selected.retainAll(allFiles.toSet())
-        val query = p.query.trim().lowercase(Locale.ROOT)
+        val query = if (searchActive && index == activePane) "" else p.query.trim().lowercase(Locale.ROOT)
         val files = allFiles.filter { query.isEmpty() || it.name.lowercase(Locale.ROOT).contains(query) }
         p.adapter.submitItems(files, p.selected.mapTo(mutableSetOf()) { it.absolutePath })
         p.list.layoutManager = if (p.gridMode ?: grid) GridLayoutManager(this, columns) else LinearLayoutManager(this)
