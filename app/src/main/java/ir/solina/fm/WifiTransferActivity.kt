@@ -17,7 +17,10 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.URLDecoder
 import java.net.URLEncoder
+import java.security.MessageDigest
 import java.security.SecureRandom
+import java.util.UUID
+import java.util.concurrent.Semaphore
 import java.util.Collections
 import kotlin.concurrent.thread
 
@@ -29,6 +32,8 @@ class WifiTransferActivity : AppCompatActivity() {
     @Volatile private var running = false
     @Volatile private var server: ServerSocket? = null
     private val port = 8765
+    private val clientSlots = Semaphore(4)
+    private val maxUploadBytes = 20L * 1024L * 1024L
     private val token = ByteArray(18).also { SecureRandom().nextBytes(it) }
         .joinToString("") { "%02x".format(it) }
 
@@ -82,7 +87,7 @@ class WifiTransferActivity : AppCompatActivity() {
 
     private fun startServer() {
         try {
-            val socket = ServerSocket(port)
+            val socket = ServerSocket().apply { reuseAddress = true; bind(java.net.InetSocketAddress(port), 8) }
             server = socket
             running = true
             toggle.text = "توقف انتقال"
@@ -95,7 +100,17 @@ class WifiTransferActivity : AppCompatActivity() {
                 while (running) {
                     try {
                         val client = socket.accept()
-                        thread(name = "SolinaWifiClient") { handleClient(client) }
+                        if (!clientSlots.tryAcquire()) {
+                            try { respond(client, 503, "Service Unavailable", "سرور مشغول است؛ کمی بعد دوباره تلاش کن") }
+                            catch (_: Exception) { }
+                            finally { try { client.close() } catch (_: Exception) { } }
+                        } else {
+                            thread(name = "SolinaWifiClient") {
+                                try { handleClient(client) }
+                                catch (_: Exception) { /* A malformed/disconnected client must not stop the server. */ }
+                                finally { clientSlots.release() }
+                            }
+                        }
                     } catch (_: Exception) {
                         if (running) runOnUiThread {
                             Toast.makeText(this, "اتصال شبکه قطع شد", Toast.LENGTH_SHORT).show()
@@ -213,21 +228,43 @@ class WifiTransferActivity : AppCompatActivity() {
             client.soTimeout = 15000
             val input = client.getInputStream()
             val requestLine = readLine(input) ?: return
+            if (requestLine.length > 4096) { respond(client, 400, "Bad Request", "درخواست بیش از حد طولانی است"); return }
             val parts = requestLine.split(" ")
-            if (parts.size < 2) { respond(client, 400, "Bad Request", "درخواست نامعتبر"); return }
+            if (parts.size != 3 || parts[2] != "HTTP/1.1") {
+                respond(client, 400, "Bad Request", "درخواست HTTP نامعتبر است"); return
+            }
             val method = parts[0]
             val rawTarget = parts[1]
-            val headers = linkedMapOf<String, String>()
-            while (true) {
-                val line = readLine(input) ?: break
-                if (line.isEmpty()) break
-                val colon = line.indexOf(':')
-                if (colon > 0) headers[line.substring(0, colon).trim().lowercase()] = line.substring(colon + 1).trim()
+            if (method != "GET" && method != "PUT") {
+                respond(client, 405, "Method Not Allowed", "فقط GET و PUT پشتیبانی می‌شوند"); return
             }
-            val query = rawTarget.substringAfter('?', "")
-                .split('&').filter { it.contains('=') }
-                .associate { URLDecoder.decode(it.substringBefore('='), "UTF-8") to URLDecoder.decode(it.substringAfter('='), "UTF-8") }
-            if (query["token"] != token) { respond(client, 403, "Forbidden", "دسترسی رد شد"); return }
+            val headers = linkedMapOf<String, String>()
+            var headerBytes = 0
+            var headerCount = 0
+            var headersComplete = false
+            while (headerCount < 64 && headerBytes <= 16 * 1024) {
+                val line = readLine(input) ?: break
+                headerCount++
+                headerBytes += line.length
+                if (line.isEmpty()) { headersComplete = true; break }
+                val colon = line.indexOf(':')
+                if (colon > 0) headers[line.substring(0, colon).trim().lowercase(java.util.Locale.ROOT)] = line.substring(colon + 1).trim()
+            }
+            if (!headersComplete) { respond(client, 400, "Bad Request", "سرآیندهای درخواست ناقص یا بیش از حد بزرگ هستند"); return }
+            val query = try {
+                rawTarget.substringAfter('?', "")
+                    .split('&').filter { it.contains('=') }
+                    .associate {
+                        URLDecoder.decode(it.substringBefore('='), "UTF-8") to
+                            URLDecoder.decode(it.substringAfter('='), "UTF-8")
+                    }
+            } catch (_: IllegalArgumentException) {
+                respond(client, 400, "Bad Request", "پارامترهای درخواست نامعتبر هستند"); return
+            }
+            val suppliedToken = query["token"]?.toByteArray(Charsets.UTF_8) ?: ByteArray(0)
+            if (!MessageDigest.isEqual(suppliedToken, token.toByteArray(Charsets.UTF_8))) {
+                respond(client, 403, "Forbidden", "دسترسی رد شد"); return
+            }
 
             if (method == "GET" && query.containsKey("download")) {
                 val name = File(query["download"].orEmpty()).name
@@ -246,30 +283,47 @@ class WifiTransferActivity : AppCompatActivity() {
             }
 
             if (method == "PUT") {
-                val length = headers["content-length"]?.toLongOrNull() ?: 0L
-                if (length <= 0 || length > 20L * 1024L * 1024L) {
+                val length = headers["content-length"]?.toLongOrNull()
+                if (length == null || length <= 0L) {
+                    respond(client, 400, "Bad Request", "طول فایل ارسالی معتبر نیست"); return
+                }
+                if (length > maxUploadBytes) {
                     respond(client, 413, "Payload Too Large", "حداکثر حجم بارگذاری ۲۰ مگابایت است"); return
                 }
                 val encodedName = headers["x-filename"] ?: "upload.bin"
-                val name = File(URLDecoder.decode(encodedName, "UTF-8")).name
-                if (name.isBlank() || name == "." || name == "..") {
+                val decodedName = try { URLDecoder.decode(encodedName, "UTF-8") }
+                    catch (_: IllegalArgumentException) {
+                        respond(client, 400, "Bad Request", "نام فایل نامعتبر است"); return
+                    }
+                val name = File(decodedName).name
+                if (name.isBlank() || name == "." || name == ".." || name.any { it == '\r' || it == '\n' }) {
                     respond(client, 400, "Bad Request", "نام فایل نامعتبر است"); return
                 }
-                val target = uniqueTarget(rootFolder, name)
+                val temp = File(rootFolder, ".solina-upload-${UUID.randomUUID()}.partial")
                 var remaining = length
-                target.outputStream().buffered().use { output ->
-                    val buffer = ByteArray(8192)
-                    while (remaining > 0) {
-                        val count = input.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
-                        if (count < 0) break
-                        output.write(buffer, 0, count)
-                        remaining -= count
+                try {
+                    temp.outputStream().buffered().use { output ->
+                        val buffer = ByteArray(8192)
+                        while (remaining > 0) {
+                            val count = input.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                            if (count < 0) break
+                            output.write(buffer, 0, count)
+                            remaining -= count
+                        }
                     }
+                    if (remaining != 0L) {
+                        respond(client, 400, "Bad Request", "بارگذاری ناقص بود")
+                        return
+                    }
+                    val target = uniqueTarget(rootFolder, name)
+                    if (!temp.renameTo(target)) {
+                        respond(client, 500, "Internal Server Error", "ذخیرهٔ فایل بارگذاری‌شده انجام نشد")
+                        return
+                    }
+                    respond(client, 200, "OK", "بارگذاری شد: " + target.name)
+                } finally {
+                    if (temp.exists()) temp.delete()
                 }
-                if (remaining != 0L) {
-                    target.delete()
-                    respond(client, 400, "Bad Request", "بارگذاری ناقص بود")
-                } else respond(client, 200, "OK", "بارگذاری شد: " + target.name)
                 return
             }
 
