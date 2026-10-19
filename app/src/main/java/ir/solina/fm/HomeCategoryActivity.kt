@@ -197,10 +197,18 @@ private fun scanCategoryFiles(context: android.content.Context, category: String
         }
     }
 
-    return found.distinctBy { it.absolutePath }.sortedWith(
-        compareByDescending<File> { it.lastModified() }
-            .thenBy { it.name.lowercase(Locale.ROOT) }
-    )
+    val uniqueFiles = found.distinctBy { it.absolutePath }
+    return if (category.equals("large", ignoreCase = true)) {
+        uniqueFiles.sortedWith(
+            compareByDescending<File> { it.length() }
+                .thenBy { it.name.lowercase(Locale.ROOT) }
+        )
+    } else {
+        uniqueFiles.sortedWith(
+            compareByDescending<File> { it.lastModified() }
+                .thenBy { it.name.lowercase(Locale.ROOT) }
+        )
+    }
 }
 
 @Composable
@@ -264,7 +272,7 @@ private fun CategoryFilesScreen(
                 }
             }
             Text(
-                if (loading) "در حال بررسی فایل‌های حافظه…" else "مرتب‌شده از جدیدترین به قدیمی‌ترین • ${files.size} فایل • ${android.text.format.Formatter.formatFileSize(context, files.sumOf { it.length() })}",
+                if (loading) "در حال بررسی فایل‌های حافظه…" else "${if (category == "large") "مرتب‌شده از بزرگ‌ترین" else "مرتب‌شده از جدیدترین"} • ${files.size} فایل • ${android.text.format.Formatter.formatFileSize(context, files.sumOf { it.length() })}",
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 12.sp
