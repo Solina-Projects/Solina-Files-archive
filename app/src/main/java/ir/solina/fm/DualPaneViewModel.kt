@@ -32,6 +32,7 @@ class DualPaneViewModel : ViewModel() {
     private var leftLoadJob: Job? = null
     private var rightLoadJob: Job? = null
     private var initialized = false
+    private val fileRepository = FileRepository()
 
     /** Call once with the path currently open in the main browser and an optional saved left path. */
     fun initialize(rightPath: String, leftPath: String? = null) {
@@ -198,31 +199,14 @@ class DualPaneViewModel : ViewModel() {
                 var failed = 0
                 sources.forEach { source ->
                     try {
-                        if (!source.exists() || !source.canRead()) {
-                            failed++
+                        if (isMove) {
+                            fileRepository.moveFile(source.path, destination.path)
                         } else {
-                            val target = uniqueTransferTarget(destination, source)
-                            val success = if (!isMove) {
-                                source.copyRecursively(target, overwrite = false).also { copied ->
-                                    if (!copied) target.deleteRecursively()
-                                }
-                            } else if (source.renameTo(target)) {
-                                true
-                            } else {
-                                val copied = source.copyRecursively(target, overwrite = false)
-                                if (!copied) {
-                                    target.deleteRecursively()
-                                    false
-                                } else if (source.deleteRecursively()) {
-                                    true
-                                } else {
-                                    target.deleteRecursively()
-                                    false
-                                }
-                            }
-                            if (success) succeeded++ else failed++
+                            fileRepository.copyFile(source.path, destination.path)
                         }
+                        succeeded++
                     } catch (_: Exception) {
+                        // One failed entry must not abort the remaining selected transfers.
                         failed++
                     }
                 }
@@ -241,18 +225,6 @@ class DualPaneViewModel : ViewModel() {
             refreshPane(destinationPaneId)
             onComplete?.invoke(outcome)
         }
-    }
-
-    private fun uniqueTransferTarget(destination: File, source: File): File {
-        var target = File(destination, source.name)
-        var suffix = 1
-        while (target.exists()) {
-            val extension = source.extension.takeIf { it.isNotEmpty() }?.let { ".$it" }.orEmpty()
-            val baseName = if (extension.isNotEmpty()) source.name.removeSuffix(extension) else source.name
-            target = File(destination, "$baseName ($suffix)$extension")
-            suffix++
-        }
-        return target
     }
 
     /** Refresh after file operations or external file-system changes. */
