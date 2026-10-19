@@ -40,6 +40,7 @@ class DualPaneActivity : AppCompatActivity() {
     private data class Pane(
         val root: LinearLayout, val breadcrumbs: LinearLayout, val breadcrumbScroll: HorizontalScrollView,
         val list: RecyclerView, val adapter: PaneAdapter, var current: File,
+        val displayButton: MaterialButton,
         val selected: LinkedHashSet<File> = linkedSetOf(),
         val backHistory: MutableList<File> = mutableListOf(),
         val forwardHistory: MutableList<File> = mutableListOf(),
@@ -236,7 +237,7 @@ class DualPaneActivity : AppCompatActivity() {
         list.setOnDragListener { _, event -> handleDropEvent(index, event, null) }
         val adapter = PaneAdapter(index)
         list.adapter = adapter
-        return Pane(root, breadcrumbs, breadcrumbScroll, list, adapter, start)
+        return Pane(root, breadcrumbs, breadcrumbScroll, list, adapter, start, displayButton)
     }
 
     private fun renderBreadcrumbs(index: Int) {
@@ -390,6 +391,9 @@ class DualPaneActivity : AppCompatActivity() {
             )
             pane.root.alpha = if (activePane == index) 1f else 0.55f
             (pane.root as? SinglePaneView)?.setActive(activePane == index)
+            val paneUsesGrid = pane.gridMode ?: grid
+            pane.displayButton.setIconResource(if (paneUsesGrid) R.drawable.ic_list_view else R.drawable.ic_grid_view)
+            pane.displayButton.contentDescription = if (paneUsesGrid) "تغییر به نمایش فهرستی" else "تغییر به نمایش شبکه‌ای"
             renderBreadcrumbs(index)
         }
         val p = pane(activePane)
