@@ -73,7 +73,7 @@ class BreadcrumbBar @JvmOverloads constructor(
     }
 
     private fun createChip(label: String, selected: Boolean, onClick: () -> Unit): MaterialButton =
-        MaterialButton(context, null, MaterialR.attr.materialButtonTextButtonStyle).apply {
+        MaterialButton(context, null, MaterialR.attr.materialButtonOutlinedStyle).apply {
             text = label
             isAllCaps = false
             maxLines = 1
