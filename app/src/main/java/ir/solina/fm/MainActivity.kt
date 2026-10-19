@@ -75,6 +75,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var navigationBar: View
     private lateinit var storageButton: MaterialButton
     private lateinit var storageQuickBar: LinearLayout
+    private lateinit var quickAccessBar: LinearLayout
     private lateinit var sortFilterButton: MaterialButton
     private lateinit var overflowButton: MaterialButton
     private lateinit var drawerButton: MaterialButton
@@ -144,6 +145,7 @@ class MainActivity : AppCompatActivity() {
         navigationBar = findViewById(R.id.navigationBar)
         storageButton = findViewById(R.id.storageButton)
         storageQuickBar = findViewById(R.id.storageQuickBar)
+        quickAccessBar = findViewById(R.id.quickAccessBar)
         sortFilterButton = findViewById(R.id.sortFilterButton)
         overflowButton = findViewById(R.id.overflowButton)
         drawerButton = findViewById(R.id.drawerButton)
@@ -251,6 +253,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         renderStorageQuickBar()
+        renderQuickAccess()
         refresh()
         pendingRecentOpenPath?.let { path ->
             pendingRecentOpenPath = null
@@ -317,6 +320,71 @@ class MainActivity : AppCompatActivity() {
         // Volume selection remains available from the "حافظه دستگاه" button.
         // Hide the square storage shortcuts and their dropdown arrows on the home screen.
         storageQuickBar.visibility = View.GONE
+    }
+
+    private fun renderQuickAccess() {
+        if (!::quickAccessBar.isInitialized) return
+        quickAccessBar.removeAllViews()
+        val root = Environment.getExternalStorageDirectory()
+        val items = listOf(
+            QuickAccessItem("downloads", "دانلودها", "⬇️", File(root, "Download")),
+            QuickAccessItem("documents", "اسناد", "📄", File(root, "Documents")),
+            QuickAccessItem("pictures", "تصاویر", "🖼️", File(root, "Pictures")),
+            QuickAccessItem("music", "موسیقی", "🎵", File(root, "Music")),
+            QuickAccessItem("movies", "ویدئو", "🎬", File(root, "Movies")),
+            QuickAccessItem("camera", "دوربین", "📷", File(root, "DCIM"))
+        )
+        items.forEach { item ->
+            val shortcut = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = android.view.Gravity.CENTER
+                minimumWidth = dp(68)
+                setPadding(dp(8), dp(5), dp(8), dp(5))
+                isClickable = true
+                isFocusable = true
+                contentDescription = item.label
+                background = androidx.core.content.ContextCompat.getDrawable(
+                    this@MainActivity,
+                    com.google.android.material.R.drawable.m3_radiobutton_ripple
+                )
+            }
+            val icon = TextView(this).apply {
+                text = item.icon
+                textSize = 23f
+                gravity = android.view.Gravity.CENTER
+                includeFontPadding = false
+            }
+            val label = TextView(this).apply {
+                text = item.label
+                textSize = 11f
+                maxLines = 1
+                gravity = android.view.Gravity.CENTER
+                setTextColor(androidx.core.content.ContextCompat.getColorStateList(
+                    this@MainActivity,
+                    R.color.quick_access_text
+                ) ?: android.content.res.ColorStateList.valueOf(
+                    androidx.core.content.ContextCompat.getColor(
+                        this@MainActivity,
+                        com.google.android.material.R.color.material_on_surface_emphasis_medium
+                    )
+                ))
+            }
+            shortcut.addView(icon, LinearLayout.LayoutParams(dp(32), dp(30)))
+            shortcut.addView(label, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ))
+            shortcut.setOnClickListener {
+                if (item.directory.isDirectory) {
+                    currentVol = volumes.firstOrNull { inside(item.directory, it.dir) } ?: currentVol
+                    navigate(item.directory)
+                } else {
+                    toast("این پوشه هنوز در دستگاه ایجاد نشده است")
+                }
+            }
+            quickAccessBar.addView(shortcut, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { marginEnd = dp(2) })
+        }
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
