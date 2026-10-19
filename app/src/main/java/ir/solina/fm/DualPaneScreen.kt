@@ -19,8 +19,6 @@ class DualPaneScreen @JvmOverloads constructor(
 
     enum class Arrangement { SIDE_BY_SIDE, STACKED }
 
-    private var leftPane: View? = null
-    private var rightPane: View? = null
     private var dividerColor: Int = 0x33808080
     private var dividerSizePx: Int = (context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
 
@@ -35,19 +33,17 @@ class DualPaneScreen @JvmOverloads constructor(
         dividerColor: Int,
         dividerSizePx: Int
     ) {
-        leftPane = left
-        rightPane = right
         this.dividerColor = dividerColor
         this.dividerSizePx = dividerSizePx.coerceAtLeast(1)
         orientation = if (arrangement == Arrangement.SIDE_BY_SIDE) HORIZONTAL else VERTICAL
         removeAllViews()
 
-        val paneParams = if (arrangement == Arrangement.SIDE_BY_SIDE) {
+        fun paneLayoutParams() = if (arrangement == Arrangement.SIDE_BY_SIDE) {
             LayoutParams(0, LayoutParams.MATCH_PARENT, 1f)
         } else {
             LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
         }
-        addView(left, paneParams)
+        addView(left, paneLayoutParams())
         addView(View(context).apply {
             background = GradientDrawable().apply { setColor(this@DualPaneScreen.dividerColor) }
             isFocusable = false
@@ -58,6 +54,6 @@ class DualPaneScreen @JvmOverloads constructor(
         } else {
             LayoutParams(LayoutParams.MATCH_PARENT, this.dividerSizePx)
         })
-        addView(right, paneParams)
+        addView(right, paneLayoutParams())
     }
 }
