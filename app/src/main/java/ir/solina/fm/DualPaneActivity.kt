@@ -1605,8 +1605,16 @@ class DualPaneActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: Holder, position: Int) {
             val file = items[position]
-            holder.row.background = if (mode == LayoutMode.VERTICAL) null else
+            val isSelected = file.absolutePath in selectedPaths
+            holder.row.background = if (isSelected) {
+                android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    cornerRadius = dp(10).toFloat()
+                    setColor(resolveThemeColor(com.google.android.material.R.attr.colorSecondaryContainer))
+                }
+            } else if (mode == LayoutMode.VERTICAL) null else {
                 androidx.appcompat.content.res.AppCompatResources.getDrawable(this@DualPaneActivity, R.drawable.item_bg)
+            }
             holder.icon.background = if (mode == LayoutMode.VERTICAL) android.graphics.drawable.GradientDrawable().apply {
                 shape = android.graphics.drawable.GradientDrawable.RECTANGLE
                 cornerRadius = dp(8).toFloat()
@@ -1616,8 +1624,11 @@ class DualPaneActivity : AppCompatActivity() {
             holder.name.text = file.name
             holder.info.text = if (!details) "" else if (file.isDirectory) "پوشه" else Formatter.formatFileSize(this@DualPaneActivity, file.length())
             val p = pane(paneIndex)
-            holder.row.isActivated = p.selected.contains(file)
-            holder.row.alpha = if (p.selected.contains(file)) 0.92f else 1f
+            holder.row.isActivated = isSelected
+            holder.row.alpha = 1f
+            val selectedTextColor = resolveThemeColor(com.google.android.material.R.attr.colorOnSecondaryContainer)
+            val normalTextColor = resolveThemeColor(com.google.android.material.R.attr.colorOnSurface)
+            holder.name.setTextColor(if (isSelected) selectedTextColor else normalTextColor)
             holder.check.setOnCheckedChangeListener(null)
             holder.check.visibility = if (p.selected.isNotEmpty()) View.VISIBLE else View.GONE
             holder.check.isChecked = p.selected.contains(file)
