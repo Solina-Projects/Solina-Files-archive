@@ -225,7 +225,6 @@ private data class HomeCategory(
     val title: String,
     val subtitle: String,
     val icon: ImageVector,
-    val tint: Color,
     val filter: String? = null
 )
 
@@ -293,18 +292,12 @@ private fun SolinaHomeScreen(
         }
     }
     val categories = listOf(
-        HomeCategory("دانلودها", "همه فایل‌های جدید از سراسر حافظه", Icons.Default.FolderOpen,
-            Color(0xFF1A73E8), "recent"),
-        HomeCategory("تصاویر", "عکس‌ها و تصاویر", Icons.Default.Image,
-            Color(0xFFAF52DE), "images"),
-        HomeCategory("ویدیوها", "فیلم‌ها و کلیپ‌ها", Icons.Default.VideoLibrary,
-            Color(0xFFE5484D), "videos"),
-        HomeCategory("موسیقی", "فایل‌های صوتی", Icons.Default.MusicNote,
-            Color(0xFFE58B22), "audio"),
-        HomeCategory("اسناد", "PDF، متن و آفیس", Icons.Default.Description,
-            Color(0xFF168A83), "documents"),
-        HomeCategory("فایل‌های APK", "نصب و بررسی برنامه", Icons.Default.Android,
-            Color(0xFF27864B), "apk")
+        HomeCategory("دانلودها", "همه فایل‌های جدید از سراسر حافظه", Icons.Default.FolderOpen, "recent"),
+        HomeCategory("تصاویر", "عکس‌ها و تصاویر", Icons.Default.Image, "images"),
+        HomeCategory("ویدیوها", "فیلم‌ها و کلیپ‌ها", Icons.Default.VideoLibrary, "videos"),
+        HomeCategory("موسیقی", "فایل‌های صوتی", Icons.Default.MusicNote, "audio"),
+        HomeCategory("اسناد", "PDF، متن و آفیس", Icons.Default.Description, "documents"),
+        HomeCategory("فایل‌های APK", "نصب و بررسی برنامه", Icons.Default.Android, "apk")
     )
 
     val toolItems = listOf(
@@ -566,63 +559,6 @@ private fun StorageMetric(title: String, value: String, modifier: Modifier = Mod
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-    }
-}
-
-@Composable
-private fun CategoryTile(
-    category: HomeCategory,
-    count: Int,
-    bytes: Long,
-    statsLoading: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 7.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(shape = RoundedCornerShape(13.dp), color = category.tint.copy(alpha = 0.12f)) {
-                Icon(category.icon, contentDescription = null, tint = category.tint,
-                    modifier = Modifier.padding(6.dp).size(18.dp))
-            }
-            Spacer(Modifier.width(6.dp))
-            Column(Modifier.weight(1f)) {
-                Text(category.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(3.dp))
-                Text(category.subtitle, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, lineHeight = 12.sp)
-                Text(
-                    if (statsLoading) "در حال شمارش…"
-                    else "${persianDigits(count.toString())} فایل • ${persianDigits(android.text.format.Formatter.formatFileSize(LocalContext.current, bytes))}",
-                    fontSize = 9.sp, color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, lineHeight = 11.sp
-                )
-            }
-            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(12.dp))
-        }
-    }
-}
-
-@Composable
-private fun QuickTool(label: String, icon: ImageVector, modifier: Modifier, onClick: () -> Unit) {
-    Column(
-        modifier = modifier.clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onClick).padding(vertical = 13.dp, horizontal = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(7.dp)
-    ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-        Text(label, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
