@@ -190,7 +190,7 @@ class MainActivity : AppCompatActivity() {
         }
         overflowButton.setOnClickListener { showTopMenu(it) }
         drawerButton.setOnClickListener { showRightDrawer() }
-        dualPaneButton.setOnClickListener { startActivity(Intent(this, DualPaneActivity::class.java)) }
+        dualPaneButton.setOnClickListener { openDualPane() }
         val savedColumns = getSharedPreferences("solina_preferences", MODE_PRIVATE).getInt("grid_columns", 1)
         gridLayout = savedColumns > 1
         layoutModeButton.setOnClickListener { showLayoutSettings() }
@@ -525,6 +525,13 @@ class MainActivity : AppCompatActivity() {
 
     // ---------- listing ----------
 
+    private fun openDualPane() {
+        startActivity(
+            Intent(this, DualPaneActivity::class.java)
+                .putExtra(DualPaneActivity.EXTRA_RIGHT_PATH, current.absolutePath)
+        )
+    }
+
     private fun navigate(dir: File, recordHistory: Boolean = true) {
         if (dir.path == current.path) return
         if (recordHistory) {
@@ -715,7 +722,7 @@ class MainActivity : AppCompatActivity() {
     private fun onMainMenu(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.action_new_folder -> newFolder()
-            R.id.action_dual_pane -> startActivity(Intent(this, DualPaneActivity::class.java))
+            R.id.action_dual_pane -> openDualPane()
             R.id.action_refresh -> refresh()
             R.id.action_bookmark -> toggleBookmark()
             R.id.action_bookmarks -> showBookmarks()
