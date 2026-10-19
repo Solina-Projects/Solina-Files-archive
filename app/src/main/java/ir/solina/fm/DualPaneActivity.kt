@@ -151,6 +151,7 @@ class DualPaneActivity : AppCompatActivity() {
         button(bottomActions, "کپی") { transfer(false) }
         button(bottomActions, "به پنل مقابل") { transfer(true) }
         button(bottomActions, "حذف") { deleteSelected(activePane) }
+        button(bottomActions, "لغو انتخاب") { clearPaneSelection(activePane) }
         screen.addView(bottomActions, LinearLayout.LayoutParams(-1, dp(48)))
         setContentView(screen)
         left = createPane(savedLeft ?: base, 0).apply { isEmpty = savedLeft == null }
