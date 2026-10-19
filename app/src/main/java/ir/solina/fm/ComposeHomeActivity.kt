@@ -381,10 +381,16 @@ private fun SolinaHomeScreen(
                     )
                 }
                 item {
-                    val usedBytes = (homeStats.totalBytes - homeStats.freeBytes).coerceAtLeast(0L)
-                    val usedFraction = if (homeStats.totalBytes > 0L) {
-                        (usedBytes.toFloat() / homeStats.totalBytes.toFloat()).coerceIn(0f, 1f)
-                    } else 0f
+                    val storageInfo = StorageInfo(
+                        totalBytes = homeStats.totalBytes,
+                        usedBytes = (homeStats.totalBytes - homeStats.freeBytes).coerceAtLeast(0L)
+                    )
+                    val usedFraction = storageInfo.usagePercent / 100f
+                    val usageColor = when {
+                        storageInfo.usagePercent >= 90 -> Color(0xFFD32F2F)
+                        storageInfo.usagePercent >= 70 -> Color(0xFFED6C02)
+                        else -> Color(0xFF2E7D32)
+                    }
                     Card(
                         modifier = Modifier.fillMaxWidth().clickable {
                             if (hasAccess) onBrowse() else onRequestPermission()
@@ -400,16 +406,11 @@ private fun SolinaHomeScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Surface(
                                     shape = RoundedCornerShape(18.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    color = usageColor.copy(alpha = 0.13f),
                                     modifier = Modifier.size(58.dp)
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            Icons.Default.Storage,
-                                            contentDescription = "حافظه دستگاه",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(34.dp)
-                                        )
+                                        Icon(Icons.Default.Storage, contentDescription = "حافظه دستگاه", tint = usageColor, modifier = Modifier.size(34.dp))
                                     }
                                 }
                                 Spacer(Modifier.width(12.dp))
@@ -419,62 +420,37 @@ private fun SolinaHomeScreen(
                                         when {
                                             !hasAccess -> "برای مشاهده آمار، دسترسی لازم است"
                                             statsLoading -> "در حال محاسبه اطلاعات حافظه…"
-                                            homeStats.totalBytes > 0L -> "استفاده‌شده: ${persianDigits((usedFraction * 100).toInt().toString())}٪"
+                                            storageInfo.totalBytes > 0L -> "استفاده‌شده: ${persianDigits(storageInfo.usagePercent.toString())}٪"
                                             else -> "اطلاعات حافظه در دسترس نیست"
                                         },
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 12.sp
+                                        color = if (hasAccess && !statsLoading && storageInfo.totalBytes > 0L) usageColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
                                     )
                                 }
-                                TextButton(onClick = {
-                                    if (hasAccess) onBrowse() else onRequestPermission()
-                                }) { Text(if (hasAccess) "باز کردن" else "دسترسی") }
+                                TextButton(onClick = { if (hasAccess) onBrowse() else onRequestPermission() }) { Text(if (hasAccess) "باز کردن" else "دسترسی") }
                             }
-                            if (hasAccess && !statsLoading && homeStats.totalBytes > 0L) {
+                            if (hasAccess && !statsLoading && storageInfo.totalBytes > 0L) {
                                 LinearProgressIndicator(
                                     progress = { usedFraction },
                                     modifier = Modifier.fillMaxWidth().height(8.dp),
+                                    color = usageColor,
                                     trackColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    StorageMetric(
-                                        title = "استفاده‌شده",
-                                        value = persianDigits(android.text.format.Formatter.formatFileSize(context, usedBytes)),
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    StorageMetric(
-                                        title = "فضای خالی",
-                                        value = persianDigits(android.text.format.Formatter.formatFileSize(context, homeStats.freeBytes)),
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    StorageMetric(
-                                        title = "ظرفیت کل",
-                                        value = persianDigits(android.text.format.Formatter.formatFileSize(context, homeStats.totalBytes)),
-                                        modifier = Modifier.weight(1f)
-                                    )
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    StorageMetric(title = "استفاده‌شده", value = storageInfo.formattedUsedGb(), modifier = Modifier.weight(1f))
+                                    StorageMetric(title = "فضای خالی", value = storageInfo.formattedFreeGb(), modifier = Modifier.weight(1f))
+                                    StorageMetric(title = "ظرفیت کل", value = storageInfo.formattedTotalGb(), modifier = Modifier.weight(1f))
                                 }
-                                Surface(
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(Icons.Default.Folder, contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                Surface(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f), shape = RoundedCornerShape(12.dp)) {
+                                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(6.dp))
-                                        Text("${persianDigits(homeStats.folderCount.toString())} پوشه", fontSize = 12.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("${persianDigits(homeStats.folderCount.toString())} پوشه", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Spacer(Modifier.width(14.dp))
-                                        Icon(Icons.Default.Description, contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                        Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(6.dp))
-                                        Text("${persianDigits(homeStats.fileCount.toString())} فایل", fontSize = 12.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("${persianDigits(homeStats.fileCount.toString())} فایل", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
                             }
