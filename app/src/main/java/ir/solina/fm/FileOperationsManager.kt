@@ -1,13 +1,17 @@
 package ir.solina.fm
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.isActive
 import java.io.File
+import java.util.UUID
+import kotlin.coroutines.coroutineContext
 
 /**
- * مدیر اختصاصی عملیات فایل با پشتیبانی از کاتلین کوروتینز
- * جلوگیری از فریز شدن رابط کاربری و امکان لغو عملیات
+ * File transfers run on Dispatchers.IO. A copy is staged to a temporary sibling and
+ * promoted only after it completes, so failed/cancelled copies do not leave partial
+ * destination files with their final names.
  */
 object FileOperationsManager {
 
@@ -35,62 +39,75 @@ object FileOperationsManager {
         val errors = mutableListOf<String>()
         val total = sources.size
 
-        sources.forEachIndexed { index, src ->
-            if (!isActive) return@withContext OperationResult(successes, failures, errors)
-
-            val currentProgress = ProgressState(
-                currentFileName = src.name,
-                processedCount = index + 1,
-                totalCount = total,
-                percent = (((index + 1).toFloat() / total) * 100).toInt()
+        if (!destinationDir.exists() || !destinationDir.isDirectory || !destinationDir.canWrite()) {
+            return@withContext OperationResult(
+                0, total, listOf("پوشهٔ مقصد وجود ندارد یا قابل نوشتن نیست")
             )
-            withContext(Dispatchers.Main) { onProgress(currentProgress) }
+        }
 
+        sources.forEachIndexed { index, src ->
+            coroutineContext.ensureActive()
+            withContext(Dispatchers.Main) {
+                onProgress(
+                    ProgressState(
+                        currentFileName = src.name,
+                        processedCount = index + 1,
+                        totalCount = total,
+                        percent = if (total == 0) 100 else ((index + 1) * 100 / total)
+                    )
+                )
+            }
+
+            var staged: File? = null
             try {
-                if (!src.exists()) {
-                    failures++
-                    errors.add("${src.name}: فایل یافت نشد")
-                    return@forEachIndexed
+                coroutineContext.ensureActive()
+                if (!src.exists()) throw IllegalStateException("فایل مبدأ پیدا نشد")
+                if (src.canonicalFile == destinationDir.canonicalFile) {
+                    throw IllegalArgumentException("مبدأ و مقصد یکسان هستند")
                 }
 
                 val sourcePath = src.canonicalPath
                 val destinationPath = destinationDir.canonicalPath
-                if (src.isDirectory && (destinationPath == sourcePath || destinationPath.startsWith(sourcePath + File.separator))) {
-                    failures++
-                    errors.add("${src.name}: نمی‌توان پوشه را در زیرمجموعه خودش کپی کرد")
-                    return@forEachIndexed
+                if (src.isDirectory &&
+                    (destinationPath == sourcePath || destinationPath.startsWith(sourcePath + File.separator))
+                ) {
+                    throw IllegalArgumentException("نمی‌توان پوشه را در زیرمجموعهٔ خودش کپی کرد")
                 }
 
                 val target = getUniqueTarget(destinationDir, src)
+                if (isMove && src.renameTo(target)) {
+                    successes++
+                    return@forEachIndexed
+                }
+
+                staged = File(destinationDir, ".solina-${UUID.randomUUID()}.partial")
+                src.copyRecursively(staged!!, overwrite = false)
+                coroutineContext.ensureActive()
+
+                if (!staged!!.exists()) throw IllegalStateException("فایل موقت مقصد ساخته نشد")
+                if (target.exists() || !staged!!.renameTo(target)) {
+                    throw IllegalStateException("انتقال فایل موقت به مقصد نهایی انجام نشد")
+                }
+                staged = null
 
                 if (isMove) {
-                    val moved = src.renameTo(target)
-                    if (moved) {
-                        successes++
+                    val deleted = if (src.isDirectory) src.deleteRecursively() else src.delete()
+                    if (!deleted) {
+                        failures++
+                        errors.add("${src.name}: نسخهٔ مقصد آماده شد، اما حذف مبدأ ناموفق بود؛ هر دو نسخه نگه داشته شدند")
                     } else {
-                        if (src.copyRecursively(target, overwrite = false)) {
-                            if (src.deleteRecursively()) {
-                                successes++
-                            } else {
-                                failures++
-                                errors.add("${src.name}: فایل کپی شد اما حذف نسخهٔ مبدأ کامل نشد")
-                            }
-                        } else {
-                            failures++
-                            errors.add("${src.name}: انتقال ناموفق بود")
-                        }
+                        successes++
                     }
                 } else {
-                    if (src.copyRecursively(target, overwrite = false)) {
-                        successes++
-                    } else {
-                        failures++
-                        errors.add("${src.name}: کپی ناموفق بود")
-                    }
+                    successes++
                 }
+            } catch (cancelled: CancellationException) {
+                staged?.let { if (it.isDirectory) it.deleteRecursively() else it.delete() }
+                throw cancelled
             } catch (e: Exception) {
+                staged?.let { if (it.isDirectory) it.deleteRecursively() else it.delete() }
                 failures++
-                errors.add("${src.name}: ${e.localizedMessage ?: "خطای ناشناخته"}")
+                errors.add("${src.name}: ${e.localizedMessage ?: "عملیات ناموفق بود"}")
             }
         }
 
@@ -103,15 +120,18 @@ object FileOperationsManager {
         val errors = mutableListOf<String>()
 
         files.forEach { file ->
+            coroutineContext.ensureActive()
             try {
                 val ok = if (file.isDirectory) file.deleteRecursively() else file.delete()
                 if (ok) successes++ else {
                     failures++
                     errors.add("حذف ${file.name} ممکن نشد")
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 failures++
-                errors.add("${file.name}: ${e.message}")
+                errors.add("${file.name}: ${e.localizedMessage ?: "خطای ناشناخته"}")
             }
         }
         OperationResult(successes, failures, errors)
@@ -124,7 +144,6 @@ object FileOperationsManager {
         val baseName = if (src.isDirectory) src.name else src.nameWithoutExtension
         val ext = if (src.isDirectory || src.extension.isEmpty()) "" else ".${src.extension}"
         var counter = 1
-
         while (candidate.exists()) {
             candidate = File(destDir, "$baseName ($counter)$ext")
             counter++
