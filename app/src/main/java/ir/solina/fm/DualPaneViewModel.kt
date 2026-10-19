@@ -145,6 +145,116 @@ class DualPaneViewModel : ViewModel() {
         clearSelection(PaneState.RIGHT_ID)
     }
 
+    data class TransferOutcome(
+        val succeeded: Int,
+        val failed: Int,
+        val message: String
+    )
+
+    /**
+     * Copy or move the selected entries from one pane into the other pane's current folder.
+     * Filesystem work runs on Dispatchers.IO; the optional callback is invoked on the main thread.
+     */
+    fun transferFiles(
+        sourcePaneId: String,
+        destinationPaneId: String,
+        isMove: Boolean,
+        onComplete: ((TransferOutcome) -> Unit)? = null
+    ): Job? {
+        val validIds = setOf(PaneState.LEFT_ID, PaneState.RIGHT_ID)
+        if (sourcePaneId !in validIds || destinationPaneId !in validIds ||
+            sourcePaneId == destinationPaneId
+        ) return null
+
+        val sourceState = stateFor(sourcePaneId).value
+        val destinationState = stateFor(destinationPaneId).value
+        val sources = sourceState.selectedIds.map(::File).distinctBy { it.absolutePath }
+        val destination = File(destinationState.currentPath)
+
+        if (sources.isEmpty()) {
+            onComplete?.invoke(TransferOutcome(0, 0, "ابتدا فایل یا پوشه‌ای را انتخاب کنید"))
+            return null
+        }
+        if (destinationState.isEmpty || !destination.isDirectory) {
+            onComplete?.invoke(TransferOutcome(0, sources.size, "پوشهٔ مقصد در دسترس نیست"))
+            return null
+        }
+        if (sources.any { source ->
+                runCatching {
+                    val sourcePath = source.canonicalFile.toPath()
+                    val destinationPath = destination.canonicalFile.toPath()
+                    sourcePath == destinationPath || destinationPath.startsWith(sourcePath) && source.isDirectory
+                }.getOrDefault(true)
+            }
+        ) {
+            onComplete?.invoke(TransferOutcome(0, sources.size, "انتقال پوشه به داخل خودش مجاز نیست"))
+            return null
+        }
+
+        stateFor(sourcePaneId).update { it.copy(isLoading = true, errorMessage = null) }
+        return viewModelScope.launch {
+            val outcome = withContext(Dispatchers.IO) {
+                var succeeded = 0
+                var failed = 0
+                sources.forEach { source ->
+                    try {
+                        if (!source.exists() || !source.canRead()) {
+                            failed++
+                        } else {
+                            val target = uniqueTransferTarget(destination, source)
+                            val success = if (!isMove) {
+                                source.copyRecursively(target, overwrite = false).also { copied ->
+                                    if (!copied) target.deleteRecursively()
+                                }
+                            } else if (source.renameTo(target)) {
+                                true
+                            } else {
+                                val copied = source.copyRecursively(target, overwrite = false)
+                                if (!copied) {
+                                    target.deleteRecursively()
+                                    false
+                                } else if (source.deleteRecursively()) {
+                                    true
+                                } else {
+                                    target.deleteRecursively()
+                                    false
+                                }
+                            }
+                            if (success) succeeded++ else failed++
+                        }
+                    } catch (_: Exception) {
+                        failed++
+                    }
+                }
+                val message = when {
+                    failed == 0 -> if (isMove) "انتقال با موفقیت انجام شد" else "کپی با موفقیت انجام شد"
+                    succeeded == 0 -> "عملیات انجام نشد؛ دسترسی و فضای ذخیره‌سازی را بررسی کنید"
+                    else -> "$succeeded مورد انجام شد؛ $failed مورد ناموفق بود"
+                }
+                TransferOutcome(succeeded, failed, message)
+            }
+
+            stateFor(sourcePaneId).update {
+                it.copy(selectedIds = emptySet(), isLoading = false, errorMessage = null)
+            }
+            refreshPane(sourcePaneId)
+            refreshPane(destinationPaneId)
+            onComplete?.invoke(outcome)
+        }
+    }
+
+    private fun uniqueTransferTarget(destination: File, source: File): File {
+        var target = File(destination, source.name)
+        var suffix = 1
+        while (target.exists()) {
+            val extension = source.extension.takeIf { it.isNotEmpty() }?.let { ".$it" }.orEmpty()
+            val baseName = if (extension.isNotEmpty()) source.name.removeSuffix(extension) else source.name
+            target = File(destination, "$baseName ($suffix)$extension")
+            suffix++
+        }
+        return target
+    }
+
     /** Refresh after file operations or external file-system changes. */
     fun refreshPane(paneId: String) {
         if (paneId != PaneState.LEFT_ID && paneId != PaneState.RIGHT_ID) return
