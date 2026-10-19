@@ -45,7 +45,7 @@ fun CategoryCard(
             .clickable(onClick = item.onClick),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
