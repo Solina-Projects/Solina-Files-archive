@@ -73,12 +73,7 @@ class BreadcrumbBar @JvmOverloads constructor(
     }
 
     private fun createChip(label: String, selected: Boolean, onClick: () -> Unit): MaterialButton =
-        MaterialButton(
-            context,
-            null,
-            if (selected) MaterialR.attr.materialButtonOutlinedStyle
-            else MaterialR.attr.materialButtonTextButtonStyle
-        ).apply {
+        MaterialButton(context, null, MaterialR.attr.materialButtonTextButtonStyle).apply {
             text = label
             isAllCaps = false
             maxLines = 1
@@ -87,7 +82,17 @@ class BreadcrumbBar @JvmOverloads constructor(
             minWidth = 0
             minimumWidth = 0
             setPadding(dp(6), 0, dp(6), 0)
-            contentDescription = "رفتن به $label"
+            backgroundTintList = android.content.res.ColorStateList.valueOf(
+                if (selected) resolveThemeColor(MaterialR.attr.colorPrimaryContainer)
+                else android.graphics.Color.TRANSPARENT
+            )
+            setTextColor(
+                resolveThemeColor(
+                    if (selected) MaterialR.attr.colorOnPrimaryContainer
+                    else MaterialR.attr.colorOnSurfaceVariant
+                )
+            )
+            contentDescription = if (selected) "پوشه فعلی: $label" else "رفتن به $label"
             setOnClickListener { onClick() }
         }
 
