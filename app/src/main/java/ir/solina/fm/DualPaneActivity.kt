@@ -152,6 +152,14 @@ class DualPaneActivity : AppCompatActivity() {
         button(bottomActions, "به پنل مقابل") { transfer(true) }
         button(bottomActions, "حذف") { deleteSelected(activePane) }
         button(bottomActions, "لغو انتخاب") { clearPaneSelection(activePane) }
+        val selectionCountLabel = TextView(this).apply {
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(onSurfaceColor)
+            contentDescription = "تعداد موارد انتخاب‌شده"
+            setPadding(dp(6), 0, dp(6), 0)
+        }
+        bottomActions.addView(selectionCountLabel, LinearLayout.LayoutParams(-2, -1))
         screen.addView(bottomActions, LinearLayout.LayoutParams(-1, dp(48)))
         setContentView(screen)
         left = createPane(savedLeft ?: base, 0).apply { isEmpty = savedLeft == null }
@@ -452,6 +460,7 @@ class DualPaneActivity : AppCompatActivity() {
         val hasSelection = p.selected.isNotEmpty()
         (selectionActions.parent as? HorizontalScrollView)?.visibility = if (hasSelection) View.VISIBLE else View.GONE
         bottomActions.visibility = if (hasSelection) View.VISIBLE else View.GONE
+        (bottomActions.getChildAt(4) as? TextView)?.text = if (hasSelection) "${p.selected.size} مورد انتخاب شد" else ""
         selectionActions.getChildAt(2)?.visibility = if (p.selected.size == 1) View.VISIBLE else View.GONE
         selectionActions.getChildAt(4)?.visibility = if (p.selected.any { it.isFile && it.extension.equals("zip", true) }) View.VISIBLE else View.GONE
         // Keep the one-tap transfer visible only when the opposite pane has a destination.
