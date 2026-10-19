@@ -11,6 +11,7 @@ data class PaneState(
     val currentPath: String,
     val files: List<File> = emptyList(),
     val isActive: Boolean = false,
+    val isGridView: Boolean = true,
     val isLoading: Boolean = false,
     val isEmpty: Boolean = false,
     val errorMessage: String? = null
