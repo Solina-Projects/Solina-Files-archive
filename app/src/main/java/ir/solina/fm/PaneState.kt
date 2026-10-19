@@ -14,8 +14,12 @@ data class PaneState(
     val isGridView: Boolean = true,
     val isLoading: Boolean = false,
     val isEmpty: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    /** Absolute paths of entries selected in this pane. */
+    val selectedIds: Set<String> = emptySet()
 ) {
+    val hasSelection: Boolean get() = selectedIds.isNotEmpty()
+
     companion object {
         const val LEFT_ID = "PANE_LEFT"
         const val RIGHT_ID = "PANE_RIGHT"
