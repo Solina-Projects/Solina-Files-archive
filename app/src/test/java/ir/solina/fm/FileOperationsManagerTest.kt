@@ -11,6 +11,11 @@ class FileOperationsManagerTest {
     val temporaryFolder = TemporaryFolder()
 
     @Test
+    fun persianDigitsLocalizesAsciiDigitsAndPreservesOtherCharacters() {
+        assertEquals("حافظه ۱۲۳.۴ GB", persianDigits("حافظه 123.4 GB"))
+    }
+
+    @Test
     fun uniqueTargetReturnsOriginalNameWhenThereIsNoCollision() {
         val destination = temporaryFolder.newFolder("destination")
         val source = File(temporaryFolder.root, "report.pdf")
