@@ -151,6 +151,10 @@ private val categoryAudioExtensionsHome = setOf("mp3", "m4a", "aac", "wav", "ogg
 private val categoryArchiveExtensionsHome = setOf("zip", "7z", "rar", "tar", "gz", "bz2", "xz", "zst", "tgz", "tbz2", "iso", "cab", "jar", "war")
 private val categoryDocumentExtensionsHome = setOf("pdf", "doc", "docx", "docm", "odt", "rtf", "txt", "text", "md", "markdown", "log", "xls", "xlsx", "xlsm", "ods", "csv", "ppt", "pptx", "pptm", "odp", "html", "htm", "xml", "json", "yaml", "yml", "epub", "pages", "numbers", "key")
 
+private fun persianDigits(value: String): String = value.map { character ->
+    if (character in '0'..'9') ('۰'.code + (character - '0')).toChar() else character
+}.joinToString("")
+
 private fun scanHomeStats(context: android.content.Context): HomeStats {
     val manager = context.getSystemService(StorageManager::class.java)
     val roots = try {
@@ -407,7 +411,7 @@ private fun SolinaHomeScreen(
                                         when {
                                             !hasAccess -> "برای مشاهده آمار، دسترسی لازم است"
                                             statsLoading -> "در حال محاسبه اطلاعات حافظه…"
-                                            homeStats.totalBytes > 0L -> "استفاده‌شده: ${(usedFraction * 100).toInt()}٪"
+                                            homeStats.totalBytes > 0L -> "استفاده‌شده: ${persianDigits((usedFraction * 100).toInt().toString())}٪"
                                             else -> "اطلاعات حافظه در دسترس نیست"
                                         },
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -430,17 +434,17 @@ private fun SolinaHomeScreen(
                                 ) {
                                     StorageMetric(
                                         title = "استفاده‌شده",
-                                        value = android.text.format.Formatter.formatFileSize(context, usedBytes),
+                                        value = persianDigits(android.text.format.Formatter.formatFileSize(context, usedBytes)),
                                         modifier = Modifier.weight(1f)
                                     )
                                     StorageMetric(
                                         title = "فضای خالی",
-                                        value = android.text.format.Formatter.formatFileSize(context, homeStats.freeBytes),
+                                        value = persianDigits(android.text.format.Formatter.formatFileSize(context, homeStats.freeBytes)),
                                         modifier = Modifier.weight(1f)
                                     )
                                     StorageMetric(
                                         title = "ظرفیت کل",
-                                        value = android.text.format.Formatter.formatFileSize(context, homeStats.totalBytes),
+                                        value = persianDigits(android.text.format.Formatter.formatFileSize(context, homeStats.totalBytes)),
                                         modifier = Modifier.weight(1f)
                                     )
                                 }
@@ -455,13 +459,13 @@ private fun SolinaHomeScreen(
                                         Icon(Icons.Default.Folder, contentDescription = null,
                                             tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(6.dp))
-                                        Text("${homeStats.folderCount} پوشه", fontSize = 12.sp,
+                                        Text("${persianDigits(homeStats.folderCount.toString())} پوشه", fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Spacer(Modifier.width(14.dp))
                                         Icon(Icons.Default.Description, contentDescription = null,
                                             tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(6.dp))
-                                        Text("${homeStats.fileCount} فایل", fontSize = 12.sp,
+                                        Text("${persianDigits(homeStats.fileCount.toString())} فایل", fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
