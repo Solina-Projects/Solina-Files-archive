@@ -115,6 +115,36 @@ class DualPaneViewModel : ViewModel() {
         stateFor(paneId).update { state -> state.copy(isGridView = !state.isGridView) }
     }
 
+    /** Add or remove one absolute file path from the selection in a pane. */
+    fun toggleSelection(paneId: String, filePath: String) {
+        if (paneId != PaneState.LEFT_ID && paneId != PaneState.RIGHT_ID) return
+        val normalizedPath = File(filePath).absolutePath
+        stateFor(paneId).update { state ->
+            val next = state.selectedIds.toMutableSet()
+            if (!next.add(normalizedPath)) next.remove(normalizedPath)
+            state.copy(selectedIds = next)
+        }
+    }
+
+    /** Replace the current selection with the supplied absolute file paths. */
+    fun selectFiles(paneId: String, filePaths: Collection<String>) {
+        if (paneId != PaneState.LEFT_ID && paneId != PaneState.RIGHT_ID) return
+        val normalizedPaths = filePaths.map { File(it).absolutePath }.toSet()
+        stateFor(paneId).update { it.copy(selectedIds = normalizedPaths) }
+    }
+
+    /** Clear selection without changing navigation or the displayed files. */
+    fun clearSelection(paneId: String) {
+        if (paneId != PaneState.LEFT_ID && paneId != PaneState.RIGHT_ID) return
+        stateFor(paneId).update { it.copy(selectedIds = emptySet()) }
+    }
+
+    /** Clear selection in both panes, useful after a completed cross-pane operation. */
+    fun clearAllSelections() {
+        clearSelection(PaneState.LEFT_ID)
+        clearSelection(PaneState.RIGHT_ID)
+    }
+
     /** Refresh after file operations or external file-system changes. */
     fun refreshPane(paneId: String) {
         if (paneId != PaneState.LEFT_ID && paneId != PaneState.RIGHT_ID) return
