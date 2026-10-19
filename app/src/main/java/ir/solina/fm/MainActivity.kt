@@ -33,6 +33,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -55,6 +56,8 @@ import java.security.MessageDigest
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
 import java.util.ArrayDeque
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import net.lingala.zip4j.ZipFile
@@ -918,46 +921,64 @@ class MainActivity : AppCompatActivity() {
         return target
     }
 
+    private var transferJob: kotlinx.coroutines.Job? = null
+
     private fun paste() {
-        val files = clipFiles
+        val files = clipFiles.toList()
         val cut = clipCut
         val dest = current
         if (files.isEmpty()) return
+        if (transferJob?.isActive == true) {
+            toast("یک عملیات انتقال دیگر در حال اجراست")
+            return
+        }
+
         progress.visibility = View.VISIBLE
-        Thread {
-            var failed = 0
-            for (src in files) {
-                try {
-                    if (!src.exists()) {
-                        failed++
-                        continue
-                    }
-                    if (src.isDirectory && inside(dest, src)) {
-                        failed++
-                        continue
-                    }
-                    if (cut && src.parentFile?.path == dest.path) continue
-                    val target = uniqueTarget(dest, src)
-                    if (cut) {
-                        if (!src.renameTo(target)) {
-                            src.copyRecursively(target); if (target.exists()) src.deleteRecursively() else failed++
-                        }
-                    } else {
-                        if (!src.copyRecursively(target)) failed++
-                    }
-                } catch (e: Exception) {
-                    failed++
+        progress.isIndeterminate = false
+        progress.progress = 0
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(if (cut) "در حال انتقال فایل‌ها" else "در حال کپی فایل‌ها")
+            .setMessage("آماده‌سازی عملیات…")
+            .setNegativeButton("لغو") { _, _ -> transferJob?.cancel() }
+            .create()
+        dialog.setCanceledOnTouchOutside(false)
+        dialog.show()
+
+        transferJob = lifecycleScope.launch {
+            try {
+                val result = FileOperationsManager.executeTransfer(files, dest, cut) { state ->
+                    progress.progress = state.percent
+                    dialog.setMessage(
+                        "در حال پردازش ${state.processedCount} از ${state.totalCount}: ${state.currentFileName}"
+                    )
                 }
-            }
-            runOnUiThread {
+                if (cut) {
+                    clipFiles = if (result.failureCount == 0) emptyList() else files.filter { it.exists() }
+                    clipCut = clipFiles.isNotEmpty()
+                }
+                if (result.failureCount > 0) {
+                    val details = result.errors.take(3).joinToString("؛ ")
+                    toast("عملیات کامل نشد: ${result.successCount} موفق، ${result.failureCount} ناموفق" +
+                        if (details.isBlank()) "" else " — $details")
+                } else {
+                    toast(if (cut) "انتقال فایل‌ها کامل شد" else "کپی فایل‌ها کامل شد")
+                }
+            } catch (_: CancellationException) {
+                if (cut) {
+                    clipFiles = files.filter { it.exists() }
+                    clipCut = clipFiles.isNotEmpty()
+                }
+                toast("عملیات لغو شد؛ فایل‌های ناقص پاک‌سازی شدند و عملیات‌های تکمیل‌شده باقی ماندند")
+            } catch (e: Exception) {
+                toast("عملیات فایل ناموفق بود: ${e.localizedMessage ?: "خطای ناشناخته"}")
+            } finally {
+                transferJob = null
                 progress.visibility = View.GONE
-                if (cut) clipFiles = emptyList()
-                if (failed > 0) toast(getString(R.string.some_failed, failed))
+                dialog.dismiss()
                 refresh()
             }
-        }.start()
+        }
     }
-
 
     private fun compressSelected() {
         val items = selected.toList()
