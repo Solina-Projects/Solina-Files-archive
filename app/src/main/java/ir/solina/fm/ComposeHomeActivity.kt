@@ -308,12 +308,11 @@ private fun SolinaHomeScreen(
         }
     }
     val categories = listOf(
-        HomeCategory("دانلودها", "همه فایل‌های جدید از سراسر حافظه", Icons.Default.FolderOpen, "recent"),
-        HomeCategory("تصاویر", "عکس‌ها و تصاویر", Icons.Default.Image, "images"),
         HomeCategory("ویدیوها", "فیلم‌ها و کلیپ‌ها", Icons.Default.VideoLibrary, "videos"),
+        HomeCategory("تصاویر", "عکس‌ها و تصاویر", Icons.Default.Image, "images"),
         HomeCategory("موسیقی", "فایل‌های صوتی", Icons.Default.MusicNote, "audio"),
-        HomeCategory("اسناد", "PDF، متن و آفیس", Icons.Default.Description, "documents"),
-        HomeCategory("فایل‌های APK", "نصب و بررسی برنامه", Icons.Default.Android, "apk")
+        HomeCategory("برنامه‌ها", "فایل‌های نصب برنامه", Icons.Default.Android, "apk"),
+        HomeCategory("اسناد", "PDF، متن و آفیس", Icons.Default.Description, "documents")
     )
 
     val toolItems = listOf(
@@ -323,32 +322,7 @@ private fun SolinaHomeScreen(
         CategoryItem("vault", "خزانه", "دسترسی به فایل‌های امن", Icons.Default.Lock, onClick = onVault),
         CategoryItem("settings", "تنظیمات", "شخصی‌سازی برنامه", Icons.Default.Settings, onClick = onSettings)
     )
-    val categoryItems = categories.map { category ->
-        val filter = category.filter ?: "recent"
-        val stats = homeStats.categories[filter]
-        val countText = if (statsLoading) "در حال شمارش…" else
-            "${persianDigits((stats?.count ?: 0).toString())} فایل · ${persianDigits(android.text.format.Formatter.formatFileSize(context, stats?.bytes ?: 0L))}"
-        // Use distinct, stable accents while keeping counts and sizes tied to live storage stats.
-        val accentColor = when (filter) {
-            "images" -> 0xFFE91E63L
-            "videos" -> 0xFF9C27B0L
-            "audio" -> 0xFFFFC107L
-            "documents" -> 0xFF009688L
-            "apk" -> 0xFF4CAF50L
-            else -> 0xFF2196F3L
-        }
-        CategoryItem(
-            id = filter,
-            title = category.title,
-            subtitle = "${category.subtitle}\n$countText",
-            icon = category.icon,
-            accentColor = accentColor,
-            onClick = { onOpenCategory(category.title, filter) }
-        )
-    }.sortedByDescending { item ->
-        val filter = item.id
-        homeStats.categories[filter]?.bytes ?: 0L
-    }
+
 
     CompositionLocalProviderCompatRtl {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -362,74 +336,149 @@ private fun SolinaHomeScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 item {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("مدیریت فایل‌ها", fontSize = 22.sp, fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface)
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                if (statsLoading) "در حال به‌روزرسانی آمار حافظه…"
-                                else "${persianDigits(String.format(Locale.ROOT, "%,d", homeStats.fileCount).replace(',', '٬'))} فایل در ${persianDigits(String.format(Locale.ROOT, "%,d", homeStats.folderCount).replace(',', '٬'))} پوشه",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(44.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(46.dp)) {
                             Box(contentAlignment = Alignment.Center) {
                                 androidx.compose.foundation.Image(
                                     painter = painterResource(id = R.drawable.ic_launcher_fg),
-                                    contentDescription = "Solina",
-                                    modifier = Modifier.size(34.dp)
+                                    contentDescription = "Solina Files",
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Solina Files", fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                if (statsLoading) "در حال شمارش فایل‌ها و پوشه‌ها…"
+                                else "${persianDigits(String.format(Locale.ROOT, "%,d", homeStats.fileCount).replace(',', '٬'))} فایل · ${persianDigits(String.format(Locale.ROOT, "%,d", homeStats.folderCount).replace(',', '٬'))} پوشه",
+                                fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.size(40.dp).clickable(onClick = onSettings)) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Settings, contentDescription = "تنظیمات برنامه",
+                                    tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(21.dp))
+                            }
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.size(40.dp).clickable { toggleHomeTheme() }) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    if (nightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
+                                    contentDescription = if (nightMode) "حالت تاریک" else "حالت روشن",
+                                    tint = if (nightMode) Color(0xFF9C6BFF) else Color(0xFFFFC107),
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
                     }
                 }
                 item {
+                    val storageInfo = viewModelStorageInfo ?: StorageInfo(
+                        totalBytes = homeStats.totalBytes,
+                        usedBytes = (homeStats.totalBytes - homeStats.freeBytes).coerceAtLeast(0L)
+                    )
+                    val percent = storageInfo.usagePercent
+                    val hasCapacity = hasAccess && !statsLoading && !viewModelStorageLoading && storageInfo.totalBytes > 0L
+                    val statusColor = when {
+                        !hasCapacity -> MaterialTheme.colorScheme.outline
+                        percent >= 90 -> MaterialTheme.colorScheme.error
+                        percent >= 70 -> Color(0xFFFFA000)
+                        else -> Color(0xFF2E7D32)
+                    }
                     Surface(
-                        modifier = Modifier.fillMaxWidth().clickable { toggleHomeTheme() },
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                        modifier = Modifier.fillMaxWidth().clickable { if (hasAccess) onBrowse() else onRequestPermission() }
                     ) {
-                        androidx.compose.runtime.CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(if (nightMode) Icons.Default.LightMode else Icons.Default.DarkMode,
-                                    contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(23.dp))
-                                Spacer(Modifier.width(10.dp))
-                                Text(if (nightMode) "تم روشن" else "تم تاریک", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Spacer(Modifier.weight(1f))
-                                Text("تغییر پوسته", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                        Column(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Storage, contentDescription = null, tint = statusColor, modifier = Modifier.size(22.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("وضعیت حافظه", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                                Text(
+                                    if (hasCapacity) "${persianDigits(percent.toString())}٪ پر"
+                                    else if (!hasAccess) "نیازمند دسترسی" else "در حال محاسبه",
+                                    color = statusColor, fontSize = 13.sp, fontWeight = FontWeight.Bold
+                                )
+                            }
+                            LinearProgressIndicator(
+                                progress = { if (hasCapacity) (percent / 100f).coerceIn(0f, 1f) else 0f },
+                                modifier = Modifier.fillMaxWidth().height(8.dp),
+                                color = statusColor,
+                                trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    if (hasCapacity) "استفاده‌شده: ${storageInfo.formattedUsedGb()}" else "فضای استفاده‌شده: —",
+                                    fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    if (hasCapacity) "خالی: ${storageInfo.formattedFreeGb()}" else "فضای خالی: —",
+                                    fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                                )
                             }
                         }
                     }
                 }
                 item {
-                    Text("ابزارها", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                }
-                items(toolItems.chunked(2)) { rowTools ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        rowTools.forEach { tool ->
-                            CategoryCard(item = tool, modifier = Modifier.weight(1f))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        categories.forEach { category ->
+                            val filter = category.filter ?: "recent"
+                            val count = homeStats.categories[filter]?.count ?: 0
+                            val iconColor = when (filter) {
+                                "videos" -> Color(0xFF9C27B0)
+                                "images" -> Color(0xFFE91E63)
+                                "audio" -> Color(0xFFFFB300)
+                                "apk" -> Color(0xFF43A047)
+                                else -> Color(0xFF00897B)
+                            }
+                            Column(
+                                modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
+                                    .clickable { onOpenCategory(category.title, filter) }
+                                    .padding(vertical = 8.dp, horizontal = 1.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(category.icon, contentDescription = category.title, tint = iconColor, modifier = Modifier.size(25.dp))
+                                Text(category.title, fontSize = 10.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(if (statsLoading) "…" else persianDigits(count.toString()),
+                                    fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                            }
                         }
-                        if (rowTools.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+                item {
+                    Surface(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.fillMaxWidth().height(1.dp)) {}
+                }
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                            .clickable(onClick = onCleanTools).padding(horizontal = 8.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.CleaningServices, contentDescription = null, tint = Color(0xFF8E63E6), modifier = Modifier.size(23.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text("پاک‌سازی", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Icon(Icons.Default.ChevronRight, contentDescription = "ورود به پاک‌سازی", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 item {
                     OutlinedTextField(
-                        value = search,
-                        onValueChange = { search = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        placeholder = { Text("جستجو در فایل‌ها و پوشه‌ها") },
+                        value = search, onValueChange = { search = it }, modifier = Modifier.fillMaxWidth(),
+                        singleLine = true, placeholder = { Text("جستجو در فایل‌ها و پوشه‌ها") },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = "جستجو") },
-                        trailingIcon = {
-                            TextButton(onClick = { onSearch(search.trim()) }) {
-                                Text("بگرد")
-                            }
-                        },
+                        trailingIcon = { TextButton(onClick = { onSearch(search.trim()) }) { Text("بگرد") } },
                         shape = RoundedCornerShape(16.dp),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = { onSearch(search.trim()) }),
@@ -440,92 +489,53 @@ private fun SolinaHomeScreen(
                     )
                 }
                 item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        FilterChip(
-                            selected = false,
+                    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        FilterChip(selected = false,
                             onClick = { onOpenCategory("فایل‌های بزرگ‌تر از ۱۰۰ مگابایت", "large") },
                             label = { Text("فایل‌های بزرگ +۱۰۰ مگابایت") },
-                            leadingIcon = { Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                        )
-                        FilterChip(
-                            selected = false,
-                            onClick = { onOpenCategory("فایل‌های اخیر", "recent7") },
+                            leadingIcon = { Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(16.dp)) })
+                        FilterChip(selected = false, onClick = { onOpenCategory("فایل‌های اخیر", "recent7") },
                             label = { Text("فایل‌های اخیر") },
-                            leadingIcon = { Icon(Icons.Default.AccessTime, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                        )
-                        FilterChip(
-                            selected = false,
-                            onClick = { onOpenCategory("فایل‌های ستاره‌دار", "starred") },
+                            leadingIcon = { Icon(Icons.Default.AccessTime, contentDescription = null, modifier = Modifier.size(16.dp)) })
+                        FilterChip(selected = false, onClick = { onOpenCategory("فایل‌های ستاره‌دار", "starred") },
                             label = { Text("ستاره‌دارها") },
-                            leadingIcon = { Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                        )
+                            leadingIcon = { Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(16.dp)) })
+                    }
+                }
+                item { Text("ابزارها", fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+                items(toolItems.chunked(2)) { rowTools ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        rowTools.forEach { tool -> CategoryCard(item = tool, modifier = Modifier.weight(1f)) }
+                        if (rowTools.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
                 item {
-                    val storageInfo = viewModelStorageInfo ?: StorageInfo(
-                        totalBytes = homeStats.totalBytes,
-                        usedBytes = (homeStats.totalBytes - homeStats.freeBytes).coerceAtLeast(0L)
-                    )
-                    ModernStorageCard(
-                        info = storageInfo,
-                        onCardClick = { if (hasAccess) onBrowse() else onRequestPermission() },
-                        modifier = Modifier,
-                        isLoading = statsLoading || viewModelStorageLoading,
-                        hasAccess = hasAccess,
-                        fileCount = homeStats.fileCount,
-                        folderCount = homeStats.folderCount,
-                        onCleanTools = onCleanTools
-                    )
-                }
-                item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("همه فایل‌ها", fontWeight = FontWeight.Bold, fontSize = 16.sp,
-                            modifier = Modifier.weight(1f))
+                        Text("همه فایل‌ها", fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
                         TextButton(onClick = onBrowse) { Text("مشاهده همه") }
                     }
                 }
                 if (homeStats.recentFiles.isNotEmpty()) {
                     items(homeStats.recentFiles.take(3), key = { "recent-home-${it.absolutePath}" }) { file ->
-                        Surface(
-                            modifier = Modifier.fillMaxWidth().clickable { onOpenFile(file.absolutePath) },
+                        Surface(modifier = Modifier.fillMaxWidth().clickable { onOpenFile(file.absolutePath) },
                             shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.FolderOpen, contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)) {
+                            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.FolderOpen, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
                                 Spacer(Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(file.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                        fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                                    Text(file.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium, fontSize = 13.sp)
                                     Text(android.text.format.Formatter.formatFileSize(context, file.length()),
                                         color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                                 }
-                                Icon(Icons.Default.ChevronRight, contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(18.dp))
                             }
                         }
                     }
                 } else {
                     item { Text("هنوز فایلی برای نمایش در فهرست اخیر پیدا نشده است.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                }
-                item {
-                    Text("دسته‌بندی فایل‌ها · مرتب‌شده بر اساس حجم", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                }
-                items(categoryItems.chunked(2)) { rowCategories ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        rowCategories.forEach { category ->
-                            CategoryCard(item = category, modifier = Modifier.weight(1f))
-                        }
-                        if (rowCategories.size == 1) Spacer(Modifier.weight(1f))
-                    }
                 }
 
             }
@@ -640,29 +650,6 @@ private fun ModernStorageCard(
     }
 }
 
-@Composable
-private fun StorageMetric(title: String, value: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Text(
-            title,
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            value,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
 
 @Composable
 private fun CompositionLocalProviderCompatRtl(content: @Composable () -> Unit) {
