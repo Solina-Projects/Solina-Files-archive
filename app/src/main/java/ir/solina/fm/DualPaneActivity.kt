@@ -306,7 +306,7 @@ class DualPaneActivity : AppCompatActivity() {
             }
             menu.add("مرتب‌سازی فایل‌های این پنل").setOnMenuItemClickListener {
                 activePane = index
-                showSortSettings()
+                showSortOptions(index)
                 true
             }
             menu.add("کپی مسیر کامل").setOnMenuItemClickListener {
@@ -377,7 +377,7 @@ class DualPaneActivity : AppCompatActivity() {
         val files = allFiles.filter { query.isEmpty() || it.name.lowercase(Locale.ROOT).contains(query) }
         p.adapter.items = files
         p.adapter.notifyDataSetChanged()
-        p.list.layoutManager = if (grid) GridLayoutManager(this, columns) else LinearLayoutManager(this)
+        p.list.layoutManager = if (p.gridMode ?: grid) GridLayoutManager(this, columns) else LinearLayoutManager(this)
         if (index == activePane) updateTopBar()
     }
 
