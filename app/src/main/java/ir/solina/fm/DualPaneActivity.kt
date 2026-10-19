@@ -44,7 +44,8 @@ class DualPaneActivity : AppCompatActivity() {
         val backHistory: MutableList<File> = mutableListOf(),
         val forwardHistory: MutableList<File> = mutableListOf(),
         var query: String = "",
-        var sortMode: SortMode = SortMode.NAME
+        var sortMode: SortMode = SortMode.NAME,
+        var isEmpty: Boolean = false
     )
     private lateinit var panesHost: LinearLayout
     private lateinit var searchIconButton: MaterialButton
@@ -71,6 +72,9 @@ class DualPaneActivity : AppCompatActivity() {
         if (savedNightMode != 0) AppCompatDelegate.setDefaultNightMode(savedNightMode)
         super.onCreate(savedInstanceState)
         val base = Environment.getExternalStorageDirectory()
+        val preferences = getSharedPreferences("solina_preferences", MODE_PRIVATE)
+        val requestedRight = intent.getStringExtra(EXTRA_RIGHT_PATH)?.let(::File)?.takeIf { it.isDirectory } ?: base
+        val savedLeft = preferences.getString(KEY_LEFT_PATH, null)?.let(::File)?.takeIf { it.isDirectory }
         val surfaceColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorSurface, it, true) }.data
         val onSurfaceColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurface, it, true) }.data
         val surfaceVariantColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorSurfaceVariant, it, true) }.data
@@ -145,8 +149,9 @@ class DualPaneActivity : AppCompatActivity() {
         button(bottomActions, "حذف") { deleteSelected(activePane) }
         screen.addView(bottomActions, LinearLayout.LayoutParams(-1, dp(48)))
         setContentView(screen)
-        left = createPane(base, 0)
-        right = createPane(base, 1)
+        left = createPane(savedLeft ?: base, 0).apply { isEmpty = savedLeft == null }
+        right = createPane(requestedRight, 1)
+        activePane = 1
         renderPanes()
     }
 
@@ -165,7 +170,7 @@ class DualPaneActivity : AppCompatActivity() {
             setOnClickListener {
                 activePane = index
                 updateTopBar()
-                showPathActions(index)
+                if (pane(index).isEmpty) chooseFolderForPane(index) else showPathActions(index)
             }
             setOnLongClickListener {
                 activePane = index
@@ -193,7 +198,12 @@ class DualPaneActivity : AppCompatActivity() {
         header.addView(path, LinearLayout.LayoutParams(0, dp(48), 1f))
         header.addView(upButton, LinearLayout.LayoutParams(dp(38), dp(40)))
         root.addView(header, LinearLayout.LayoutParams(-1, dp(48)))
-        val list = RecyclerView(this)
+        val list = RecyclerView(this).apply {
+            setOnClickListener {
+                activePane = index
+                updateTopBar()
+            }
+        }
         root.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
         root.setOnDragListener { _, event -> handleDropEvent(index, event, null) }
         list.setOnDragListener { _, event -> handleDropEvent(index, event, null) }
@@ -211,6 +221,7 @@ class DualPaneActivity : AppCompatActivity() {
         listOf(left, right).forEachIndexed { index, p ->
             p.root.layoutParams = if (mode == LayoutMode.VERTICAL) LinearLayout.LayoutParams(-1, 0, 1f) else LinearLayout.LayoutParams(0, -1, 1f)
             p.root.setBackgroundColor(if (activePane == index) androidx.core.graphics.ColorUtils.setAlphaComponent(resolveThemeColor(com.google.android.material.R.attr.colorSecondaryContainer), 38) else 0x00000000)
+            p.root.alpha = if (activePane == index) 1f else 0.55f
             p.root.setOnClickListener { activePane = index; updateTopBar() }
             panesHost.addView(p.root)
             if (mode == LayoutMode.HORIZONTAL && index == 0) {
@@ -224,7 +235,14 @@ class DualPaneActivity : AppCompatActivity() {
 
     private fun refresh(index: Int) {
         val p = pane(index)
-        p.path.text = (if (index == 0) "چپ • " else "راست • ") + p.current.name.ifBlank { "/" }
+        p.path.text = if (p.isEmpty) "چپ • انتخاب پوشه" else (if (index == 0) "چپ • " else "راست • ") + p.current.name.ifBlank { "/" }
+        if (p.isEmpty) {
+            p.adapter.items = emptyList()
+            p.adapter.notifyDataSetChanged()
+            p.list.layoutManager = if (grid) GridLayoutManager(this, columns) else LinearLayoutManager(this)
+            if (index == activePane) updateTopBar()
+            return
+        }
         val unsorted = p.current.listFiles()
             ?.filter { (it.isFile || it.isDirectory) && (showHiddenFiles || !it.name.startsWith(".")) }
             ?: emptyList()
@@ -250,8 +268,9 @@ class DualPaneActivity : AppCompatActivity() {
                     resolveThemeColor(com.google.android.material.R.attr.colorSecondaryContainer), 38
                 ) else 0x00000000
             )
-            pane.path.text = (if (index == 0) "چپ • " else "راست • ") + pane.current.name.ifBlank { "/" }
-            pane.path.contentDescription = pane.current.absolutePath
+            pane.root.alpha = if (activePane == index) 1f else 0.55f
+            pane.path.text = if (pane.isEmpty) "چپ • انتخاب پوشه" else (if (index == 0) "چپ • " else "راست • ") + pane.current.name.ifBlank { "/" }
+            pane.path.contentDescription = if (pane.isEmpty) "برای انتخاب پوشه لمس کنید" else pane.current.absolutePath
         }
         val p = pane(activePane)
         searchInput.setTextIfDifferent(p.query)
@@ -271,13 +290,31 @@ class DualPaneActivity : AppCompatActivity() {
 
     private fun navigateTo(index: Int, dir: File) {
         val p = pane(index)
-        if (p.current.path == dir.path) return
-        p.backHistory.add(p.current)
+        if (!dir.isDirectory) return
+        if (!p.isEmpty && p.current.path == dir.path) return
+        if (!p.isEmpty) p.backHistory.add(p.current)
+        p.isEmpty = false
         p.forwardHistory.clear()
         p.current = dir
         p.selected.clear()
+        getSharedPreferences("solina_preferences", MODE_PRIVATE).edit()
+            .putString(if (index == 0) KEY_LEFT_PATH else KEY_RIGHT_PATH, dir.absolutePath).apply()
         refresh(index)
         updateTopBar()
+    }
+
+    private fun chooseFolderForPane(index: Int) {
+        val base = Environment.getExternalStorageDirectory()
+        val candidates = (listOf(base) + (base.listFiles()?.filter { it.isDirectory } ?: emptyList()))
+            .distinctBy { it.absolutePath }
+        AlertDialog.Builder(this)
+            .setTitle("انتخاب پوشه برای پنل چپ")
+            .setItems(candidates.map { if (it == base) "حافظهٔ داخلی" else it.name }.toTypedArray()) { _, which ->
+                activePane = index
+                navigateTo(index, candidates[which])
+            }
+            .setNegativeButton("لغو", null)
+            .show()
     }
 
     private fun navigateHistory(index: Int, back: Boolean) {
@@ -1465,7 +1502,13 @@ class DualPaneActivity : AppCompatActivity() {
         }
     }
 
-    private fun resolveThemeColor(attribute: Int): Int {
+    companion object {
+        const val EXTRA_RIGHT_PATH = "ir.solina.fm.extra.RIGHT_PATH"
+        private const val KEY_LEFT_PATH = "dual_pane_left_path"
+        private const val KEY_RIGHT_PATH = "dual_pane_right_path"
+    }
+
+    private fun resolveThemeColor(attribute: Int) {
         val value = android.util.TypedValue()
         theme.resolveAttribute(attribute, value, true)
         return value.data
