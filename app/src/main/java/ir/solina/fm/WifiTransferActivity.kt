@@ -34,8 +34,11 @@ class WifiTransferActivity : AppCompatActivity() {
     private val port = 8765
     private val clientSlots = Semaphore(4)
     private val maxUploadBytes = 20L * 1024L * 1024L
-    private val token = ByteArray(18).also { SecureRandom().nextBytes(it) }
-        .joinToString("") { "%02x".format(it) }
+    @Volatile private var token: String = createToken()
+
+    private fun createToken(): String =
+        ByteArray(18).also { SecureRandom().nextBytes(it) }
+            .joinToString("") { "%02x".format(it) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,6 +90,7 @@ class WifiTransferActivity : AppCompatActivity() {
 
     private fun startServer() {
         try {
+            token = createToken()
             val socket = ServerSocket().apply { reuseAddress = true; bind(java.net.InetSocketAddress(port), 8) }
             server = socket
             running = true
