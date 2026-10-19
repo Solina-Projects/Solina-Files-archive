@@ -7,6 +7,7 @@ import android.os.StatFs
 import android.os.storage.StorageManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.lifecycle.ViewModelProvider
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.core.content.ContextCompat
@@ -62,6 +63,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -88,18 +90,22 @@ import java.util.Locale
 
 class ComposeHomeActivity : AppCompatActivity() {
     private var resumeVersion by mutableIntStateOf(0)
+    private lateinit var homeViewModel: HomeViewModel
 
     override fun onResume() {
         super.onResume()
         resumeVersion++
+        if (::homeViewModel.isInitialized) homeViewModel.refreshStorageStats()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        homeViewModel = ViewModelProvider(this)[HomeViewModel::class.java]
         setContent {
             SolinaComposeTheme {
                 SolinaHomeScreen(
                     permissionRefreshKey = resumeVersion,
+                    storageViewModel = homeViewModel,
                     onBrowse = { openBrowser() },
                     onRequestPermission = { requestStoragePermission() },
                     onCleanTools = { openCleanTools() },
@@ -226,6 +232,7 @@ private data class HomeCategory(
 @Composable
 private fun SolinaHomeScreen(
     permissionRefreshKey: Int,
+    storageViewModel: HomeViewModel,
     onBrowse: () -> Unit,
     onRequestPermission: () -> Unit,
     onCleanTools: () -> Unit,
@@ -237,6 +244,8 @@ private fun SolinaHomeScreen(
     onSettings: () -> Unit
 ) {
     val context = LocalContext.current
+    val viewModelStorageInfo by storageViewModel.storageInfo.collectAsState()
+    val viewModelStorageLoading by storageViewModel.isLoading.collectAsState()
     var search by remember { mutableStateOf("") }
     var homeStats by remember { mutableStateOf(HomeStats()) }
     var statsLoading by remember { mutableStateOf(true) }
@@ -381,7 +390,7 @@ private fun SolinaHomeScreen(
                     )
                 }
                 item {
-                    val storageInfo = StorageInfo(
+                    val storageInfo = viewModelStorageInfo ?: StorageInfo(
                         totalBytes = homeStats.totalBytes,
                         usedBytes = (homeStats.totalBytes - homeStats.freeBytes).coerceAtLeast(0L)
                     )
@@ -389,7 +398,7 @@ private fun SolinaHomeScreen(
                         info = storageInfo,
                         onCardClick = { if (hasAccess) onBrowse() else onRequestPermission() },
                         modifier = Modifier,
-                        isLoading = statsLoading,
+                        isLoading = statsLoading || viewModelStorageLoading || viewModelStorageInfo == null,
                         hasAccess = hasAccess,
                         fileCount = homeStats.fileCount,
                         folderCount = homeStats.folderCount
