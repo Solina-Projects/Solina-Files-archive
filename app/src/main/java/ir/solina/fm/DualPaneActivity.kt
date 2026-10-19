@@ -73,7 +73,9 @@ class DualPaneActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         val base = Environment.getExternalStorageDirectory()
         val preferences = getSharedPreferences("solina_preferences", MODE_PRIVATE)
-        val requestedRight = intent.getStringExtra(EXTRA_RIGHT_PATH)?.let(::File)?.takeIf { it.isDirectory } ?: base
+        val requestedRight = intent.getStringExtra(EXTRA_RIGHT_PATH)?.let(::File)?.takeIf { it.isDirectory }
+            ?: preferences.getString(KEY_RIGHT_PATH, null)?.let(::File)?.takeIf { it.isDirectory }
+            ?: base
         val savedLeft = preferences.getString(KEY_LEFT_PATH, null)?.let(::File)?.takeIf { it.isDirectory }
         val surfaceColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorSurface, it, true) }.data
         val onSurfaceColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurface, it, true) }.data
@@ -1508,7 +1510,7 @@ class DualPaneActivity : AppCompatActivity() {
         private const val KEY_RIGHT_PATH = "dual_pane_right_path"
     }
 
-    private fun resolveThemeColor(attribute: Int) {
+    private fun resolveThemeColor(attribute: Int): Int {
         val value = android.util.TypedValue()
         theme.resolveAttribute(attribute, value, true)
         return value.data
