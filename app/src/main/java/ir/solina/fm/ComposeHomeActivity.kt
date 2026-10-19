@@ -559,7 +559,7 @@ private fun CategoryTile(
                     maxLines = 1, overflow = TextOverflow.Ellipsis, lineHeight = 12.sp)
                 Text(
                     if (statsLoading) "در حال شمارش…"
-                    else "$count فایل • ${android.text.format.Formatter.formatFileSize(LocalContext.current, bytes)}",
+                    else "${persianDigits(count.toString())} فایل • ${persianDigits(android.text.format.Formatter.formatFileSize(LocalContext.current, bytes))}",
                     fontSize = 9.sp, color = MaterialTheme.colorScheme.primary,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, lineHeight = 11.sp
                 )
