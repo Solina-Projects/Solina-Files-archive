@@ -71,7 +71,16 @@ class VaultActivity : AppCompatActivity() {
         val prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 unlocked = true
-                ensureKey()
+                try {
+                    ensureKey()
+                } catch (_: Exception) {
+                    // Do not silently generate a replacement key when encrypted data already exists.
+                    Toast.makeText(
+                        this@VaultActivity,
+                        "کلید خزانه در دسترس نیست؛ کلید جدید ساخته نشد تا فایل‌های موجود بی‌دلیل غیرقابل‌بازیابی نشوند.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
                 renderFiles()
             }
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
@@ -91,6 +100,9 @@ class VaultActivity : AppCompatActivity() {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         val existing = store.getKey(keyAlias, null) as? SecretKey
         if (existing != null) return existing
+        if (vaultDir.listFiles()?.any { it.isFile && it.extension == "svault" } == true) {
+            throw IllegalStateException("کلید رمزگذاری قبلی پیدا نشد؛ ساخت کلید جدید داده‌های موجود را بازیابی نمی‌کند")
+        }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         generator.init(KeyGenParameterSpec.Builder(
             keyAlias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
@@ -180,7 +192,16 @@ class VaultActivity : AppCompatActivity() {
             buttons.addView(MaterialButton(this@VaultActivity).apply { text = "حذف"; setOnClickListener {
                 MaterialAlertDialogBuilder(this@VaultActivity).setMessage("فایل رمزگذاری‌شده حذف شود؟")
                     .setNegativeButton("لغو", null).setPositiveButton("حذف") { _, _ ->
-                        file.delete(); prefs.edit().remove(file.name).apply(); renderFiles()
+                        val deleted = if (file.isDirectory) file.deleteRecursively() else file.delete()
+                        if (deleted) {
+                            prefs.edit().remove(file.name).apply()
+                            if (vaultDir.listFiles()?.none { it.isFile && it.extension == "svault" } != false) {
+                                deleteVaultKeyIfUnused()
+                            }
+                            renderFiles()
+                        } else {
+                            toast("حذف فایل از خزانه انجام نشد")
+                        }
                     }.show()
             } }, LinearLayout.LayoutParams(0, -2, 1f))
             row.addView(buttons)
@@ -201,27 +222,54 @@ class VaultActivity : AppCompatActivity() {
     }
 
     private fun decryptToUri(file: File, uri: android.net.Uri) {
+        var completed = false
         try {
-            val input = FileInputStream(file)
-            val magic = ByteArray(4)
-            if (input.read(magic) != 4 || String(magic) != "SVL1") { input.close(); toast("ساختار فایل خزانه معتبر نیست"); return }
-            val ivLength = input.read()
-            if (ivLength !in 12..16) { input.close(); toast("سرآیند رمزگذاری نامعتبر است"); return }
-            val iv = ByteArray(ivLength)
-            var offset = 0
-            while (offset < ivLength) {
-                val count = input.read(iv, offset, ivLength - offset)
-                if (count <= 0) { input.close(); toast("فایل ناقص است"); return }
-                offset += count
+            FileInputStream(file).use { input ->
+                val magic = ByteArray(4)
+                var magicRead = 0
+                while (magicRead < magic.size) {
+                    val count = input.read(magic, magicRead, magic.size - magicRead)
+                    if (count <= 0) throw IllegalStateException("سرآیند فایل ناقص است")
+                    magicRead += count
+                }
+                if (String(magic, Charsets.US_ASCII) != "SVL1") {
+                    throw IllegalStateException("ساختار فایل خزانه معتبر نیست")
+                }
+                val ivLength = input.read()
+                if (ivLength !in 12..16) throw IllegalStateException("سرآیند رمزگذاری نامعتبر است")
+                val iv = ByteArray(ivLength)
+                var offset = 0
+                while (offset < ivLength) {
+                    val count = input.read(iv, offset, ivLength - offset)
+                    if (count <= 0) throw IllegalStateException("فایل ناقص است")
+                    offset += count
+                }
+                val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                cipher.init(Cipher.DECRYPT_MODE, ensureKey(), GCMParameterSpec(128, iv))
+                val output = contentResolver.openOutputStream(uri)
+                    ?: throw IllegalStateException("مقصد برای نوشتن باز نشد")
+                javax.crypto.CipherInputStream(input, cipher).use { decrypted ->
+                    output.use { out -> decrypted.copyTo(out) }
+                }
             }
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.DECRYPT_MODE, ensureKey(), GCMParameterSpec(128, iv))
-            val output = contentResolver.openOutputStream(uri) ?: throw IllegalStateException("مقصد برای نوشتن باز نشد")
-            javax.crypto.CipherInputStream(input, cipher).use { decrypted ->
-                output.use { out -> decrypted.copyTo(out) }
-            }
+            completed = true
             toast("فایل با موفقیت رمزگشایی و در مقصد انتخابی ذخیره شد")
-        } catch (_: Exception) { toast("رمزگشایی ناموفق بود؛ فایل یا کلید ممکن است آسیب دیده باشد") }
+        } catch (_: Exception) {
+            if (!completed) {
+                try { contentResolver.delete(uri, null, null) } catch (_: Exception) { }
+            }
+            toast("رمزگشایی ناموفق بود؛ فایل خروجی ناقص پاک‌سازی شد، اگر ارائه‌دهندهٔ مقصد حذف را پشتیبانی کند")
+        }
+    }
+
+    private fun deleteVaultKeyIfUnused() {
+        if (vaultDir.listFiles()?.any { it.isFile && it.extension == "svault" } == true) return
+        try {
+            val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            if (store.containsAlias(keyAlias)) store.deleteEntry(keyAlias)
+        } catch (_: Exception) {
+            // Keeping an unused keystore entry is safer than interrupting vault cleanup.
+        }
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
