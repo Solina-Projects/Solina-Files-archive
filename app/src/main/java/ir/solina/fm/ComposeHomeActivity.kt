@@ -308,15 +308,26 @@ private fun SolinaHomeScreen(
         CategoryItem("settings", "تنظیمات", "شخصی‌سازی برنامه", Icons.Default.Settings, onClick = onSettings)
     )
     val categoryItems = categories.map { category ->
-        val stats = homeStats.categories[category.filter ?: "recent"]
+        val filter = category.filter ?: "recent"
+        val stats = homeStats.categories[filter]
         val countText = if (statsLoading) "در حال شمارش…" else
             "${persianDigits((stats?.count ?: 0).toString())} فایل · ${persianDigits(android.text.format.Formatter.formatFileSize(context, stats?.bytes ?: 0L))}"
+        // Use distinct, stable accents while keeping counts and sizes tied to live storage stats.
+        val accentColor = when (filter) {
+            "images" -> 0xFFE91E63L
+            "videos" -> 0xFF9C27B0L
+            "audio" -> 0xFFFFC107L
+            "documents" -> 0xFF009688L
+            "apk" -> 0xFF4CAF50L
+            else -> 0xFF2196F3L
+        }
         CategoryItem(
-            id = category.filter ?: "recent",
+            id = filter,
             title = category.title,
             subtitle = "${category.subtitle}\n$countText",
             icon = category.icon,
-            onClick = { onOpenCategory(category.title, category.filter ?: "recent") }
+            accentColor = accentColor,
+            onClick = { onOpenCategory(category.title, filter) }
         )
     }
 
