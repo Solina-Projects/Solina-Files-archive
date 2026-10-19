@@ -307,6 +307,26 @@ private fun SolinaHomeScreen(
             Color(0xFF27864B), "apk")
     )
 
+    val toolItems = listOf(
+        CategoryItem("dual-pane", "دوپنجره", "مدیریت هم‌زمان دو مسیر", Icons.Default.GridView, onClick = onDualPane),
+        CategoryItem("clean", "پاک‌سازی", "بررسی فایل‌های اضافی", Icons.Default.CleaningServices, onClick = onCleanTools),
+        CategoryItem("transfer", "انتقال بی‌سیم", "ارسال و دریافت در شبکه", Icons.Default.Wifi, onClick = onShare),
+        CategoryItem("vault", "خزانه", "دسترسی به فایل‌های امن", Icons.Default.Lock, onClick = onVault),
+        CategoryItem("settings", "تنظیمات", "شخصی‌سازی برنامه", Icons.Default.Settings, onClick = onSettings)
+    )
+    val categoryItems = categories.map { category ->
+        val stats = homeStats.categories[category.filter ?: "recent"]
+        val countText = if (statsLoading) "در حال شمارش…" else
+            "${persianDigits((stats?.count ?: 0).toString())} فایل · ${persianDigits(android.text.format.Formatter.formatFileSize(context, stats?.bytes ?: 0L))}"
+        CategoryItem(
+            id = category.filter ?: "recent",
+            title = category.title,
+            subtitle = "${category.subtitle}\n$countText",
+            icon = category.icon,
+            onClick = { onOpenCategory(category.title, category.filter ?: "recent") }
+        )
+    }
+
     CompositionLocalProviderCompatRtl {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             LazyColumn(
@@ -356,15 +376,14 @@ private fun SolinaHomeScreen(
                     }
                 }
                 item {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("ابزارها", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        QuickTool("دوپنجره", Icons.Default.GridView, Modifier.weight(1f), onDualPane)
-                        QuickTool("پاک‌سازی", Icons.Default.CleaningServices, Modifier.weight(1f), onCleanTools)
-                        QuickTool("انتقال", Icons.Default.Wifi, Modifier.weight(1f), onShare)
-                        QuickTool("خزانه", Icons.Default.Lock, Modifier.weight(1f), onVault)
-                        QuickTool("تنظیمات", Icons.Default.Settings, Modifier.weight(1f), onSettings)
+                    Text("ابزارها", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+                items(toolItems.chunked(2)) { rowTools ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        rowTools.forEach { tool ->
+                            CategoryCard(item = tool, modifier = Modifier.weight(1f))
+                        }
+                        if (rowTools.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
                 item {
@@ -411,19 +430,10 @@ private fun SolinaHomeScreen(
                         TextButton(onClick = onBrowse) { Text("همه فایل‌ها") }
                     }
                 }
-                items(categories.chunked(2)) { rowCategories ->
+                items(categoryItems.chunked(2)) { rowCategories ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         rowCategories.forEach { category ->
-                            CategoryTile(
-                                category = category,
-                                count = homeStats.categories[category.filter ?: "recent"]?.count ?: 0,
-                                bytes = homeStats.categories[category.filter ?: "recent"]?.bytes ?: 0L,
-                                statsLoading = statsLoading,
-                                modifier = Modifier.weight(1f),
-                                onClick = {
-                                    onOpenCategory(category.title, category.filter ?: "recent")
-                                }
-                            )
+                            CategoryCard(item = category, modifier = Modifier.weight(1f))
                         }
                         if (rowCategories.size == 1) Spacer(Modifier.weight(1f))
                     }
