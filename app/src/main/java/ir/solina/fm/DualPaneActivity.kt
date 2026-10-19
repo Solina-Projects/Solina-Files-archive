@@ -757,7 +757,15 @@ class DualPaneActivity : AppCompatActivity() {
     private fun transfer(move: Boolean) {
         val sourceIndex = activePane
         val source = pane(sourceIndex)
-        val dest = other(sourceIndex).current
+        val destinationPane = other(sourceIndex)
+        if (destinationPane.isEmpty) {
+            activePane = 1 - sourceIndex
+            updateTopBar()
+            toast("ابتدا پوشهٔ مقصد را در پنل چپ انتخاب کنید")
+            chooseFolderForPane(activePane)
+            return
+        }
+        val dest = destinationPane.current
         val files = source.selected.toList()
         if (files.isEmpty()) { toast("ابتدا فایل یا پوشه را با نگه‌داشتن انتخاب کنید"); return }
         if (files.any { it.isDirectory && (dest.absolutePath == it.absolutePath || dest.absolutePath.startsWith(it.absolutePath + File.separator)) }) {
