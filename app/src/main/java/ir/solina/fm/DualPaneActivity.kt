@@ -199,7 +199,7 @@ class DualPaneActivity : AppCompatActivity() {
         )
         val breadcrumbBar = paneHeader.breadcrumbBar
         val displayButton = paneHeader.displayButton
-        root.addView(paneHeader, LinearLayout.LayoutParams(-1, dp(88)))
+        root.setPaneHeader(paneHeader)
         val list = RecyclerView(this).apply {
             setOnClickListener {
                 activePane = index
