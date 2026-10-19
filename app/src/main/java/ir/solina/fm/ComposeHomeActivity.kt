@@ -377,7 +377,7 @@ private fun SolinaHomeScreen(
                         Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(44.dp)) {
                             Box(contentAlignment = Alignment.Center) {
                                 androidx.compose.foundation.Image(
-                                    painter = painterResource(id = R.mipmap.ic_launcher),
+                                    painter = painterResource(id = R.drawable.ic_launcher_fg),
                                     contentDescription = "Solina",
                                     modifier = Modifier.size(34.dp)
                                 )
