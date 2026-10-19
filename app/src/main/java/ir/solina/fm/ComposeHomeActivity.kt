@@ -240,6 +240,7 @@ private fun SolinaHomeScreen(
     var search by remember { mutableStateOf("") }
     var homeStats by remember { mutableStateOf(HomeStats()) }
     var statsLoading by remember { mutableStateOf(true) }
+    var lastStatsScanAt by remember { mutableStateOf(0L) }
     var nightMode by remember {
         mutableStateOf((context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES)
     }
@@ -252,11 +253,18 @@ private fun SolinaHomeScreen(
         }
         if (!access) {
             homeStats = HomeStats()
+            lastStatsScanAt = 0L
             statsLoading = false
         } else {
-            statsLoading = true
-            homeStats = withContext(Dispatchers.IO) { scanHomeStats(context) }
-            statsLoading = false
+            val now = android.os.SystemClock.elapsedRealtime()
+            // Returning from a child screen should not trigger a full-storage scan every time.
+            // Keep the dashboard responsive while allowing periodic refreshes.
+            if (lastStatsScanAt == 0L || now - lastStatsScanAt >= 60_000L) {
+                statsLoading = true
+                homeStats = withContext(Dispatchers.IO) { scanHomeStats(context) }
+                lastStatsScanAt = android.os.SystemClock.elapsedRealtime()
+                statsLoading = false
+            }
         }
     }
     fun toggleHomeTheme() {
