@@ -5,6 +5,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.util.UUID
 import kotlin.coroutines.coroutineContext
 
@@ -81,7 +83,7 @@ object FileOperationsManager {
                 }
 
                 staged = File(destinationDir, ".solina-${UUID.randomUUID()}.partial")
-                src.copyRecursively(staged!!, overwrite = false)
+                copyCancellable(src, staged!!)
                 coroutineContext.ensureActive()
 
                 if (!staged!!.exists()) throw IllegalStateException("فایل موقت مقصد ساخته نشد")
@@ -112,6 +114,50 @@ object FileOperationsManager {
         }
 
         OperationResult(successes, failures, errors)
+    }
+
+    private suspend fun copyCancellable(
+        source: File,
+        target: File,
+        visitedDirectories: MutableSet<String> = mutableSetOf()
+    ) {
+        coroutineContext.ensureActive()
+        if (source.isDirectory) {
+            val canonical = source.canonicalPath
+            if (!visitedDirectories.add(canonical)) {
+                throw IllegalStateException("ساختار پوشه شامل پیوند بازگشتی است")
+            }
+            if (!target.mkdirs() && !target.isDirectory) {
+                throw IllegalStateException("ساخت پوشهٔ موقت مقصد ممکن نشد")
+            }
+            val children = source.listFiles()
+                ?: throw IllegalStateException("فهرست پوشهٔ مبدأ قابل خواندن نیست")
+            children.forEach { child ->
+                coroutineContext.ensureActive()
+                copyCancellable(child, File(target, child.name), visitedDirectories)
+            }
+            target.setLastModified(source.lastModified())
+            return
+        }
+
+        target.parentFile?.let { parent ->
+            if (!parent.exists() && !parent.mkdirs()) {
+                throw IllegalStateException("ساخت پوشهٔ مقصد ممکن نشد")
+            }
+        }
+        FileInputStream(source).use { input ->
+            FileOutputStream(target).use { output ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    coroutineContext.ensureActive()
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    output.write(buffer, 0, count)
+                }
+                output.fd.sync()
+            }
+        }
+        target.setLastModified(source.lastModified())
     }
 
     suspend fun deleteFiles(files: List<File>): OperationResult = withContext(Dispatchers.IO) {
