@@ -161,6 +161,8 @@ class MainActivity : AppCompatActivity() {
         bottomDelete = findViewById(R.id.bottomDelete)
         progress = findViewById(R.id.progress)
         list = findViewById(R.id.list)
+        list.setHasFixedSize(true)
+        list.setItemViewCacheSize(12)
         emptyBox = findViewById(R.id.emptyBox)
         emptyText = findViewById(R.id.emptyText)
         grantButton = findViewById(R.id.grantButton)
