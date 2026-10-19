@@ -195,9 +195,7 @@ class VaultActivity : AppCompatActivity() {
                         val deleted = if (file.isDirectory) file.deleteRecursively() else file.delete()
                         if (deleted) {
                             prefs.edit().remove(file.name).apply()
-                            if (vaultDir.listFiles()?.none { it.isFile && it.extension == "svault" } != false) {
-                                deleteVaultKeyIfUnused()
-                            }
+                            deleteVaultKeyIfUnused()
                             renderFiles()
                         } else {
                             toast("حذف فایل از خزانه انجام نشد")
@@ -263,7 +261,8 @@ class VaultActivity : AppCompatActivity() {
     }
 
     private fun deleteVaultKeyIfUnused() {
-        if (vaultDir.listFiles()?.any { it.isFile && it.extension == "svault" } == true) return
+        val remainingFiles = vaultDir.listFiles() ?: return
+        if (remainingFiles.any { it.isFile && it.extension == "svault" }) return
         try {
             val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
             if (store.containsAlias(keyAlias)) store.deleteEntry(keyAlias)
