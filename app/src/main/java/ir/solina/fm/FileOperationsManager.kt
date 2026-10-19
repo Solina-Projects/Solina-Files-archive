@@ -145,6 +145,7 @@ object FileOperationsManager {
                 throw IllegalStateException("ساخت پوشهٔ مقصد ممکن نشد")
             }
         }
+        if (target.exists()) throw IllegalStateException("فایل موقت از قبل وجود دارد")
         FileInputStream(source).use { input ->
             FileOutputStream(target).use { output ->
                 val buffer = ByteArray(64 * 1024)
