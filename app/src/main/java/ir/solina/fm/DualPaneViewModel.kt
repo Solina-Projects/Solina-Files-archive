@@ -99,6 +99,22 @@ class DualPaneViewModel : ViewModel() {
         openFolder(paneId, parent)
     }
 
+    /**
+     * Navigate directly to a breadcrumb path. An empty target represents the filesystem root.
+     * Directory enumeration and permission failures are handled by the shared loader.
+     */
+    fun navigateToPath(paneId: String, targetPath: String) {
+        if (paneId != PaneState.LEFT_ID && paneId != PaneState.RIGHT_ID) return
+        val destination = File(targetPath.ifBlank { File.separator }).absoluteFile
+        openFolder(paneId, destination)
+    }
+
+    /** Toggle grid/list presentation independently for the requested pane. */
+    fun toggleViewMode(paneId: String) {
+        if (paneId != PaneState.LEFT_ID && paneId != PaneState.RIGHT_ID) return
+        stateFor(paneId).update { state -> state.copy(isGridView = !state.isGridView) }
+    }
+
     /** Refresh after file operations or external file-system changes. */
     fun refreshPane(paneId: String) {
         if (paneId != PaneState.LEFT_ID && paneId != PaneState.RIGHT_ID) return
