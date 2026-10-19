@@ -75,6 +75,7 @@ class FileTransferService : Service() {
         startForeground(NOTIFICATION_ID, notification)
 
         serviceScope.launch {
+            var completionMessage: String? = null
             try {
                 val result = FileOperationsManager.executeTransfer(sources, destination, isMove) { progress ->
                     val updatedNotif = buildNotification(
@@ -86,21 +87,21 @@ class FileTransferService : Service() {
                 }
                 val summary = "تمام شد: ${result.successCount} موفق، ${result.failureCount} ناموفق"
                 val detail = result.errors.take(3).joinToString("؛ ")
-                notificationManager.notify(
-                    NOTIFICATION_ID,
-                    buildNotification(if (detail.isBlank()) summary else "$summary — $detail", 100, 100, ongoing = false)
-                )
+                completionMessage = if (detail.isBlank()) summary else "$summary — $detail"
             } catch (cancelled: CancellationException) {
                 // Cancellation is expected when the user/system stops the service.
                 throw cancelled
             } catch (error: Exception) {
-                notificationManager.notify(
-                    NOTIFICATION_ID,
-                    buildNotification("انتقال ناموفق بود: ${error.localizedMessage ?: "خطای ناشناخته"}", 0, 100, ongoing = false)
-                )
+                completionMessage = "انتقال ناموفق بود: ${error.localizedMessage ?: "خطای ناشناخته"}"
             } finally {
                 withContext(Dispatchers.Main) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
+                    completionMessage?.let { message ->
+                        notificationManager.notify(
+                            NOTIFICATION_ID,
+                            buildNotification(message, 100, 100, ongoing = false)
+                        )
+                    }
                     stopSelf()
                 }
             }
