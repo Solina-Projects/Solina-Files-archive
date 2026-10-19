@@ -417,7 +417,7 @@ class DualPaneActivity : AppCompatActivity() {
         val p = pane(index)
         syncPaneStateToViewModel(index)
         renderBreadcrumbs(index)
-        if (p.isEmpty) {
+        if (p.isEmpty && !(searchActive && index == activePane)) {
             p.adapter.submitItems(emptyList(), emptySet())
             p.list.layoutManager = if (p.gridMode ?: grid) GridLayoutManager(this, columns) else LinearLayoutManager(this)
             if (index == activePane) updateTopBar()
