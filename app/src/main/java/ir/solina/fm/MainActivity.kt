@@ -57,7 +57,9 @@ import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
 import java.util.ArrayDeque
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import net.lingala.zip4j.ZipFile
@@ -96,6 +98,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var grantButton: MaterialButton
     private lateinit var pasteFab: ExtendedFloatingActionButton
     private lateinit var createFab: com.google.android.material.floatingactionbutton.FloatingActionButton
+    private var createMenuPopup: android.widget.PopupWindow? = null
 
     private val adapter = FileAdapter()
     private var volumes: List<Vol> = emptyList()
@@ -327,12 +330,12 @@ class MainActivity : AppCompatActivity() {
         quickAccessBar.removeAllViews()
         val root = Environment.getExternalStorageDirectory()
         val items = listOf(
-            QuickAccessItem("downloads", "دانلودها", "⬇️", File(root, "Download")),
-            QuickAccessItem("documents", "اسناد", "📄", File(root, "Documents")),
-            QuickAccessItem("pictures", "تصاویر", "🖼️", File(root, "Pictures")),
-            QuickAccessItem("music", "موسیقی", "🎵", File(root, "Music")),
-            QuickAccessItem("movies", "ویدئو", "🎬", File(root, "Movies")),
-            QuickAccessItem("camera", "دوربین", "📷", File(root, "DCIM"))
+            QuickAccessItem("downloads", "دانلودها", "", File(root, "Download")),
+            QuickAccessItem("documents", "اسناد", "", File(root, "Documents")),
+            QuickAccessItem("pictures", "تصاویر", "", File(root, "Pictures")),
+            QuickAccessItem("music", "موسیقی", "", File(root, "Music")),
+            QuickAccessItem("movies", "ویدئو", "", File(root, "Movies")),
+            QuickAccessItem("camera", "دوربین", "", File(root, "DCIM"))
         )
 
         val outlineColor = com.google.android.material.color.MaterialColors.getColor(
@@ -344,14 +347,29 @@ class MainActivity : AppCompatActivity() {
         val textColor = com.google.android.material.color.MaterialColors.getColor(
             this, com.google.android.material.R.attr.colorOnSurface, android.graphics.Color.BLACK
         )
+        val primaryColor = com.google.android.material.color.MaterialColors.getColor(
+            this, com.google.android.material.R.attr.colorPrimary, 0xFF6750A4.toInt()
+        )
+        val iconFor: (String) -> Int = { id ->
+            when (id) {
+                "downloads" -> R.drawable.ic_folder
+                "documents" -> R.drawable.ic_file_document
+                "pictures" -> R.drawable.ic_file_image
+                "music" -> R.drawable.ic_file_audio
+                "movies" -> R.drawable.ic_file_video
+                "camera" -> R.drawable.ic_file_image
+                else -> R.drawable.ic_folder
+            }
+        }
 
         items.forEach { item ->
-            // Compact outlined pill: icon and label share one tap target.
+            // One consistent outlined-vector icon style for every shortcut.
             val shortcut = MaterialButton(
                 this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle
             ).apply {
-                text = "${item.icon}  ${item.label}"
+                text = item.label
                 textSize = 12f
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
                 isAllCaps = false
                 minHeight = dp(38)
                 minimumHeight = dp(38)
@@ -360,16 +378,37 @@ class MainActivity : AppCompatActivity() {
                 insetTop = 0
                 insetBottom = 0
                 setPadding(dp(12), 0, dp(12), 0)
+                iconPadding = dp(6)
+                iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+                setIconResource(iconFor(item.id))
+                iconTint = android.content.res.ColorStateList.valueOf(primaryColor)
+                rippleColor = android.content.res.ColorStateList.valueOf(
+                    android.graphics.Color.argb(
+                        38,
+                        android.graphics.Color.red(primaryColor),
+                        android.graphics.Color.green(primaryColor),
+                        android.graphics.Color.blue(primaryColor)
+                    )
+                )
                 cornerRadius = dp(22)
                 strokeWidth = dp(1)
                 strokeColor = android.content.res.ColorStateList.valueOf(outlineColor)
                 backgroundTintList = android.content.res.ColorStateList.valueOf(surfaceColor)
                 setTextColor(textColor)
                 contentDescription = item.label
+                tooltipText = item.label
                 gravity = android.view.Gravity.CENTER
                 stateListAnimator = null
             }
 
+            shortcut.setOnTouchListener { view, event ->
+                when (event?.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN -> view.animate().scaleX(0.97f).scaleY(0.97f).setDuration(80L).start()
+                    android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL ->
+                        view.animate().scaleX(1f).scaleY(1f).setDuration(110L).start()
+                }
+                false
+            }
             shortcut.setOnClickListener {
                 if (item.directory.isDirectory) {
                     currentVol = volumes.firstOrNull { inside(item.directory, it.dir) } ?: currentVol
@@ -611,9 +650,16 @@ class MainActivity : AppCompatActivity() {
         val audioTypes = setOf("mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi", "wma")
         val documentTypes = setOf("pdf", "doc", "docx", "txt", "rtf", "odt", "xls", "xlsx", "csv", "ppt", "pptx", "md")
         val archiveTypes = setOf("zip", "7z", "rar", "tar", "gz", "bz2", "xz")
+        val searchableExtensions = imageTypes + videoTypes + audioTypes + documentTypes + archiveTypes + setOf("apk")
         val files = allFiles.filter { file ->
-            val matchesQuery = query.isEmpty() || file.name.lowercase(Locale.ROOT).contains(query)
             val extension = file.extension.lowercase(Locale.ROOT)
+            val extensionQuery = query.removePrefix(".")
+            val matchesQuery = when {
+                query.isEmpty() -> true
+                query.startsWith(".") || extensionQuery in searchableExtensions ->
+                    file.isFile && extension.equals(extensionQuery, ignoreCase = true)
+                else -> file.name.lowercase(Locale.ROOT).contains(query)
+            }
             val matchesCategory = when (activeCategory) {
                 "images" -> file.isFile && extension in imageTypes
                 "videos" -> file.isFile && extension in videoTypes
@@ -1244,18 +1290,69 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showCreateMenu() {
-        val options = arrayOf("پوشه جدید", "فایل متنی جدید (.txt)", "فایل HTML جدید (.html)")
-        MaterialAlertDialogBuilder(this)
-            .setTitle("ایجاد مورد جدید")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> newFolder()
-                    1 -> createTextFile("txt")
-                    2 -> createTextFile("html")
+        if (createMenuPopup?.isShowing == true) {
+            createMenuPopup?.dismiss()
+            return
+        }
+
+        val menu = android.widget.FrameLayout(this)
+        val width = dp(226)
+        val height = dp(180)
+        lateinit var popup: android.widget.PopupWindow
+
+        fun addRadialAction(label: String, iconRes: Int, x: Int, y: Int, action: () -> Unit) {
+            val group = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+            }
+            val button = com.google.android.material.floatingactionbutton.FloatingActionButton(this).apply {
+                size = com.google.android.material.floatingactionbutton.FloatingActionButton.SIZE_MINI
+                setImageResource(iconRes)
+                contentDescription = label
+                tooltipText = label
+                setOnClickListener {
+                    popup.dismiss()
+                    action()
                 }
             }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
+            val caption = TextView(this).apply {
+                text = label
+                textSize = 10f
+                gravity = android.view.Gravity.CENTER
+                maxLines = 1
+                setTextColor(com.google.android.material.color.MaterialColors.getColor(
+                    this@MainActivity, com.google.android.material.R.attr.colorOnSurface, android.graphics.Color.BLACK
+                ))
+                setShadowLayer(dp(3).toFloat(), 0f, 1f, android.graphics.Color.TRANSPARENT)
+            }
+            group.addView(button, LinearLayout.LayoutParams(dp(42), dp(42)))
+            group.addView(caption, LinearLayout.LayoutParams(dp(70), dp(22)))
+            menu.addView(group, android.widget.FrameLayout.LayoutParams(dp(70), dp(66)).apply {
+                leftMargin = dp(x)
+                topMargin = dp(y)
+            })
+            group.scaleX = 0.65f
+            group.scaleY = 0.65f
+            group.alpha = 0f
+            group.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(170L).setStartDelay((x + y).toLong()).start()
+        }
+
+        addRadialAction("پوشه", R.drawable.ic_folder, 150, 94) { newFolder() }
+        addRadialAction("فایل متنی", R.drawable.ic_file_document, 78, 18) { createTextFile("txt") }
+        addRadialAction("فایل HTML", R.drawable.ic_file_code, 6, 94) { createTextFile("html") }
+
+        popup = android.widget.PopupWindow(menu, width, height, true).apply {
+            isOutsideTouchable = true
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+            elevation = dp(8).toFloat()
+            setOnDismissListener {
+                createFab.animate().rotation(0f).setDuration(150L).start()
+                if (createMenuPopup === this) createMenuPopup = null
+            }
+        }
+        createMenuPopup = popup
+        createFab.animate().rotation(45f).setDuration(180L).start()
+        popup.showAtLocation(window.decorView, android.view.Gravity.BOTTOM or android.view.Gravity.END, dp(8), dp(88))
     }
 
     private fun createTextFile(extension: String) {
@@ -2111,8 +2208,39 @@ class MainActivity : AppCompatActivity() {
             } else {
                 androidx.appcompat.content.res.AppCompatResources.getDrawable(this@MainActivity, R.drawable.item_bg)
             }
-            holder.info.visibility = if (!multiColumn) View.VISIBLE else View.GONE
+            holder.info.visibility = View.VISIBLE
+            holder.info.maxLines = if (multiColumn) 1 else 2
+            holder.info.ellipsize = android.text.TextUtils.TruncateAt.END
+            if (multiColumn) holder.info.textSize = 10f
             FileTypeVisuals.applyTo(holder.icon, file)
+            holder.icon.tag = file.absolutePath
+            holder.icon.scaleType = ImageView.ScaleType.FIT_CENTER
+            if (file.isDirectory && file.name.lowercase(Locale.ROOT) in setOf("pictures", "picture", "photos", "images", "dcim", "camera")) {
+                lifecycleScope.launch {
+                    val thumbnail = withContext(Dispatchers.IO) {
+                        val imageExtensions = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif")
+                        val directImages = runCatching {
+                            file.listFiles().orEmpty().filter { it.isFile && it.extension.lowercase(Locale.ROOT) in imageExtensions }
+                        }.getOrDefault(emptyList())
+                        val nestedImages = if (directImages.isEmpty()) runCatching {
+                            file.listFiles().orEmpty().filter { it.isDirectory }
+                                .asSequence().flatMap { it.listFiles().orEmpty().asSequence() }
+                                .filter { it.isFile && it.extension.lowercase(Locale.ROOT) in imageExtensions }
+                                .toList()
+                        }.getOrDefault(emptyList()) else emptyList()
+                        val firstImage = (directImages + nestedImages).minByOrNull { it.name.lowercase(Locale.ROOT) }
+                        firstImage?.let { image ->
+                            val options = BitmapFactory.Options().apply { inSampleSize = 4 }
+                            runCatching { BitmapFactory.decodeFile(image.absolutePath, options) }.getOrNull()
+                        }
+                    }
+                    if (thumbnail != null && holder.icon.tag == file.absolutePath) {
+                        holder.icon.imageTintList = null
+                        holder.icon.scaleType = ImageView.ScaleType.CENTER_CROP
+                        holder.icon.setImageBitmap(thumbnail)
+                    }
+                }
+            }
             val latestChange = activityTimes[file.absolutePath] ?: file.lastModified()
             val date = formatDate(latestChange)
             val detail = if (file.isDirectory) "پوشه • $date" else fmt(file.length()) + " • " + date
