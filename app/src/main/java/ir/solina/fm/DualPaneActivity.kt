@@ -20,8 +20,11 @@ import android.widget.*
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.FileProvider
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -32,21 +35,28 @@ import net.lingala.zip4j.ZipFile
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Optional two-pane file manager with independent navigation and selection. */
 class DualPaneActivity : AppCompatActivity() {
     private enum class LayoutMode { VERTICAL, HORIZONTAL }
     private enum class SortMode { NAME, SIZE, MODIFIED, TYPE }
     private data class Pane(
-        val root: LinearLayout, val path: TextView, val list: RecyclerView,
-        val adapter: PaneAdapter, var current: File,
+        val root: LinearLayout, val breadcrumbBar: BreadcrumbBar,
+        val list: RecyclerView, val adapter: PaneAdapter, var current: File,
+        val displayButton: MaterialButton,
         val selected: LinkedHashSet<File> = linkedSetOf(),
         val backHistory: MutableList<File> = mutableListOf(),
         val forwardHistory: MutableList<File> = mutableListOf(),
         var query: String = "",
-        var sortMode: SortMode = SortMode.NAME
+        var sortMode: SortMode = SortMode.NAME,
+        var gridMode: Boolean? = null,
+        var isEmpty: Boolean = false
     )
-    private lateinit var panesHost: LinearLayout
+    private lateinit var panesHost: DualPaneScreen
+    private lateinit var paneViewModel: DualPaneViewModel
     private lateinit var searchIconButton: MaterialButton
     private lateinit var searchInput: EditText
     private lateinit var bookmarkButton: MaterialButton
@@ -65,12 +75,27 @@ class DualPaneActivity : AppCompatActivity() {
     private var iconDp = 38
     private var columns = 2
     private var pendingInstallApk: File? = null
+    private val searchEngine = SearchEngine()
+    private var searchJob: Job? = null
+    private var searchActive = false
+    private var searchResults: List<File> = emptyList()
+    private val selectedSearchTypes = linkedSetOf<FileType>()
+    private var recentOnly = false
+    private var largerThanTenMb = false
+    private lateinit var searchFilterRow: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val savedNightMode = getSharedPreferences("solina_preferences", MODE_PRIVATE).getInt("night_mode", 0)
         if (savedNightMode != 0) AppCompatDelegate.setDefaultNightMode(savedNightMode)
         super.onCreate(savedInstanceState)
         val base = Environment.getExternalStorageDirectory()
+        val preferences = getSharedPreferences("solina_preferences", MODE_PRIVATE)
+        val requestedRight = intent.getStringExtra(EXTRA_RIGHT_PATH)?.let(::File)?.takeIf { it.isDirectory }
+            ?: preferences.getString(KEY_RIGHT_PATH, null)?.let(::File)?.takeIf { it.isDirectory }
+            ?: base
+        val savedLeft = preferences.getString(KEY_LEFT_PATH, null)?.let(::File)?.takeIf { it.isDirectory }
+        paneViewModel = ViewModelProvider(this)[DualPaneViewModel::class.java]
+        paneViewModel.initialize(requestedRight.absolutePath, savedLeft?.absolutePath)
         val surfaceColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorSurface, it, true) }.data
         val onSurfaceColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurface, it, true) }.data
         val surfaceVariantColor = android.util.TypedValue().also { theme.resolveAttribute(com.google.android.material.R.attr.colorSurfaceVariant, it, true) }.data
@@ -119,11 +144,23 @@ class DualPaneActivity : AppCompatActivity() {
         navigation.addView(layoutButton, LinearLayout.LayoutParams(dp(42), dp(40)))
         navigation.addView(overflowButton, LinearLayout.LayoutParams(dp(42), dp(40)))
         screen.addView(navigation, LinearLayout.LayoutParams(-1, dp(44)))
+        val filterScroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+        }
+        searchFilterRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(2), dp(4), dp(2))
+        }
+        filterScroll.addView(searchFilterRow, ViewGroup.LayoutParams(-2, dp(40)))
+        screen.addView(filterScroll, LinearLayout.LayoutParams(-1, dp(42)))
+        buildSearchFilterChips()
         searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 pane(activePane).query = s?.toString().orEmpty()
-                refresh(activePane)
+                scheduleAdvancedSearch()
             }
             override fun afterTextChanged(s: Editable?) {}
         })
@@ -137,109 +174,286 @@ class DualPaneActivity : AppCompatActivity() {
         button(selectionActions, "بیشتر") { showSelectedTools() }
         selectionScroll.addView(selectionActions)
         screen.addView(selectionScroll, LinearLayout.LayoutParams(-1, dp(46)))
-        panesHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        panesHost = DualPaneScreen(this)
         screen.addView(panesHost, LinearLayout.LayoutParams(-1, 0, 1f))
         bottomActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; visibility = View.GONE }
         button(bottomActions, "کپی") { transfer(false) }
-        button(bottomActions, "انتقال") { transfer(true) }
+        button(bottomActions, "به پنل مقابل") { transfer(true) }
         button(bottomActions, "حذف") { deleteSelected(activePane) }
+        button(bottomActions, "لغو انتخاب") { clearPaneSelection(activePane) }
+        val selectionCountLabel = TextView(this).apply {
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(onSurfaceColor)
+            contentDescription = "تعداد موارد انتخاب‌شده"
+            setPadding(dp(6), 0, dp(6), 0)
+        }
+        bottomActions.addView(selectionCountLabel, LinearLayout.LayoutParams(-2, -1))
         screen.addView(bottomActions, LinearLayout.LayoutParams(-1, dp(48)))
         setContentView(screen)
-        left = createPane(base, 0)
-        right = createPane(base, 1)
+        left = createPane(savedLeft ?: base, 0)
+        right = createPane(requestedRight, 1)
+        activePane = 1
         renderPanes()
     }
 
     private fun createPane(start: File, index: Int): Pane {
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(4), dp(4), dp(4), dp(4)) }
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(4), 0, dp(2), 0)
-        }
-        val path = TextView(this).apply {
-            textSize = 12f
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
-            setPadding(dp(6), dp(6), dp(6), dp(6))
-            setOnClickListener {
+        val root = SinglePaneView(this).apply {
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            setOnActivateListener {
                 activePane = index
                 updateTopBar()
-                showPathActions(index)
-            }
-            setOnLongClickListener {
-                activePane = index
-                updateTopBar()
-                val clipboard = android.content.ClipData.newPlainText("path", pane(index).current.absolutePath)
-                val manager = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                manager.setPrimaryClip(clipboard)
-                toast("مسیر پوشه کپی شد")
-                true
             }
         }
-        val upButton = MaterialButton(this).apply {
-            text = "↑"
-            textSize = 18f
-            minWidth = dp(36)
-            minimumWidth = dp(36)
-            setPadding(0, 0, 0, 0)
-            contentDescription = "رفتن به پوشه والد"
-            setOnClickListener {
+        lateinit var paneHeader: PaneHeader
+        paneHeader = PaneHeader(
+            context = this,
+            onNavigateUp = {
                 activePane = index
                 goUp(index)
                 updateTopBar()
+            },
+            onCrumbClick = { fullPath ->
+                activePane = index
+                val destination = if (fullPath.isBlank()) {
+                    Environment.getExternalStorageDirectory()
+                } else File(fullPath)
+                if (destination.isDirectory) navigateTo(index, destination)
+                else toast("این مسیر در دسترس نیست")
+                updateTopBar()
+            },
+            onToggleViewMode = {
+                activePane = index
+                val p = pane(index)
+                p.gridMode = !(p.gridMode ?: grid)
+                refresh(index)
+                updateTopBar()
+            },
+            onMenuClick = {
+                activePane = index
+                updateTopBar()
+                showPaneMenu(index, paneHeader.menuButton)
+            },
+            onSelectAll = {
+                activePane = index
+                selectAll(index)
+                updateTopBar()
+            },
+            onCopyToOther = {
+                activePane = index
+                transferFrom(index, move = false)
+            },
+            onMoveToOther = {
+                activePane = index
+                transferFrom(index, move = true)
+            }
+        )
+        val breadcrumbBar = paneHeader.breadcrumbBar
+        val displayButton = paneHeader.displayButton
+        root.setPaneHeader(paneHeader)
+        val list = RecyclerView(this).apply {
+            setOnClickListener {
+                activePane = index
+                updateTopBar()
             }
         }
-        header.addView(path, LinearLayout.LayoutParams(0, dp(48), 1f))
-        header.addView(upButton, LinearLayout.LayoutParams(dp(38), dp(40)))
-        root.addView(header, LinearLayout.LayoutParams(-1, dp(48)))
-        val list = RecyclerView(this)
         root.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
         root.setOnDragListener { _, event -> handleDropEvent(index, event, null) }
         list.setOnDragListener { _, event -> handleDropEvent(index, event, null) }
         val adapter = PaneAdapter(index)
         list.adapter = adapter
-        return Pane(root, path, list, adapter, start)
+        return Pane(root, breadcrumbBar, list, adapter, start, displayButton)
+    }
+
+    private fun renderBreadcrumbs(index: Int) {
+        val p = pane(index)
+        p.breadcrumbBar.setPath(
+            path = if (p.isEmpty) "" else p.current.absolutePath,
+            emptyLabel = if (index == 0) "چپ • انتخاب پوشه" else "راست • انتخاب پوشه",
+            onCrumbClick = { fullPath ->
+                activePane = index
+                val destination = if (fullPath.isBlank()) {
+                    Environment.getExternalStorageDirectory()
+                } else File(fullPath)
+                if (destination.isDirectory) navigateTo(index, destination)
+                else toast("این مسیر در دسترس نیست")
+                updateTopBar()
+            }
+        )
+    }
+
+    private fun showPaneMenu(index: Int, anchor: View) {
+        val p = pane(index)
+        android.widget.PopupMenu(this, anchor).apply {
+            menu.add("به‌روزرسانی پوشه").setOnMenuItemClickListener {
+                refresh(index); true
+            }
+            menu.add(if (p.gridMode ?: grid) "نمایش فهرستی" else "نمایش شبکه‌ای").setIcon(
+                if (p.gridMode ?: grid) R.drawable.ic_list_view else R.drawable.ic_grid_view
+            ).setOnMenuItemClickListener {
+                p.gridMode = !(p.gridMode ?: grid)
+                refresh(index)
+                updateTopBar()
+                true
+            }
+            menu.add("مرتب‌سازی فایل‌های این پنل").setOnMenuItemClickListener {
+                activePane = index
+                showSortOptions(index)
+                true
+            }
+            menu.add("کپی مسیر کامل").setOnMenuItemClickListener {
+                val pathText = if (p.isEmpty) "" else p.current.absolutePath
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("path", pathText))
+                toast("مسیر پنل کپی شد")
+                true
+            }
+            menu.add("نشانک این پوشه").setIcon(R.drawable.ic_pin).setOnMenuItemClickListener {
+                activePane = index
+                toggleBookmark()
+                true
+            }
+            show()
+        }
     }
 
     private fun pane(index: Int) = if (index == 0) left else right
     private fun other(index: Int) = pane(1 - index)
 
     private fun renderPanes() {
-        panesHost.removeAllViews()
-        panesHost.orientation = if (mode == LayoutMode.VERTICAL) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
-        listOf(left, right).forEachIndexed { index, p ->
-            p.root.layoutParams = if (mode == LayoutMode.VERTICAL) LinearLayout.LayoutParams(-1, 0, 1f) else LinearLayout.LayoutParams(0, -1, 1f)
-            p.root.setBackgroundColor(if (activePane == index) androidx.core.graphics.ColorUtils.setAlphaComponent(resolveThemeColor(com.google.android.material.R.attr.colorSecondaryContainer), 38) else 0x00000000)
-            p.root.setOnClickListener { activePane = index; updateTopBar() }
-            panesHost.addView(p.root)
-            if (mode == LayoutMode.HORIZONTAL && index == 0) {
-                panesHost.addView(View(this).apply { setBackgroundColor(androidx.core.graphics.ColorUtils.setAlphaComponent(resolveThemeColor(com.google.android.material.R.attr.colorOutline), 100)) },
-                    LinearLayout.LayoutParams(dp(1), -1))
-            }
+        listOf(left, right).forEachIndexed { index, pane ->
+            pane.root.setBackgroundColor(
+                if (activePane == index) androidx.core.graphics.ColorUtils.setAlphaComponent(
+                    resolveThemeColor(com.google.android.material.R.attr.colorSecondaryContainer), 38
+                ) else 0x00000000
+            )
+            (pane.root as? SinglePaneView)?.setActive(activePane == index)
+            pane.root.alpha = if (activePane == index) 1f else 0.55f
             refresh(index)
         }
+        val dividerColor = androidx.core.graphics.ColorUtils.setAlphaComponent(
+            resolveThemeColor(com.google.android.material.R.attr.colorOutline), 100
+        )
+        panesHost.setPanes(
+            left.root,
+            right.root,
+            if (mode == LayoutMode.HORIZONTAL) DualPaneScreen.Arrangement.SIDE_BY_SIDE
+            else DualPaneScreen.Arrangement.STACKED,
+            dividerColor,
+            dp(1)
+        )
         updateTopBar()
+    }
+
+    /** Render compact filter chips under the search field. */
+    private fun buildSearchFilterChips() {
+        if (!::searchFilterRow.isInitialized) return
+        searchFilterRow.removeAllViews()
+        fun addChip(label: String, checked: Boolean, onClick: () -> Unit) {
+            val chip = com.google.android.material.chip.Chip(this).apply {
+                text = label
+                isCheckable = true
+                isChecked = checked
+                isClickable = true
+                setOnClickListener { onClick() }
+            }
+            searchFilterRow.addView(chip, LinearLayout.LayoutParams(-2, dp(36)).apply {
+                marginStart = dp(3)
+                marginEnd = dp(3)
+            })
+        }
+        addChip("همه", selectedSearchTypes.isEmpty() && !recentOnly && !largerThanTenMb) {
+            selectedSearchTypes.clear()
+            recentOnly = false
+            largerThanTenMb = false
+            buildSearchFilterChips()
+            scheduleAdvancedSearch()
+        }
+        listOf(
+            FileType.IMAGE to "تصاویر",
+            FileType.VIDEO to "ویدئو",
+            FileType.AUDIO to "صوت",
+            FileType.DOCUMENT to "اسناد",
+            FileType.ARCHIVE to "فشرده",
+            FileType.APK to "APK"
+        ).forEach { (type, label) ->
+            addChip(label, type in selectedSearchTypes) {
+                if (!selectedSearchTypes.add(type)) selectedSearchTypes.remove(type)
+                buildSearchFilterChips()
+                scheduleAdvancedSearch()
+            }
+        }
+        addChip("۷ روز اخیر", recentOnly) {
+            recentOnly = !recentOnly
+            buildSearchFilterChips()
+            scheduleAdvancedSearch()
+        }
+        addChip("بیش از ۱۰ مگابایت", largerThanTenMb) {
+            largerThanTenMb = !largerThanTenMb
+            buildSearchFilterChips()
+            scheduleAdvancedSearch()
+        }
+    }
+
+    /** Debounced whole-storage search; traversal runs on the engine's IO dispatcher. */
+    private fun scheduleAdvancedSearch() {
+        searchJob?.cancel()
+        val criteria = SearchCriteria(
+            queryText = pane(activePane).query,
+            fileTypes = if (selectedSearchTypes.isEmpty()) setOf(FileType.ALL) else selectedSearchTypes.toSet(),
+            minSizeBytes = if (largerThanTenMb) 10L * 1024L * 1024L else 0L,
+            modifiedSinceDays = if (recentOnly) 7 else null,
+            searchInSubfolders = true
+        )
+        if (criteria.isEmpty()) {
+            searchActive = false
+            searchResults = emptyList()
+            refresh(activePane)
+            return
+        }
+        searchActive = true
+        searchResults = emptyList()
+        refresh(activePane)
+        searchJob = lifecycleScope.launch {
+            delay(450)
+            val root = Environment.getExternalStorageDirectory().absolutePath
+            val found = runCatching { searchEngine.search(root, criteria) }.getOrDefault(emptyList())
+            if (!isFinishing && !isDestroyed) {
+                searchResults = found.filter { showHiddenFiles || !it.name.startsWith(".") }
+                refresh(activePane)
+                toast("${searchResults.size} نتیجه")
+            }
+        }
     }
 
     private fun refresh(index: Int) {
         val p = pane(index)
-        p.path.text = (if (index == 0) "چپ • " else "راست • ") + p.current.name.ifBlank { "/" }
-        val unsorted = p.current.listFiles()
-            ?.filter { (it.isFile || it.isDirectory) && (showHiddenFiles || !it.name.startsWith(".")) }
-            ?: emptyList()
-        val allFiles = when (p.sortMode) {
-            SortMode.NAME -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) }))
-            SortMode.SIZE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.length() }))
-            SortMode.MODIFIED -> unsorted.sortedByDescending { it.lastModified() }
-            SortMode.TYPE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.extension.lowercase(Locale.ROOT) }, { it.name.lowercase(Locale.ROOT) }))
+        syncPaneStateToViewModel(index)
+        renderBreadcrumbs(index)
+        if (p.isEmpty && !(searchActive && index == activePane)) {
+            p.adapter.submitItems(emptyList(), emptySet())
+            p.list.layoutManager = if (p.gridMode ?: grid) GridLayoutManager(this, columns) else LinearLayoutManager(this)
+            if (index == activePane) updateTopBar()
+            return
+        }
+        val allFiles = if (searchActive && index == activePane) {
+            searchResults
+        } else {
+            val unsorted = p.current.listFiles()
+                ?.filter { (it.isFile || it.isDirectory) && (showHiddenFiles || !it.name.startsWith(".")) }
+                ?: emptyList()
+            when (p.sortMode) {
+                SortMode.NAME -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) }))
+                SortMode.SIZE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.length() }))
+                SortMode.MODIFIED -> unsorted.sortedByDescending { it.lastModified() }
+                SortMode.TYPE -> unsorted.sortedWith(compareBy<File>({ !it.isDirectory }, { it.extension.lowercase(Locale.ROOT) }, { it.name.lowercase(Locale.ROOT) }))
+            }
         }
         p.selected.retainAll(allFiles.toSet())
-        val query = p.query.trim().lowercase(Locale.ROOT)
+        val query = if (searchActive && index == activePane) "" else p.query.trim().lowercase(Locale.ROOT)
         val files = allFiles.filter { query.isEmpty() || it.name.lowercase(Locale.ROOT).contains(query) }
-        p.adapter.items = files
-        p.adapter.notifyDataSetChanged()
-        p.list.layoutManager = if (grid) GridLayoutManager(this, columns) else LinearLayoutManager(this)
+        p.adapter.submitItems(files, p.selected.mapTo(mutableSetOf()) { it.absolutePath })
+        p.list.layoutManager = if (p.gridMode ?: grid) GridLayoutManager(this, columns) else LinearLayoutManager(this)
         if (index == activePane) updateTopBar()
     }
 
@@ -250,8 +464,12 @@ class DualPaneActivity : AppCompatActivity() {
                     resolveThemeColor(com.google.android.material.R.attr.colorSecondaryContainer), 38
                 ) else 0x00000000
             )
-            pane.path.text = (if (index == 0) "چپ • " else "راست • ") + pane.current.name.ifBlank { "/" }
-            pane.path.contentDescription = pane.current.absolutePath
+            pane.root.alpha = if (activePane == index) 1f else 0.55f
+            (pane.root as? SinglePaneView)?.setActive(activePane == index)
+            val paneUsesGrid = pane.gridMode ?: grid
+            pane.displayButton.setIconResource(if (paneUsesGrid) R.drawable.ic_list_view else R.drawable.ic_grid_view)
+            pane.displayButton.contentDescription = if (paneUsesGrid) "تغییر به نمایش فهرستی" else "تغییر به نمایش شبکه‌ای"
+            renderBreadcrumbs(index)
         }
         val p = pane(activePane)
         searchInput.setTextIfDifferent(p.query)
@@ -271,13 +489,31 @@ class DualPaneActivity : AppCompatActivity() {
 
     private fun navigateTo(index: Int, dir: File) {
         val p = pane(index)
-        if (p.current.path == dir.path) return
-        p.backHistory.add(p.current)
+        if (!dir.isDirectory) return
+        if (!p.isEmpty && p.current.path == dir.path) return
+        if (!p.isEmpty) p.backHistory.add(p.current)
+        p.isEmpty = false
         p.forwardHistory.clear()
         p.current = dir
         p.selected.clear()
+        getSharedPreferences("solina_preferences", MODE_PRIVATE).edit()
+            .putString(if (index == 0) KEY_LEFT_PATH else KEY_RIGHT_PATH, dir.absolutePath).apply()
         refresh(index)
         updateTopBar()
+    }
+
+    private fun chooseFolderForPane(index: Int) {
+        val base = Environment.getExternalStorageDirectory()
+        val candidates = (listOf(base) + (base.listFiles()?.filter { it.isDirectory } ?: emptyList()))
+            .distinctBy { it.absolutePath }
+        AlertDialog.Builder(this)
+            .setTitle("انتخاب پوشه برای پنل چپ")
+            .setItems(candidates.map { if (it == base) "حافظهٔ داخلی" else it.name }.toTypedArray()) { _, which ->
+                activePane = index
+                navigateTo(index, candidates[which])
+            }
+            .setNegativeButton("لغو", null)
+            .show()
     }
 
     private fun navigateHistory(index: Int, back: Boolean) {
@@ -344,14 +580,31 @@ class DualPaneActivity : AppCompatActivity() {
         updateSelectionUi()
     }
 
+    /** Keep the ViewModel selection/path state aligned with the existing native Views browser. */
+    private fun syncPaneStateToViewModel(index: Int) {
+        if (!::paneViewModel.isInitialized) return
+        val p = pane(index)
+        val paneId = if (index == 0) PaneState.LEFT_ID else PaneState.RIGHT_ID
+        if (p.isEmpty) {
+            paneViewModel.clearSelection(paneId)
+            return
+        }
+        paneViewModel.openFolder(paneId, p.current)
+        paneViewModel.selectFiles(paneId, p.selected.map { it.absolutePath })
+    }
+
     private fun updateSelectionUi() {
         if (!::selectionActions.isInitialized || !::bottomActions.isInitialized) return
         val p = pane(activePane)
         val hasSelection = p.selected.isNotEmpty()
         (selectionActions.parent as? HorizontalScrollView)?.visibility = if (hasSelection) View.VISIBLE else View.GONE
         bottomActions.visibility = if (hasSelection) View.VISIBLE else View.GONE
+        (bottomActions.getChildAt(4) as? TextView)?.text = if (hasSelection) "${p.selected.size} مورد انتخاب شد" else ""
         selectionActions.getChildAt(2)?.visibility = if (p.selected.size == 1) View.VISIBLE else View.GONE
         selectionActions.getChildAt(4)?.visibility = if (p.selected.any { it.isFile && it.extension.equals("zip", true) }) View.VISIBLE else View.GONE
+        // Keep the one-tap transfer visible only when the opposite pane has a destination.
+        bottomActions.getChildAt(1)?.visibility =
+            if (hasSelection && !other(activePane).isEmpty) View.VISIBLE else View.GONE
     }
 
     private fun renameSelected(index: Int) {
@@ -715,33 +968,35 @@ class DualPaneActivity : AppCompatActivity() {
         p.current.parentFile?.takeIf { it.exists() }?.let { navigateTo(index, it) }
     }
 
-    private fun transfer(move: Boolean) {
-        val sourceIndex = activePane
+    private fun transfer(move: Boolean) = transferFrom(activePane, move)
+
+    private fun transferFrom(sourceIndex: Int, move: Boolean) {
+        val destinationIndex = 1 - sourceIndex
         val source = pane(sourceIndex)
-        val dest = other(sourceIndex).current
-        val files = source.selected.toList()
-        if (files.isEmpty()) { toast("ابتدا فایل یا پوشه را با نگه‌داشتن انتخاب کنید"); return }
-        if (files.any { it.isDirectory && (dest.absolutePath == it.absolutePath || dest.absolutePath.startsWith(it.absolutePath + File.separator)) }) {
-            toast("انتقال پوشه به داخل خودش مجاز نیست"); return
+        val destinationPane = pane(destinationIndex)
+        if (destinationPane.isEmpty) {
+            activePane = destinationIndex
+            updateTopBar()
+            toast("ابتدا پوشهٔ مقصد را در پنل مقابل انتخاب کنید")
+            chooseFolderForPane(activePane)
+            return
         }
-        Thread {
-            var failed = 0
-            files.forEach { src ->
-                try {
-                    val target = uniqueTarget(dest, src)
-                    if (move) {
-                        if (!src.renameTo(target)) {
-                            val copied = src.copyRecursively(target, overwrite = false); if (copied) src.deleteRecursively() else { target.deleteRecursively(); failed++ }
-                        }
-                    } else if (!src.copyRecursively(target, overwrite = false)) failed++
-                } catch (_: Exception) { failed++ }
-            }
-            runOnUiThread {
-                source.selected.clear(); refresh(sourceIndex); refresh(1 - sourceIndex)
-                updateSelectionUi()
-                toast(if (failed == 0) "عملیات با موفقیت انجام شد" else "$failed مورد ناموفق بود")
-            }
-        }.start()
+        if (source.selected.isEmpty()) {
+            toast("ابتدا فایل یا پوشه‌ای را انتخاب کنید")
+            return
+        }
+
+        // Synchronize both panes before asking the ViewModel to execute the operation.
+        syncPaneStateToViewModel(sourceIndex)
+        syncPaneStateToViewModel(destinationIndex)
+        val sourceId = if (sourceIndex == 0) PaneState.LEFT_ID else PaneState.RIGHT_ID
+        val destinationId = if (destinationIndex == 0) PaneState.LEFT_ID else PaneState.RIGHT_ID
+        paneViewModel.transferFiles(sourceId, destinationId, isMove = move) { outcome ->
+            refresh(sourceIndex)
+            refresh(destinationIndex)
+            updateSelectionUi()
+            toast(outcome.message)
+        }
     }
 
     private fun extractSelectedArchives() {
@@ -1323,7 +1578,7 @@ class DualPaneActivity : AppCompatActivity() {
             "استخراج" -> R.drawable.ic_unarchive
             "بیشتر" -> R.drawable.ic_more_vert
             "کپی" -> R.drawable.ic_content_copy
-            "انتقال" -> R.drawable.ic_content_cut
+            "به پنل مقابل" -> R.drawable.ic_content_cut
             "حذف" -> R.drawable.ic_delete
             else -> R.drawable.ic_file
         }
@@ -1354,6 +1609,66 @@ class DualPaneActivity : AppCompatActivity() {
 
     private inner class PaneAdapter(private val paneIndex: Int) : RecyclerView.Adapter<PaneAdapter.Holder>() {
         var items: List<File> = emptyList()
+            private set
+        private var selectedPaths: Set<String> = emptySet()
+        private var presentationKey: String = ""
+
+        init {
+            setHasStableIds(true)
+        }
+
+        override fun getItemId(position: Int): Long =
+            stableIdFor(items[position].absolutePath)
+
+        /**
+         * Apply only the insert/remove/move/change operations DiffUtil detects.
+         * Selection and presentation state are included so changing one row does not
+         * require rebinding the entire directory.
+         */
+        fun submitItems(nextItems: List<File>, nextSelectedPaths: Set<String>) {
+            val oldItems = items
+            val oldSelectedPaths = selectedPaths
+            val oldPresentationKey = presentationKey
+            val nextPresentationKey = listOf(
+                mode.name, pane(paneIndex).gridMode ?: grid, details, iconDp, columns
+            ).joinToString("|")
+
+            val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+                override fun getOldListSize(): Int = oldItems.size
+                override fun getNewListSize(): Int = nextItems.size
+
+                override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
+                    oldItems[oldItemPosition].absolutePath == nextItems[newItemPosition].absolutePath
+
+                override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                    val oldFile = oldItems[oldItemPosition]
+                    val newFile = nextItems[newItemPosition]
+                    return oldFile.name == newFile.name &&
+                        oldFile.isDirectory == newFile.isDirectory &&
+                        oldFile.length() == newFile.length() &&
+                        oldFile.lastModified() == newFile.lastModified() &&
+                        (oldFile.absolutePath in oldSelectedPaths) ==
+                            (newFile.absolutePath in nextSelectedPaths) &&
+                        oldPresentationKey == nextPresentationKey
+                }
+            }, true)
+
+            items = nextItems.toList()
+            selectedPaths = nextSelectedPaths.toSet()
+            presentationKey = nextPresentationKey
+            diff.dispatchUpdatesTo(this)
+        }
+
+        private fun stableIdFor(path: String): Long {
+            // 64-bit FNV-1a over the full path; DiffUtil still compares the exact path
+            // so a rare hash collision cannot make two different entries identical.
+            var hash = -0x340d631b7bdddcdbL
+            path.forEach { character ->
+                hash = hash xor character.code.toLong()
+                hash *= 0x100000001b3L
+            }
+            return hash
+        }
 
         inner class Holder(
             val row: LinearLayout,
@@ -1413,8 +1728,16 @@ class DualPaneActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: Holder, position: Int) {
             val file = items[position]
-            holder.row.background = if (mode == LayoutMode.VERTICAL) null else
+            val isSelected = file.absolutePath in selectedPaths
+            holder.row.background = if (isSelected) {
+                android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    cornerRadius = dp(10).toFloat()
+                    setColor(resolveThemeColor(com.google.android.material.R.attr.colorSecondaryContainer))
+                }
+            } else if (mode == LayoutMode.VERTICAL) null else {
                 androidx.appcompat.content.res.AppCompatResources.getDrawable(this@DualPaneActivity, R.drawable.item_bg)
+            }
             holder.icon.background = if (mode == LayoutMode.VERTICAL) android.graphics.drawable.GradientDrawable().apply {
                 shape = android.graphics.drawable.GradientDrawable.RECTANGLE
                 cornerRadius = dp(8).toFloat()
@@ -1424,8 +1747,11 @@ class DualPaneActivity : AppCompatActivity() {
             holder.name.text = file.name
             holder.info.text = if (!details) "" else if (file.isDirectory) "پوشه" else Formatter.formatFileSize(this@DualPaneActivity, file.length())
             val p = pane(paneIndex)
-            holder.row.isActivated = p.selected.contains(file)
-            holder.row.alpha = if (p.selected.contains(file)) 0.92f else 1f
+            holder.row.isActivated = isSelected
+            holder.row.alpha = 1f
+            val selectedTextColor = resolveThemeColor(com.google.android.material.R.attr.colorOnSecondaryContainer)
+            val normalTextColor = resolveThemeColor(com.google.android.material.R.attr.colorOnSurface)
+            holder.name.setTextColor(if (isSelected) selectedTextColor else normalTextColor)
             holder.check.setOnCheckedChangeListener(null)
             holder.check.visibility = if (p.selected.isNotEmpty()) View.VISIBLE else View.GONE
             holder.check.isChecked = p.selected.contains(file)
@@ -1463,6 +1789,12 @@ class DualPaneActivity : AppCompatActivity() {
             } else if (file.isDirectory) navigateTo(paneIndex, file)
             else openFile(file, paneIndex)
         }
+    }
+
+    companion object {
+        const val EXTRA_RIGHT_PATH = "ir.solina.fm.extra.RIGHT_PATH"
+        private const val KEY_LEFT_PATH = "dual_pane_left_path"
+        private const val KEY_RIGHT_PATH = "dual_pane_right_path"
     }
 
     private fun resolveThemeColor(attribute: Int): Int {

@@ -2,7 +2,7 @@ name: Build & Test Solina Files
 
 on:
   push:
-    branches: [ main, feature/advanced-file-manager, feature/strata-dual-pane-integration ]
+    branches: [ main, feature/advanced-file-manager, feature/strata-dual-pane-integration, feature/ui-ux-refresh-v2.1 ]
   pull_request:
     branches: [ main, feature/strata-dual-pane-integration ]
   workflow_dispatch:
@@ -37,13 +37,16 @@ jobs:
       - name: Grant Execute Permission for Gradlew (if present)
         run: chmod +x gradlew 2>/dev/null || true
 
+      - name: Run JVM Unit Tests
+        run: gradle testDebugUnitTest --no-daemon --stacktrace
+
       - name: Build Debug APK
         run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SolinaFiles-v1.0-debug
+          name: SolinaFiles-ui-ux-refresh-debug
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 14
 

@@ -16,16 +16,16 @@ object FileTypeVisuals {
     fun forFile(file: File): Visual {
         if (file.isDirectory) return Visual(R.drawable.ic_folder, R.color.solina_primary)
         return when (file.extension.lowercase(Locale.ROOT)) {
-            "jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "svg", "tif", "tiff" ->
+            "jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif", "svg", "tif", "tiff", "avif", "raw", "dng" ->
                 Visual(R.drawable.ic_file_image, R.color.solina_file_image)
-            "mp3", "wav", "ogg", "m4a", "flac", "aac", "opus", "mid", "midi" ->
+            "mp3", "wav", "ogg", "oga", "m4a", "flac", "aac", "opus", "mid", "midi", "wma", "amr", "aiff" ->
                 Visual(R.drawable.ic_file_audio, R.color.solina_file_audio)
-            "mp4", "mkv", "mov", "avi", "webm", "3gp", "mpeg", "mpg", "m4v" ->
+            "mp4", "mkv", "mov", "avi", "webm", "3gp", "mpeg", "mpg", "m4v", "wmv", "flv", "ts", "mts" ->
                 Visual(R.drawable.ic_file_video, R.color.solina_file_video)
-            "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "tgz", "tbz2", "txz" ->
+            "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "zst", "tgz", "tbz2", "txz", "iso", "cab", "jar", "war" ->
                 Visual(R.drawable.ic_file_archive, R.color.solina_file_archive)
             "apk" -> Visual(R.drawable.ic_file_apk, R.color.solina_file_apk)
-            "pdf", "doc", "docx", "odt", "rtf", "xls", "xlsx", "ppt", "pptx", "epub" ->
+            "pdf", "doc", "docx", "docm", "odt", "rtf", "xls", "xlsx", "xlsm", "ods", "ppt", "pptx", "pptm", "odp", "epub", "pages", "numbers", "key" ->
                 Visual(R.drawable.ic_file_document, R.color.solina_file_document)
             "txt", "md", "log", "json", "xml", "csv", "tsv", "ini", "kt", "java", "smali",
             "properties", "html", "htm", "css", "js", "gradle", "kts", "yaml", "yml", "sh",

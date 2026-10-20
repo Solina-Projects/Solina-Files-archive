@@ -172,6 +172,42 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
+    <!-- Quick Access: compact horizontal shortcuts for common folders. -->
+    <LinearLayout
+        android:id="@+id/quickAccessSection"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingTop="2dp"
+        android:paddingBottom="4dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="2dp"
+            android:text="دسترسی سریع"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif-medium" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fillViewport="false"
+            android:scrollbars="none"
+            android:paddingHorizontal="8dp">
+
+            <LinearLayout
+                android:id="@+id/quickAccessBar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+    </LinearLayout>
+
     <!-- Navigation History & Breadcrumbs Path Row -->
     <LinearLayout
         android:id="@+id/navigationBar"

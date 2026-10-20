@@ -33,6 +33,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -55,6 +56,10 @@ import java.security.MessageDigest
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
 import java.util.ArrayDeque
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import net.lingala.zip4j.ZipFile
@@ -72,6 +77,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var navigationBar: View
     private lateinit var storageButton: MaterialButton
     private lateinit var storageQuickBar: LinearLayout
+    private lateinit var quickAccessBar: LinearLayout
     private lateinit var sortFilterButton: MaterialButton
     private lateinit var overflowButton: MaterialButton
     private lateinit var drawerButton: MaterialButton
@@ -92,7 +98,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var grantButton: MaterialButton
     private lateinit var pasteFab: ExtendedFloatingActionButton
     private lateinit var createFab: com.google.android.material.floatingactionbutton.FloatingActionButton
+    private var createMenuPopup: android.widget.PopupWindow? = null
 
+    private val searchHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val searchRefreshRunnable = Runnable { refresh() }
+    private val thumbnailCache by lazy { ThumbnailCache(this) }
     private val adapter = FileAdapter()
     private var volumes: List<Vol> = emptyList()
     private var currentVol: Vol? = null
@@ -141,6 +151,7 @@ class MainActivity : AppCompatActivity() {
         navigationBar = findViewById(R.id.navigationBar)
         storageButton = findViewById(R.id.storageButton)
         storageQuickBar = findViewById(R.id.storageQuickBar)
+        quickAccessBar = findViewById(R.id.quickAccessBar)
         sortFilterButton = findViewById(R.id.sortFilterButton)
         overflowButton = findViewById(R.id.overflowButton)
         drawerButton = findViewById(R.id.drawerButton)
@@ -161,6 +172,9 @@ class MainActivity : AppCompatActivity() {
         bottomDelete = findViewById(R.id.bottomDelete)
         progress = findViewById(R.id.progress)
         list = findViewById(R.id.list)
+        list.setHasFixedSize(true)
+        list.setItemViewCacheSize(12)
+        list.itemAnimator?.changeDuration = 0L
         emptyBox = findViewById(R.id.emptyBox)
         emptyText = findViewById(R.id.emptyText)
         grantButton = findViewById(R.id.grantButton)
@@ -183,7 +197,7 @@ class MainActivity : AppCompatActivity() {
         }
         overflowButton.setOnClickListener { showTopMenu(it) }
         drawerButton.setOnClickListener { showRightDrawer() }
-        dualPaneButton.setOnClickListener { startActivity(Intent(this, DualPaneActivity::class.java)) }
+        dualPaneButton.setOnClickListener { openDualPane() }
         val savedColumns = getSharedPreferences("solina_preferences", MODE_PRIVATE).getInt("grid_columns", 1)
         gridLayout = savedColumns > 1
         layoutModeButton.setOnClickListener { showLayoutSettings() }
@@ -192,7 +206,10 @@ class MainActivity : AppCompatActivity() {
         navForward.setOnClickListener { navigateHistory(back = false) }
         searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { refresh() }
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                searchHandler.removeCallbacks(searchRefreshRunnable)
+                searchHandler.postDelayed(searchRefreshRunnable, 160L)
+            }
             override fun afterTextChanged(s: Editable?) {}
         })
         bottomCopy.setOnClickListener { setClip(false) }
@@ -246,6 +263,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         renderStorageQuickBar()
+        renderQuickAccess()
         refresh()
         pendingRecentOpenPath?.let { path ->
             pendingRecentOpenPath = null
@@ -312,6 +330,104 @@ class MainActivity : AppCompatActivity() {
         // Volume selection remains available from the "حافظه دستگاه" button.
         // Hide the square storage shortcuts and their dropdown arrows on the home screen.
         storageQuickBar.visibility = View.GONE
+    }
+
+    private fun renderQuickAccess() {
+        if (!::quickAccessBar.isInitialized) return
+        quickAccessBar.removeAllViews()
+        val root = Environment.getExternalStorageDirectory()
+        val items = listOf(
+            QuickAccessItem("downloads", "دانلودها", "", File(root, "Download")),
+            QuickAccessItem("documents", "اسناد", "", File(root, "Documents")),
+            QuickAccessItem("pictures", "تصاویر", "", File(root, "Pictures")),
+            QuickAccessItem("music", "موسیقی", "", File(root, "Music")),
+            QuickAccessItem("movies", "ویدئو", "", File(root, "Movies")),
+            QuickAccessItem("camera", "دوربین", "", File(root, "DCIM"))
+        )
+
+        val outlineColor = com.google.android.material.color.MaterialColors.getColor(
+            this, com.google.android.material.R.attr.colorOutline, 0xFF797979.toInt()
+        )
+        val surfaceColor = com.google.android.material.color.MaterialColors.getColor(
+            this, com.google.android.material.R.attr.colorSurface, android.graphics.Color.WHITE
+        )
+        val textColor = com.google.android.material.color.MaterialColors.getColor(
+            this, com.google.android.material.R.attr.colorOnSurface, android.graphics.Color.BLACK
+        )
+        val primaryColor = com.google.android.material.color.MaterialColors.getColor(
+            this, com.google.android.material.R.attr.colorPrimary, 0xFF6750A4.toInt()
+        )
+        val iconFor: (String) -> Int = { id ->
+            when (id) {
+                "downloads" -> R.drawable.ic_folder
+                "documents" -> R.drawable.ic_file_document
+                "pictures" -> R.drawable.ic_file_image
+                "music" -> R.drawable.ic_file_audio
+                "movies" -> R.drawable.ic_file_video
+                "camera" -> R.drawable.ic_file_image
+                else -> R.drawable.ic_folder
+            }
+        }
+
+        items.forEach { item ->
+            // One consistent outlined-vector icon style for every shortcut.
+            val shortcut = MaterialButton(
+                this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle
+            ).apply {
+                text = item.label
+                textSize = 12f
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                isAllCaps = false
+                minHeight = dp(38)
+                minimumHeight = dp(38)
+                minWidth = 0
+                minimumWidth = dp(0)
+                insetTop = 0
+                insetBottom = 0
+                setPadding(dp(12), 0, dp(12), 0)
+                iconPadding = dp(6)
+                iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+                setIconResource(iconFor(item.id))
+                iconTint = android.content.res.ColorStateList.valueOf(primaryColor)
+                rippleColor = android.content.res.ColorStateList.valueOf(
+                    android.graphics.Color.argb(
+                        38,
+                        android.graphics.Color.red(primaryColor),
+                        android.graphics.Color.green(primaryColor),
+                        android.graphics.Color.blue(primaryColor)
+                    )
+                )
+                cornerRadius = dp(22)
+                strokeWidth = dp(1)
+                strokeColor = android.content.res.ColorStateList.valueOf(outlineColor)
+                backgroundTintList = android.content.res.ColorStateList.valueOf(surfaceColor)
+                setTextColor(textColor)
+                contentDescription = item.label
+                tooltipText = item.label
+                gravity = android.view.Gravity.CENTER
+                stateListAnimator = null
+            }
+
+            shortcut.setOnTouchListener { view, event ->
+                when (event?.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN -> view.animate().scaleX(0.97f).scaleY(0.97f).setDuration(80L).start()
+                    android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL ->
+                        view.animate().scaleX(1f).scaleY(1f).setDuration(110L).start()
+                }
+                false
+            }
+            shortcut.setOnClickListener {
+                if (item.directory.isDirectory) {
+                    currentVol = volumes.firstOrNull { inside(item.directory, it.dir) } ?: currentVol
+                    navigate(item.directory)
+                } else {
+                    toast("این پوشه هنوز در دستگاه ایجاد نشده است")
+                }
+            }
+            quickAccessBar.addView(shortcut, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, dp(40)
+            ).apply { marginEnd = dp(8) })
+        }
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
@@ -455,6 +571,13 @@ class MainActivity : AppCompatActivity() {
 
     // ---------- listing ----------
 
+    private fun openDualPane() {
+        startActivity(
+            Intent(this, DualPaneActivity::class.java)
+                .putExtra(DualPaneActivity.EXTRA_RIGHT_PATH, current.absolutePath)
+        )
+    }
+
     private fun navigate(dir: File, recordHistory: Boolean = true) {
         if (dir.path == current.path) return
         if (recordHistory) {
@@ -529,14 +652,21 @@ class MainActivity : AppCompatActivity() {
         }
         selected.retainAll(allFiles.toSet())
         val query = searchInput.text?.toString()?.trim()?.lowercase(Locale.ROOT).orEmpty()
-        val imageTypes = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif", "tif", "tiff", "svg")
-        val videoTypes = setOf("mp4", "mkv", "mov", "webm", "3gp", "avi", "mpeg", "mpg", "m4v")
-        val audioTypes = setOf("mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi", "wma")
-        val documentTypes = setOf("pdf", "doc", "docx", "txt", "rtf", "odt", "xls", "xlsx", "csv", "ppt", "pptx", "md")
-        val archiveTypes = setOf("zip", "7z", "rar", "tar", "gz", "bz2", "xz")
+        val imageTypes = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif", "tif", "tiff", "svg", "avif", "raw", "dng")
+        val videoTypes = setOf("mp4", "mkv", "mov", "webm", "3gp", "avi", "mpeg", "mpg", "m4v", "wmv", "flv", "ts", "mts")
+        val audioTypes = setOf("mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi", "wma", "amr", "aiff")
+        val documentTypes = setOf("pdf", "doc", "docx", "docm", "txt", "rtf", "odt", "xls", "xlsx", "xlsm", "csv", "tsv", "ppt", "pptx", "pptm", "md", "markdown", "epub", "pages", "numbers", "key", "ods", "odp")
+        val archiveTypes = setOf("zip", "7z", "rar", "tar", "gz", "bz2", "xz", "zst", "tgz", "tbz2", "txz", "iso", "cab", "jar", "war")
+        val searchableExtensions = imageTypes + videoTypes + audioTypes + documentTypes + archiveTypes + setOf("apk")
         val files = allFiles.filter { file ->
-            val matchesQuery = query.isEmpty() || file.name.lowercase(Locale.ROOT).contains(query)
             val extension = file.extension.lowercase(Locale.ROOT)
+            val extensionQuery = query.removePrefix(".")
+            val matchesQuery = when {
+                query.isEmpty() -> true
+                query.startsWith(".") || extensionQuery in searchableExtensions ->
+                    file.isFile && extension.equals(extensionQuery, ignoreCase = true)
+                else -> file.name.lowercase(Locale.ROOT).contains(query)
+            }
             val matchesCategory = when (activeCategory) {
                 "images" -> file.isFile && extension in imageTypes
                 "videos" -> file.isFile && extension in videoTypes
@@ -645,7 +775,7 @@ class MainActivity : AppCompatActivity() {
     private fun onMainMenu(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.action_new_folder -> newFolder()
-            R.id.action_dual_pane -> startActivity(Intent(this, DualPaneActivity::class.java))
+            R.id.action_dual_pane -> openDualPane()
             R.id.action_refresh -> refresh()
             R.id.action_bookmark -> toggleBookmark()
             R.id.action_bookmarks -> showBookmarks()
@@ -916,46 +1046,64 @@ class MainActivity : AppCompatActivity() {
         return target
     }
 
+    private var transferJob: kotlinx.coroutines.Job? = null
+
     private fun paste() {
-        val files = clipFiles
+        val files = clipFiles.toList()
         val cut = clipCut
         val dest = current
         if (files.isEmpty()) return
+        if (transferJob?.isActive == true) {
+            toast("یک عملیات انتقال دیگر در حال اجراست")
+            return
+        }
+
         progress.visibility = View.VISIBLE
-        Thread {
-            var failed = 0
-            for (src in files) {
-                try {
-                    if (!src.exists()) {
-                        failed++
-                        continue
-                    }
-                    if (src.isDirectory && inside(dest, src)) {
-                        failed++
-                        continue
-                    }
-                    if (cut && src.parentFile?.path == dest.path) continue
-                    val target = uniqueTarget(dest, src)
-                    if (cut) {
-                        if (!src.renameTo(target)) {
-                            src.copyRecursively(target); if (target.exists()) src.deleteRecursively() else failed++
-                        }
-                    } else {
-                        if (!src.copyRecursively(target)) failed++
-                    }
-                } catch (e: Exception) {
-                    failed++
+        progress.isIndeterminate = false
+        progress.progress = 0
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(if (cut) "در حال انتقال فایل‌ها" else "در حال کپی فایل‌ها")
+            .setMessage("آماده‌سازی عملیات…")
+            .setNegativeButton("لغو") { _, _ -> transferJob?.cancel() }
+            .create()
+        dialog.setCanceledOnTouchOutside(false)
+        dialog.show()
+
+        transferJob = lifecycleScope.launch {
+            try {
+                val result = FileOperationsManager.executeTransfer(files, dest, cut) { state ->
+                    progress.progress = state.percent
+                    dialog.setMessage(
+                        "در حال پردازش ${state.processedCount} از ${state.totalCount}: ${state.currentFileName}"
+                    )
                 }
-            }
-            runOnUiThread {
+                if (cut) {
+                    clipFiles = if (result.failureCount == 0) emptyList() else files.filter { it.exists() }
+                    clipCut = clipFiles.isNotEmpty()
+                }
+                if (result.failureCount > 0) {
+                    val details = result.errors.take(3).joinToString("؛ ")
+                    toast("عملیات کامل نشد: ${result.successCount} موفق، ${result.failureCount} ناموفق" +
+                        if (details.isBlank()) "" else " — $details")
+                } else {
+                    toast(if (cut) "انتقال فایل‌ها کامل شد" else "کپی فایل‌ها کامل شد")
+                }
+            } catch (_: CancellationException) {
+                if (cut) {
+                    clipFiles = files.filter { it.exists() }
+                    clipCut = clipFiles.isNotEmpty()
+                }
+                toast("عملیات لغو شد؛ فایل‌های ناقص پاک‌سازی شدند و عملیات‌های تکمیل‌شده باقی ماندند")
+            } catch (e: Exception) {
+                toast("عملیات فایل ناموفق بود: ${e.localizedMessage ?: "خطای ناشناخته"}")
+            } finally {
+                transferJob = null
                 progress.visibility = View.GONE
-                if (cut) clipFiles = emptyList()
-                if (failed > 0) toast(getString(R.string.some_failed, failed))
+                dialog.dismiss()
                 refresh()
             }
-        }.start()
+        }
     }
-
 
     private fun compressSelected() {
         val items = selected.toList()
@@ -1149,18 +1297,70 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showCreateMenu() {
-        val options = arrayOf("پوشه جدید", "فایل متنی جدید (.txt)", "فایل HTML جدید (.html)")
-        MaterialAlertDialogBuilder(this)
-            .setTitle("ایجاد مورد جدید")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> newFolder()
-                    1 -> createTextFile("txt")
-                    2 -> createTextFile("html")
+        if (createMenuPopup?.isShowing == true) {
+            createMenuPopup?.dismiss()
+            return
+        }
+
+        val menu = android.widget.FrameLayout(this)
+        val width = dp(226)
+        val height = dp(180)
+        var popup: android.widget.PopupWindow? = null
+
+        fun addRadialAction(label: String, iconRes: Int, x: Int, y: Int, action: () -> Unit) {
+            val group = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+            }
+            val button = com.google.android.material.floatingactionbutton.FloatingActionButton(this).apply {
+                size = com.google.android.material.floatingactionbutton.FloatingActionButton.SIZE_MINI
+                setImageResource(iconRes)
+                contentDescription = label
+                tooltipText = label
+                setOnClickListener {
+                    popup?.dismiss()
+                    action()
                 }
             }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
+            val caption = TextView(this).apply {
+                text = label
+                textSize = 10f
+                gravity = android.view.Gravity.CENTER
+                maxLines = 1
+                setTextColor(com.google.android.material.color.MaterialColors.getColor(
+                    this@MainActivity, com.google.android.material.R.attr.colorOnSurface, android.graphics.Color.BLACK
+                ))
+                setShadowLayer(dp(3).toFloat(), 0f, 1f, android.graphics.Color.TRANSPARENT)
+            }
+            group.addView(button, LinearLayout.LayoutParams(dp(42), dp(42)))
+            group.addView(caption, LinearLayout.LayoutParams(dp(70), dp(22)))
+            menu.addView(group, android.widget.FrameLayout.LayoutParams(dp(70), dp(66)).apply {
+                leftMargin = dp(x)
+                topMargin = dp(y)
+            })
+            group.scaleX = 0.65f
+            group.scaleY = 0.65f
+            group.alpha = 0f
+            group.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(170L).setStartDelay((x + y).toLong()).start()
+        }
+
+        addRadialAction("پوشه", R.drawable.ic_folder, 150, 94) { newFolder() }
+        addRadialAction("فایل متنی", R.drawable.ic_file_document, 78, 18) { createTextFile("txt") }
+        addRadialAction("فایل HTML", R.drawable.ic_file_code, 6, 94) { createTextFile("html") }
+
+        val popupInstance = android.widget.PopupWindow(menu, width, height, true).apply {
+            isOutsideTouchable = true
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+            elevation = dp(8).toFloat()
+            setOnDismissListener {
+                createFab.animate().rotation(0f).setDuration(150L).start()
+                if (createMenuPopup === this) createMenuPopup = null
+            }
+        }
+        popup = popupInstance
+        createMenuPopup = popupInstance
+        createFab.animate().rotation(45f).setDuration(180L).start()
+        popupInstance.showAtLocation(window.decorView, android.view.Gravity.BOTTOM or android.view.Gravity.END, dp(8), dp(88))
     }
 
     private fun createTextFile(extension: String) {
@@ -2016,8 +2216,39 @@ class MainActivity : AppCompatActivity() {
             } else {
                 androidx.appcompat.content.res.AppCompatResources.getDrawable(this@MainActivity, R.drawable.item_bg)
             }
-            holder.info.visibility = if (!multiColumn) View.VISIBLE else View.GONE
+            holder.info.visibility = View.VISIBLE
+            holder.info.maxLines = if (multiColumn) 1 else 2
+            holder.info.ellipsize = android.text.TextUtils.TruncateAt.END
+            if (multiColumn) holder.info.textSize = 10f
             FileTypeVisuals.applyTo(holder.icon, file)
+            holder.icon.tag = file.absolutePath
+            holder.icon.scaleType = ImageView.ScaleType.FIT_CENTER
+            val thumbnailExtensions = setOf(
+                "jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif", "tif", "tiff", "avif", "dng",
+                "mp4", "mkv", "mov", "webm", "3gp", "avi", "mpeg", "mpg", "m4v", "wmv", "flv", "ts", "mts",
+                "mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi", "wma", "amr", "aiff", "pdf"
+            )
+            val thumbnailTag = "${file.absolutePath}|${file.lastModified()}|${if (file.isFile) file.length() else 0L}"
+            holder.icon.tag = thumbnailTag
+            holder.icon.clipToOutline = false
+            holder.icon.scaleType = ImageView.ScaleType.FIT_CENTER
+            if (file.isDirectory || file.extension.lowercase(Locale.ROOT) in thumbnailExtensions) {
+                lifecycleScope.launch {
+                    val thumbnail = thumbnailCache.get(file)
+                    if (thumbnail != null && holder.icon.tag == thumbnailTag) {
+                        holder.icon.imageTintList = null
+                        holder.icon.scaleType = ImageView.ScaleType.CENTER_CROP
+                        holder.icon.clipToOutline = true
+                        holder.icon.outlineProvider = object : android.view.ViewOutlineProvider() {
+                            override fun getOutline(view: View, outline: android.graphics.Outline) {
+                                outline.setRoundRect(0, 0, view.width, view.height, dp(7).toFloat())
+                            }
+                        }
+                        holder.icon.setImageBitmap(thumbnail)
+                        holder.icon.layoutParams = android.widget.FrameLayout.LayoutParams(-1, -1)
+                    }
+                }
+            }
             val latestChange = activityTimes[file.absolutePath] ?: file.lastModified()
             val date = formatDate(latestChange)
             val detail = if (file.isDirectory) "پوشه • $date" else fmt(file.length()) + " • " + date

@@ -34,6 +34,7 @@ class AdvancedSettingsActivity : AppCompatActivity() {
             setNavigationOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(56)))
         root.addView(action("تنظیم پوشهٔ آغازین") { editHomeFolder() })
+        root.addView(action(if (prefs.getBoolean("dynamic_colors", false)) "غیرفعال‌کردن رنگ‌های پویا" else "استفاده از رنگ‌های سیستم (Dynamic Color)") { toggleDynamicColors() })
         root.addView(action("تنظیم یا تغییر رمز قفل برنامه") { setAppPin() })
         root.addView(action(if (prefs.getBoolean("biometric_lock_enabled", false)) "غیرفعال‌کردن بازگشایی زیستی" else "فعال‌کردن اثرانگشت/قفل دستگاه") { toggleBiometric() })
         root.addView(action("غیرفعال‌کردن قفل برنامه") { disableAppLock() })
@@ -46,6 +47,17 @@ class AdvancedSettingsActivity : AppCompatActivity() {
         text = label
         isAllCaps = false
         setOnClickListener { callback() }
+    }
+
+    private fun toggleDynamicColors() {
+        val enabled = !prefs.getBoolean("dynamic_colors", false)
+        prefs.edit().putBoolean("dynamic_colors", enabled).apply()
+        Toast.makeText(
+            this,
+            if (enabled) "رنگ‌های سیستم ذخیره شد؛ برنامه را دوباره اجرا کن تا در همهٔ صفحه‌ها اعمال شود"
+            else "رنگ برند ذخیره شد؛ برنامه را دوباره اجرا کن تا تغییر کامل اعمال شود",
+            Toast.LENGTH_LONG
+        ).show()
     }
 
     private fun editHomeFolder() {
