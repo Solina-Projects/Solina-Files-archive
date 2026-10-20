@@ -100,6 +100,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var createFab: com.google.android.material.floatingactionbutton.FloatingActionButton
     private var createMenuPopup: android.widget.PopupWindow? = null
 
+    private val searchHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val searchRefreshRunnable = Runnable { refresh() }
+    private val thumbnailCache by lazy { ThumbnailCache(this) }
     private val adapter = FileAdapter()
     private var volumes: List<Vol> = emptyList()
     private var currentVol: Vol? = null
@@ -171,6 +174,7 @@ class MainActivity : AppCompatActivity() {
         list = findViewById(R.id.list)
         list.setHasFixedSize(true)
         list.setItemViewCacheSize(12)
+        list.itemAnimator?.changeDuration = 0L
         emptyBox = findViewById(R.id.emptyBox)
         emptyText = findViewById(R.id.emptyText)
         grantButton = findViewById(R.id.grantButton)
@@ -202,7 +206,10 @@ class MainActivity : AppCompatActivity() {
         navForward.setOnClickListener { navigateHistory(back = false) }
         searchInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { refresh() }
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                searchHandler.removeCallbacks(searchRefreshRunnable)
+                searchHandler.postDelayed(searchRefreshRunnable, 160L)
+            }
             override fun afterTextChanged(s: Editable?) {}
         })
         bottomCopy.setOnClickListener { setClip(false) }
@@ -2216,29 +2223,29 @@ class MainActivity : AppCompatActivity() {
             FileTypeVisuals.applyTo(holder.icon, file)
             holder.icon.tag = file.absolutePath
             holder.icon.scaleType = ImageView.ScaleType.FIT_CENTER
-            if (file.isDirectory && file.name.lowercase(Locale.ROOT) in setOf("pictures", "picture", "photos", "images", "dcim", "camera")) {
+            val thumbnailExtensions = setOf(
+                "jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif", "tif", "tiff", "avif", "dng",
+                "mp4", "mkv", "mov", "webm", "3gp", "avi", "mpeg", "mpg", "m4v", "wmv", "flv", "ts", "mts",
+                "mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi", "wma", "amr", "aiff", "pdf"
+            )
+            val thumbnailTag = "${file.absolutePath}|${file.lastModified()}|${if (file.isFile) file.length() else 0L}"
+            holder.icon.tag = thumbnailTag
+            holder.icon.clipToOutline = false
+            holder.icon.scaleType = ImageView.ScaleType.FIT_CENTER
+            if (file.isDirectory || file.extension.lowercase(Locale.ROOT) in thumbnailExtensions) {
                 lifecycleScope.launch {
-                    val thumbnail = withContext(Dispatchers.IO) {
-                        val imageExtensions = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif", "tif", "tiff", "avif", "dng")
-                        val directImages = runCatching {
-                            file.listFiles().orEmpty().filter { it.isFile && it.extension.lowercase(Locale.ROOT) in imageExtensions }
-                        }.getOrDefault(emptyList())
-                        val nestedImages = if (directImages.isEmpty()) runCatching {
-                            file.listFiles().orEmpty().filter { it.isDirectory }
-                                .asSequence().flatMap { it.listFiles().orEmpty().asSequence() }
-                                .filter { it.isFile && it.extension.lowercase(Locale.ROOT) in imageExtensions }
-                                .toList()
-                        }.getOrDefault(emptyList()) else emptyList()
-                        val firstImage = (directImages + nestedImages).minByOrNull { it.name.lowercase(Locale.ROOT) }
-                        firstImage?.let { image ->
-                            val options = BitmapFactory.Options().apply { inSampleSize = 4 }
-                            runCatching { BitmapFactory.decodeFile(image.absolutePath, options) }.getOrNull()
-                        }
-                    }
-                    if (thumbnail != null && holder.icon.tag == file.absolutePath) {
+                    val thumbnail = thumbnailCache.get(file)
+                    if (thumbnail != null && holder.icon.tag == thumbnailTag) {
                         holder.icon.imageTintList = null
                         holder.icon.scaleType = ImageView.ScaleType.CENTER_CROP
+                        holder.icon.clipToOutline = true
+                        holder.icon.outlineProvider = object : android.view.ViewOutlineProvider() {
+                            override fun getOutline(view: View, outline: android.graphics.Outline) {
+                                outline.setRoundRect(0, 0, view.width, view.height, dp(7).toFloat())
+                            }
+                        }
                         holder.icon.setImageBitmap(thumbnail)
+                        holder.icon.layoutParams = android.widget.FrameLayout.LayoutParams(-1, -1)
                     }
                 }
             }
