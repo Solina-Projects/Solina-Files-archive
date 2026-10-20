@@ -102,17 +102,19 @@ class ComposeHomeActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         resumeVersion++
+        if (::homeViewModel.isInitialized) homeViewModel.refreshStorageStats()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         homeViewModel = ViewModelProvider(this)[HomeViewModel::class.java]
+        homeViewModel.attachContext(applicationContext)
         setContent {
             SolinaComposeTheme {
                 SolinaHomeScreen(
                     permissionRefreshKey = resumeVersion,
                     storageViewModel = homeViewModel,
-                    onManualRefresh = { homeViewModel.refreshStorageStats() },
+                    onManualRefresh = { homeViewModel.refreshStorageStats(force = true) },
                     onBrowse = { openBrowser() },
                     onRequestPermission = { requestStoragePermission() },
                     onCleanTools = { openCleanTools() },
@@ -381,16 +383,16 @@ private fun SolinaHomeScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(
                     start = 12.dp, end = 12.dp,
-                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 6.dp,
+                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 10.dp,
                     bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 10.dp
                 ),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 item {
                     Column {
                     Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
-                        .padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        .padding(horizontal = 14.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(52.dp)) {
                             Box(contentAlignment = Alignment.Center) {
                                 androidx.compose.foundation.Image(
@@ -431,7 +433,7 @@ private fun SolinaHomeScreen(
                             }
                         }
                     }
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(12.dp))
                     }
                 }
                 item {
@@ -440,7 +442,7 @@ private fun SolinaHomeScreen(
                         usedBytes = (homeStats.totalBytes - homeStats.freeBytes).coerceAtLeast(0L)
                     )
                     val percent = storageInfo.usagePercent
-                    val hasCapacity = hasAccess && !statsLoading && !viewModelStorageLoading && storageInfo.totalBytes > 0L
+                    val hasCapacity = hasAccess && !viewModelStorageLoading && storageInfo.totalBytes > 0L
                     val statusColor = when {
                         !hasCapacity -> MaterialTheme.colorScheme.outline
                         percent >= 90 -> MaterialTheme.colorScheme.error
