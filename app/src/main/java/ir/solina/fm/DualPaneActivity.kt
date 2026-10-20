@@ -191,7 +191,7 @@ class DualPaneActivity : AppCompatActivity() {
         bottomActions.addView(selectionCountLabel, LinearLayout.LayoutParams(-2, -1))
         screen.addView(bottomActions, LinearLayout.LayoutParams(-1, dp(48)))
         setContentView(screen)
-        left = createPane(savedLeft ?: base, 0).apply { isEmpty = savedLeft == null }
+        left = createPane(savedLeft ?: base, 0)
         right = createPane(requestedRight, 1)
         activePane = 1
         renderPanes()
@@ -233,6 +233,19 @@ class DualPaneActivity : AppCompatActivity() {
                 activePane = index
                 updateTopBar()
                 showPaneMenu(index, paneHeader.menuButton)
+            },
+            onSelectAll = {
+                activePane = index
+                selectAll(index)
+                updateTopBar()
+            },
+            onCopyToOther = {
+                activePane = index
+                transferFrom(index, move = false)
+            },
+            onMoveToOther = {
+                activePane = index
+                transferFrom(index, move = true)
             }
         )
         val breadcrumbBar = paneHeader.breadcrumbBar
@@ -955,8 +968,9 @@ class DualPaneActivity : AppCompatActivity() {
         p.current.parentFile?.takeIf { it.exists() }?.let { navigateTo(index, it) }
     }
 
-    private fun transfer(move: Boolean) {
-        val sourceIndex = activePane
+    private fun transfer(move: Boolean) = transferFrom(activePane, move)
+
+    private fun transferFrom(sourceIndex: Int, move: Boolean) {
         val destinationIndex = 1 - sourceIndex
         val source = pane(sourceIndex)
         val destinationPane = pane(destinationIndex)
