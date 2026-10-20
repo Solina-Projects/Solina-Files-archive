@@ -574,6 +574,12 @@ private fun SolinaHomeScreen(
                             onClick = { onOpenCategory("فایل‌های بزرگ", "large") },
                             label = { Text("فایل‌های بزرگ") },
                             leadingIcon = { Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(16.dp)) })
+                        FilterChip(selected = false, onClick = { onOpenCategory("فایل‌های اخیر", "recent7") },
+                            label = { Text("فایل‌های اخیر") },
+                            leadingIcon = { Icon(Icons.Default.AccessTime, contentDescription = null, modifier = Modifier.size(16.dp)) })
+                        FilterChip(selected = false, onClick = { onOpenCategory("فایل‌های ستاره‌دار", "starred") },
+                            label = { Text("ستاره‌دارها") },
+                            leadingIcon = { Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(16.dp)) })
                     }
                 }
                 item { Text("ابزارها", fontWeight = FontWeight.Bold, fontSize = 16.sp) }
