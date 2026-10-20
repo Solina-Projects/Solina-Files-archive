@@ -2219,7 +2219,7 @@ class MainActivity : AppCompatActivity() {
             if (file.isDirectory && file.name.lowercase(Locale.ROOT) in setOf("pictures", "picture", "photos", "images", "dcim", "camera")) {
                 lifecycleScope.launch {
                     val thumbnail = withContext(Dispatchers.IO) {
-                        val imageExtensions = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif")
+                        val imageExtensions = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif", "tif", "tiff", "avif", "dng")
                         val directImages = runCatching {
                             file.listFiles().orEmpty().filter { it.isFile && it.extension.lowercase(Locale.ROOT) in imageExtensions }
                         }.getOrDefault(emptyList())
