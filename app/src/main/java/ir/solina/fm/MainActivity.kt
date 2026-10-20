@@ -1298,7 +1298,7 @@ class MainActivity : AppCompatActivity() {
         val menu = android.widget.FrameLayout(this)
         val width = dp(226)
         val height = dp(180)
-        lateinit var popup: android.widget.PopupWindow
+        var popup: android.widget.PopupWindow? = null
 
         fun addRadialAction(label: String, iconRes: Int, x: Int, y: Int, action: () -> Unit) {
             val group = LinearLayout(this).apply {
@@ -1311,7 +1311,7 @@ class MainActivity : AppCompatActivity() {
                 contentDescription = label
                 tooltipText = label
                 setOnClickListener {
-                    popup.dismiss()
+                    popup?.dismiss()
                     action()
                 }
             }
@@ -1341,7 +1341,7 @@ class MainActivity : AppCompatActivity() {
         addRadialAction("فایل متنی", R.drawable.ic_file_document, 78, 18) { createTextFile("txt") }
         addRadialAction("فایل HTML", R.drawable.ic_file_code, 6, 94) { createTextFile("html") }
 
-        popup = android.widget.PopupWindow(menu, width, height, true).apply {
+        val popupInstance = android.widget.PopupWindow(menu, width, height, true).apply {
             isOutsideTouchable = true
             setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
             elevation = dp(8).toFloat()
@@ -1350,9 +1350,10 @@ class MainActivity : AppCompatActivity() {
                 if (createMenuPopup === this) createMenuPopup = null
             }
         }
-        createMenuPopup = popup
+        popup = popupInstance
+        createMenuPopup = popupInstance
         createFab.animate().rotation(45f).setDuration(180L).start()
-        popup.showAtLocation(window.decorView, android.view.Gravity.BOTTOM or android.view.Gravity.END, dp(8), dp(88))
+        popupInstance.showAtLocation(window.decorView, android.view.Gravity.BOTTOM or android.view.Gravity.END, dp(8), dp(88))
     }
 
     private fun createTextFile(extension: String) {
