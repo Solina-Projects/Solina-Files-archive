@@ -30,9 +30,15 @@ class PaneHeader @JvmOverloads constructor(
     val menuButton: MaterialButton
 
     private val upButton: MaterialButton
+    private val activeAccent: View
 
     init {
         orientation = VERTICAL
+        activeAccent = View(context).apply {
+            setBackgroundColor(resolveThemeColor(MaterialR.attr.colorPrimary, 0xFF3B82F6.toInt()))
+            alpha = 0.18f
+        }
+        addView(activeAccent, LayoutParams(LayoutParams.MATCH_PARENT, dp(2)))
         val controls = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -120,6 +126,10 @@ class PaneHeader @JvmOverloads constructor(
 
     fun setPath(path: String, emptyLabel: String = "انتخاب پوشه") {
         breadcrumbBar.setPath(path, onCrumbClick, emptyLabel)
+    }
+
+    fun setActive(active: Boolean) {
+        activeAccent.alpha = if (active) 1f else 0.18f
     }
 
     private fun dp(value: Int): Int =
