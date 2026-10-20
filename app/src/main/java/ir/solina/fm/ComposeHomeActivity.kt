@@ -367,7 +367,8 @@ private fun SolinaHomeScreen(
         HomeCategory("تصاویر", "عکس‌ها و تصاویر", Icons.Default.Image, "images"),
         HomeCategory("موسیقی", "فایل‌های صوتی", Icons.Default.MusicNote, "audio"),
         HomeCategory("برنامه‌ها", "فایل‌های نصب برنامه", Icons.Default.Android, "apk"),
-        HomeCategory("اسناد", "PDF، متن و آفیس", Icons.Default.Description, "documents")
+        HomeCategory("اسناد", "PDF، متن و آفیس", Icons.Default.Description, "documents"),
+        HomeCategory("همه فایل‌ها", "همه فایل‌ها و پوشه‌ها", Icons.Default.FolderOpen, "all")
     )
 
     val toolItems = listOf(
@@ -501,12 +502,14 @@ private fun SolinaHomeScreen(
                     }
                 }
                 item {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         categories.forEach { category ->
                             val filter = category.filter ?: "recent"
-                            val count = homeStats.categories[filter]?.count ?: 0
+                            val isAllFiles = filter == "all"
+                            val count = if (isAllFiles) homeStats.fileCount else homeStats.categories[filter]?.count ?: 0
                             val iconColor = when (filter) {
+                                "all" -> MaterialTheme.colorScheme.primary
                                 "videos" -> Color(0xFF9C27B0)
                                 "images" -> Color(0xFFE91E63)
                                 "audio" -> Color(0xFFFFB300)
@@ -515,7 +518,11 @@ private fun SolinaHomeScreen(
                             }
                             Column(
                                 modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
-                                    .clickable { onOpenCategory(category.title, filter) }
+                                    .clickable {
+                                        if (isAllFiles) {
+                                            if (hasAccess) onBrowse() else onRequestPermission()
+                                        } else onOpenCategory(category.title, filter)
+                                    }
                                     .padding(vertical = 8.dp, horizontal = 1.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -527,9 +534,11 @@ private fun SolinaHomeScreen(
                                     ((categoryBytes.toDouble() / homeStats.totalBytes.toDouble()) * 100.0).toInt().coerceIn(0, 100)
                                 else 0
                                 Text(
-                                    if (statsLoading) "در حال به‌روزرسانی…" else
+                                    if (statsLoading) "در حال به‌روزرسانی…" else if (isAllFiles)
+                                        "${persianDigits(String.format(Locale.ROOT, "%,d", count).replace(',', '٬'))} فایل · ${persianDigits(String.format(Locale.ROOT, "%,d", homeStats.folderCount).replace(',', '٬'))} پوشه"
+                                    else
                                         "${persianDigits(count.toString())} فایل · ${persianDigits(categoryPercent.toString())}٪ حافظه",
-                                    fontSize = 10.7.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
+                                    fontSize = 10.2.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
                             }
