@@ -433,6 +433,19 @@ private fun SolinaHomeScreen(
                                 )
                             }
                         }
+                        Spacer(Modifier.width(8.dp))
+                        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.size(44.dp).clickable {
+                                if (hasAccess) {
+                                    onManualRefresh()
+                                    manualRefreshKey++
+                                } else onRequestPermission()
+                            }) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Refresh, contentDescription = "تازه‌سازی آمار حافظه و دسته‌بندی‌ها",
+                                    tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(21.dp))
+                            }
+                        }
                     }
                     Spacer(Modifier.height(12.dp))
                     }
@@ -460,32 +473,54 @@ private fun SolinaHomeScreen(
                                 Icon(Icons.Default.Storage, contentDescription = null, tint = statusColor, modifier = Modifier.size(22.dp))
                                 Spacer(Modifier.width(8.dp))
                                 Text("وضعیت حافظه", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface,
-                                    modifier = Modifier.size(36.dp).clickable {
-                                        if (hasAccess) {
-                                            onManualRefresh()
-                                            manualRefreshKey++
-                                        } else onRequestPermission()
-                                    }) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Default.Refresh, contentDescription = "تازه‌سازی آمار حافظه و دسته‌بندی‌ها",
-                                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                                    }
-                                }
-                                Spacer(Modifier.width(8.dp))
                                 Text(
                                     if (hasCapacity) "${persianDigits(percent.toString())}٪ پر"
                                     else if (!hasAccess) "نیازمند دسترسی" else "در حال محاسبه",
                                     color = statusColor, fontSize = 13.sp, fontWeight = FontWeight.Bold
                                 )
                             }
-                            LinearProgressIndicator(
-                                progress = { if (hasCapacity) (percent / 100f).coerceIn(0f, 1f) else 0f },
-                                modifier = Modifier.fillMaxWidth().height(8.dp),
-                                color = statusColor,
-                                trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                            val barTotal = (homeStats.totalBytes.takeIf { it > 0L } ?: storageInfo.totalBytes).coerceAtLeast(0L)
+                            val barFree = if (homeStats.totalBytes > 0L) homeStats.freeBytes else storageInfo.freeBytes
+                            val barUsed = (barTotal - barFree).coerceIn(0L, barTotal)
+                            val categoryColors = listOf(
+                                "images" to Color(0xFFE91E63),
+                                "videos" to Color(0xFF9C27B0),
+                                "documents" to Color(0xFF00897B),
+                                "audio" to Color(0xFFFFB300),
+                                "apk" to Color(0xFF43A047)
                             )
+                            val rawCategoryBytes = categoryColors.map { (key, color) ->
+                                Triple(key, (homeStats.categories[key]?.bytes ?: 0L).coerceAtLeast(0L), color)
+                            }
+                            val rawCategoryTotal = rawCategoryBytes.sumOf { it.second }
+                            val categoryScale = if (rawCategoryTotal > barUsed && rawCategoryTotal > 0L)
+                                barUsed.toDouble() / rawCategoryTotal.toDouble() else 1.0
+                            val categorySegments = rawCategoryBytes.map { (key, bytes, color) ->
+                                Triple(key, (bytes * categoryScale).toLong(), color)
+                            }
+                            val categoryUsed = categorySegments.sumOf { it.second }.coerceAtMost(barUsed)
+                            val otherUsed = (barUsed - categoryUsed).coerceAtLeast(0L)
+                            val storageSegments = buildList {
+                                categorySegments.filter { it.second > 0L }.forEach { add(it.second to it.third) }
+                                if (otherUsed > 0L) add(otherUsed to statusColor)
+                                if (barFree > 0L) add(barFree.coerceAtMost(barTotal) to MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(8.dp)),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (storageSegments.isEmpty()) {
+                                    Box(Modifier.fillMaxWidth().height(10.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)))
+                                } else {
+                                    storageSegments.forEach { (bytes, color) ->
+                                        if (bytes > 0L) {
+                                            Box(
+                                                modifier = Modifier.weight(bytes.toFloat()).fillMaxWidth().height(10.dp).background(color)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     if (hasCapacity) "استفاده‌شده: ${storageInfo.formattedUsedGb()}" else "فضای استفاده‌شده: —",
@@ -507,7 +542,6 @@ private fun SolinaHomeScreen(
                         categories.forEach { category ->
                             val filter = category.filter ?: "recent"
                             val isAllFiles = filter == "all"
-                            val count = if (isAllFiles) homeStats.fileCount else homeStats.categories[filter]?.count ?: 0
                             val iconColor = when (filter) {
                                 "all" -> MaterialTheme.colorScheme.primary
                                 "videos" -> Color(0xFF9C27B0)
@@ -529,18 +563,7 @@ private fun SolinaHomeScreen(
                             ) {
                                 Icon(category.icon, contentDescription = category.title, tint = iconColor, modifier = Modifier.size(32.5.dp))
                                 Text(category.title, fontSize = 10.7.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                val categoryBytes = homeStats.categories[filter]?.bytes ?: 0L
-                                val categoryPercent = if (homeStats.totalBytes > 0L)
-                                    ((categoryBytes.toDouble() / homeStats.totalBytes.toDouble()) * 100.0).toInt().coerceIn(0, 100)
-                                else 0
-                                Text(
-                                    if (statsLoading) "در حال به‌روزرسانی…" else if (isAllFiles)
-                                        "${persianDigits(String.format(Locale.ROOT, "%,d", count).replace(',', '٬'))} فایل · ${persianDigits(String.format(Locale.ROOT, "%,d", homeStats.folderCount).replace(',', '٬'))} پوشه"
-                                    else
-                                        "${persianDigits(count.toString())} فایل · ${persianDigits(categoryPercent.toString())}٪ حافظه",
-                                    fontSize = 10.2.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
+
                             }
                         }
                     }
