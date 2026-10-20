@@ -3,9 +3,6 @@ package ir.solina.fm
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Rect
-import android.graphics.RectF
 import android.graphics.pdf.PdfRenderer
 import android.media.MediaMetadataRetriever
 import android.os.ParcelFileDescriptor
@@ -91,7 +88,7 @@ class ThumbnailCache(context: Context) {
         BitmapFactory.decodeFile(file.absolutePath, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
         var sample = 1
-        while (bounds.outWidth / (sample * 2) >= width && bounds.outHeight / (sample * 2) >= height) sample *= 2
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxOf(width, height)) sample *= 2
         return BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply {
             inSampleSize = sample
             inPreferredConfig = Bitmap.Config.RGB_565
@@ -102,13 +99,7 @@ class ThumbnailCache(context: Context) {
         val retriever = MediaMetadataRetriever()
         return try {
             retriever.setDataSource(file.absolutePath)
-            retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)?.let { source ->
-                val ratio = minOf(1f, maxDimension.toFloat() / maxOf(source.width, source.height).coerceAtLeast(1))
-                if (ratio >= 1f) source else Bitmap.createScaledBitmap(
-                    source, (source.width * ratio).toInt().coerceAtLeast(1),
-                    (source.height * ratio).toInt().coerceAtLeast(1), true
-                ).also { if (it !== source) source.recycle() }
-            }
+            retriever.getScaledFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, maxDimension, maxDimension)
         } finally {
             runCatching { retriever.release() }
         }
@@ -123,7 +114,7 @@ class ThumbnailCache(context: Context) {
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
             if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
             var sample = 1
-            while (bounds.outWidth / (sample * 2) >= maxDimension && bounds.outHeight / (sample * 2) >= maxDimension) sample *= 2
+            while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxDimension) sample *= 2
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply {
                 inSampleSize = sample
                 inPreferredConfig = Bitmap.Config.RGB_565
