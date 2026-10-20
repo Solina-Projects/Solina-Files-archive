@@ -309,6 +309,7 @@ private fun SolinaHomeScreen(
     var homeStats by remember { mutableStateOf(HomeStats()) }
     var statsLoading by remember { mutableStateOf(true) }
     var manualRefreshKey by remember { mutableIntStateOf(0) }
+    var lastManualRefreshHandled by remember { mutableIntStateOf(0) }
     var nightMode by remember {
         mutableStateOf((context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES)
     }
@@ -325,7 +326,7 @@ private fun SolinaHomeScreen(
         } else {
             val (cachedStats, lastScanAt) = readCachedHomeStats(context)
             val now = System.currentTimeMillis()
-            val manualRefreshRequested = manualRefreshKey > 0
+            val manualRefreshRequested = manualRefreshKey != lastManualRefreshHandled
             val cacheUsable = lastScanAt > 0L && now >= lastScanAt &&
                 now - lastScanAt < HOME_STATS_CACHE_TTL_MS
             if (cachedStats.totalBytes > 0L || cachedStats.fileCount > 0 || lastScanAt > 0L) {
@@ -336,6 +337,7 @@ private fun SolinaHomeScreen(
                 val freshStats = withContext(Dispatchers.IO) { scanHomeStats(context) }
                 homeStats = freshStats
                 saveCachedHomeStats(context, freshStats, System.currentTimeMillis())
+                lastManualRefreshHandled = manualRefreshKey
                 statsLoading = false
             } else {
                 statsLoading = false
