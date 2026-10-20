@@ -80,6 +80,7 @@ class SinglePaneView @JvmOverloads constructor(
     fun setActive(isActive: Boolean) {
         if (active == isActive) return
         active = isActive
+        installedHeader?.setActive(isActive)
         applyFocusAppearance()
     }
 
