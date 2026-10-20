@@ -645,11 +645,11 @@ class MainActivity : AppCompatActivity() {
         }
         selected.retainAll(allFiles.toSet())
         val query = searchInput.text?.toString()?.trim()?.lowercase(Locale.ROOT).orEmpty()
-        val imageTypes = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif", "tif", "tiff", "svg")
-        val videoTypes = setOf("mp4", "mkv", "mov", "webm", "3gp", "avi", "mpeg", "mpg", "m4v")
-        val audioTypes = setOf("mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi", "wma")
-        val documentTypes = setOf("pdf", "doc", "docx", "txt", "rtf", "odt", "xls", "xlsx", "csv", "ppt", "pptx", "md")
-        val archiveTypes = setOf("zip", "7z", "rar", "tar", "gz", "bz2", "xz")
+        val imageTypes = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif", "tif", "tiff", "svg", "avif", "raw", "dng")
+        val videoTypes = setOf("mp4", "mkv", "mov", "webm", "3gp", "avi", "mpeg", "mpg", "m4v", "wmv", "flv", "ts", "mts")
+        val audioTypes = setOf("mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "mid", "midi", "wma", "amr", "aiff")
+        val documentTypes = setOf("pdf", "doc", "docx", "docm", "txt", "rtf", "odt", "xls", "xlsx", "xlsm", "csv", "tsv", "ppt", "pptx", "pptm", "md", "markdown", "epub", "pages", "numbers", "key", "ods", "odp")
+        val archiveTypes = setOf("zip", "7z", "rar", "tar", "gz", "bz2", "xz", "zst", "tgz", "tbz2", "txz", "iso", "cab", "jar", "war")
         val searchableExtensions = imageTypes + videoTypes + audioTypes + documentTypes + archiveTypes + setOf("apk")
         val files = allFiles.filter { file ->
             val extension = file.extension.lowercase(Locale.ROOT)
