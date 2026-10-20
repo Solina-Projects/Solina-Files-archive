@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -101,7 +102,6 @@ class ComposeHomeActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         resumeVersion++
-        if (::homeViewModel.isInitialized) homeViewModel.refreshStorageStats()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -112,6 +112,7 @@ class ComposeHomeActivity : AppCompatActivity() {
                 SolinaHomeScreen(
                     permissionRefreshKey = resumeVersion,
                     storageViewModel = homeViewModel,
+                    onManualRefresh = { homeViewModel.refreshStorageStats() },
                     onBrowse = { openBrowser() },
                     onRequestPermission = { requestStoragePermission() },
                     onCleanTools = { openCleanTools() },
@@ -152,6 +153,10 @@ class ComposeHomeActivity : AppCompatActivity() {
 }
 
 private data class CategoryStats(val count: Int = 0, val bytes: Long = 0L)
+private const val HOME_STATS_CACHE_PREFS = "solina_home_stats_cache"
+private const val HOME_STATS_CACHE_TIME = "last_scan_at"
+private const val HOME_STATS_CACHE_TTL_MS = 24L * 60L * 60L * 1000L
+
 private data class HomeStats(
     val totalBytes: Long = 0L,
     val freeBytes: Long = 0L,
@@ -170,6 +175,44 @@ private val categoryDocumentExtensionsHome = setOf("pdf", "doc", "docx", "docm",
 internal fun persianDigits(value: String): String = value.map { character ->
     if (character in '0'..'9') ('۰'.code + (character - '0')).toChar() else character
 }.joinToString("")
+
+
+private fun readCachedHomeStats(context: android.content.Context): Pair<HomeStats, Long> {
+    val prefs = context.getSharedPreferences(HOME_STATS_CACHE_PREFS, android.content.Context.MODE_PRIVATE)
+    val timestamp = prefs.getLong(HOME_STATS_CACHE_TIME, 0L)
+    val categories = listOf("recent", "images", "videos", "audio", "documents", "apk").associateWith { key ->
+        CategoryStats(prefs.getInt("count_$key", 0), prefs.getLong("bytes_$key", 0L))
+    }
+    val paths = prefs.getStringSet("recent_paths", emptySet()).orEmpty()
+    val recentFiles = paths.mapNotNull { path -> runCatching { File(path).takeIf { it.isFile } }.getOrNull() }
+        .distinctBy { it.absolutePath }.sortedByDescending { it.lastModified() }.take(5)
+    val stats = HomeStats(
+        totalBytes = prefs.getLong("total_bytes", 0L),
+        freeBytes = prefs.getLong("free_bytes", 0L),
+        fileCount = prefs.getInt("file_count", 0),
+        folderCount = prefs.getInt("folder_count", 0),
+        categories = categories,
+        recentFiles = recentFiles
+    )
+    return stats to timestamp
+}
+
+private fun saveCachedHomeStats(context: android.content.Context, stats: HomeStats, timestamp: Long) {
+    val prefs = context.getSharedPreferences(HOME_STATS_CACHE_PREFS, android.content.Context.MODE_PRIVATE)
+    val edit = prefs.edit()
+        .putLong(HOME_STATS_CACHE_TIME, timestamp)
+        .putLong("total_bytes", stats.totalBytes)
+        .putLong("free_bytes", stats.freeBytes)
+        .putInt("file_count", stats.fileCount)
+        .putInt("folder_count", stats.folderCount)
+        .putStringSet("recent_paths", stats.recentFiles.map { it.absolutePath }.toSet())
+    listOf("recent", "images", "videos", "audio", "documents", "apk").forEach { key ->
+        val category = stats.categories[key] ?: CategoryStats()
+        edit.putInt("count_$key", category.count)
+        edit.putLong("bytes_$key", category.bytes)
+    }
+    edit.apply()
+}
 
 private fun scanHomeStats(context: android.content.Context): HomeStats {
     val manager = context.getSystemService(StorageManager::class.java)
@@ -247,6 +290,7 @@ private data class HomeCategory(
 private fun SolinaHomeScreen(
     permissionRefreshKey: Int,
     storageViewModel: HomeViewModel,
+    onManualRefresh: () -> Unit,
     onBrowse: () -> Unit,
     onRequestPermission: () -> Unit,
     onCleanTools: () -> Unit,
@@ -264,11 +308,11 @@ private fun SolinaHomeScreen(
     var search by remember { mutableStateOf("") }
     var homeStats by remember { mutableStateOf(HomeStats()) }
     var statsLoading by remember { mutableStateOf(true) }
-    var lastStatsScanAt by remember { mutableStateOf(0L) }
+    var manualRefreshKey by remember { mutableIntStateOf(0) }
     var nightMode by remember {
         mutableStateOf((context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES)
     }
-    LaunchedEffect(permissionRefreshKey) {
+    LaunchedEffect(permissionRefreshKey, manualRefreshKey) {
         val access = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()
         } else {
@@ -277,16 +321,23 @@ private fun SolinaHomeScreen(
         }
         if (!access) {
             homeStats = HomeStats()
-            lastStatsScanAt = 0L
             statsLoading = false
         } else {
-            val now = android.os.SystemClock.elapsedRealtime()
-            // Returning from a child screen should not trigger a full-storage scan every time.
-            // Keep the dashboard responsive while allowing periodic refreshes.
-            if (lastStatsScanAt == 0L || now - lastStatsScanAt >= 60_000L) {
+            val (cachedStats, lastScanAt) = readCachedHomeStats(context)
+            val now = System.currentTimeMillis()
+            val manualRefreshRequested = manualRefreshKey > 0
+            val cacheUsable = lastScanAt > 0L && now >= lastScanAt &&
+                now - lastScanAt < HOME_STATS_CACHE_TTL_MS
+            if (cachedStats.totalBytes > 0L || cachedStats.fileCount > 0 || lastScanAt > 0L) {
+                homeStats = cachedStats
+            }
+            if (manualRefreshRequested || !cacheUsable) {
                 statsLoading = true
-                homeStats = withContext(Dispatchers.IO) { scanHomeStats(context) }
-                lastStatsScanAt = android.os.SystemClock.elapsedRealtime()
+                val freshStats = withContext(Dispatchers.IO) { scanHomeStats(context) }
+                homeStats = freshStats
+                saveCachedHomeStats(context, freshStats, System.currentTimeMillis())
+                statsLoading = false
+            } else {
                 statsLoading = false
             }
         }
@@ -334,29 +385,32 @@ private fun SolinaHomeScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 item {
-                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(46.dp)) {
+                    Column {
+                    Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                        .padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(52.dp)) {
                             Box(contentAlignment = Alignment.Center) {
                                 androidx.compose.foundation.Image(
                                     painter = painterResource(id = R.drawable.ic_launcher_fg),
                                     contentDescription = "Solina Files",
-                                    modifier = Modifier.size(36.dp)
+                                    modifier = Modifier.size(41.dp)
                                 )
                             }
                         }
                         Spacer(Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Solina Files", fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                            Text("Solina Files", fontSize = 22.sp, fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(
                                 if (statsLoading) "در حال شمارش فایل‌ها و پوشه‌ها…"
                                 else "${persianDigits(String.format(Locale.ROOT, "%,d", homeStats.fileCount).replace(',', '٬'))} فایل · ${persianDigits(String.format(Locale.ROOT, "%,d", homeStats.folderCount).replace(',', '٬'))} پوشه",
-                                fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis
                             )
                         }
                         Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.size(40.dp).clickable(onClick = onSettings)) {
+                            modifier = Modifier.size(44.dp).clickable(onClick = onSettings)) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(Icons.Default.Settings, contentDescription = "تنظیمات برنامه",
                                     tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(21.dp))
@@ -364,7 +418,7 @@ private fun SolinaHomeScreen(
                         }
                         Spacer(Modifier.width(8.dp))
                         Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.size(40.dp).clickable { toggleHomeTheme() }) {
+                            modifier = Modifier.size(44.dp).clickable { toggleHomeTheme() }) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     if (nightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
@@ -374,6 +428,8 @@ private fun SolinaHomeScreen(
                                 )
                             }
                         }
+                    }
+                    Spacer(Modifier.height(6.dp))
                     }
                 }
                 item {
@@ -399,6 +455,19 @@ private fun SolinaHomeScreen(
                                 Icon(Icons.Default.Storage, contentDescription = null, tint = statusColor, modifier = Modifier.size(22.dp))
                                 Spacer(Modifier.width(8.dp))
                                 Text("وضعیت حافظه", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier.size(36.dp).clickable {
+                                        if (hasAccess) {
+                                            onManualRefresh()
+                                            manualRefreshKey++
+                                        } else onRequestPermission()
+                                    }) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Refresh, contentDescription = "تازه‌سازی آمار حافظه و دسته‌بندی‌ها",
+                                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                    }
+                                }
+                                Spacer(Modifier.width(8.dp))
                                 Text(
                                     if (hasCapacity) "${persianDigits(percent.toString())}٪ پر"
                                     else if (!hasAccess) "نیازمند دسترسی" else "در حال محاسبه",
@@ -447,10 +516,18 @@ private fun SolinaHomeScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Icon(category.icon, contentDescription = category.title, tint = iconColor, modifier = Modifier.size(25.dp))
-                                Text(category.title, fontSize = 10.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(if (statsLoading) "…" else persianDigits(count.toString()),
-                                    fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                Icon(category.icon, contentDescription = category.title, tint = iconColor, modifier = Modifier.size(32.5.dp))
+                                Text(category.title, fontSize = 10.7.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                val categoryBytes = homeStats.categories[filter]?.bytes ?: 0L
+                                val categoryPercent = if (homeStats.totalBytes > 0L)
+                                    ((categoryBytes.toDouble() / homeStats.totalBytes.toDouble()) * 100.0).toInt().coerceIn(0, 100)
+                                else 0
+                                Text(
+                                    if (statsLoading) "در حال به‌روزرسانی…" else
+                                        "${persianDigits(count.toString())} فایل · ${persianDigits(categoryPercent.toString())}٪ حافظه",
+                                    fontSize = 10.7.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
                             }
                         }
                     }
@@ -490,15 +567,9 @@ private fun SolinaHomeScreen(
                     Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         FilterChip(selected = false,
-                            onClick = { onOpenCategory("فایل‌های بزرگ‌تر از ۱۰۰ مگابایت", "large") },
-                            label = { Text("فایل‌های بزرگ +۱۰۰ مگابایت") },
+                            onClick = { onOpenCategory("فایل‌های بزرگ", "large") },
+                            label = { Text("فایل‌های بزرگ") },
                             leadingIcon = { Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(16.dp)) })
-                        FilterChip(selected = false, onClick = { onOpenCategory("فایل‌های اخیر", "recent7") },
-                            label = { Text("فایل‌های اخیر") },
-                            leadingIcon = { Icon(Icons.Default.AccessTime, contentDescription = null, modifier = Modifier.size(16.dp)) })
-                        FilterChip(selected = false, onClick = { onOpenCategory("فایل‌های ستاره‌دار", "starred") },
-                            label = { Text("ستاره‌دارها") },
-                            leadingIcon = { Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(16.dp)) })
                     }
                 }
                 item { Text("ابزارها", fontWeight = FontWeight.Bold, fontSize = 16.sp) }
@@ -538,34 +609,6 @@ private fun SolinaHomeScreen(
                         }
                     }
                 }
-                item {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("همه فایل‌ها", fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                        TextButton(onClick = onBrowse) { Text("مشاهده همه") }
-                    }
-                }
-                if (homeStats.recentFiles.isNotEmpty()) {
-                    items(homeStats.recentFiles.take(3), key = { "recent-home-${it.absolutePath}" }) { file ->
-                        Surface(modifier = Modifier.fillMaxWidth().clickable { onOpenFile(file.absolutePath) },
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)) {
-                            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.FolderOpen, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-                                Spacer(Modifier.width(10.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(file.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium, fontSize = 13.sp)
-                                    Text(android.text.format.Formatter.formatFileSize(context, file.length()),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
-                                }
-                                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(18.dp))
-                            }
-                        }
-                    }
-                } else {
-                    item { Text("هنوز فایلی برای نمایش در فهرست اخیر پیدا نشده است.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                }
-
             }
         }
     }
