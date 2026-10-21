@@ -37,6 +37,27 @@ jobs:
       - name: Grant Execute Permission for Gradlew (if present)
         run: chmod +x gradlew 2>/dev/null || true
 
+      - name: Set up Android SDK and NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: |
+          sdkmanager "ndk;26.3.11579264"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> "$GITHUB_ENV"
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Format and test Rust core
+        run: |
+          cargo fmt --manifest-path rust-core/Cargo.toml
+          cargo test --manifest-path rust-core/Cargo.toml
+
       - name: Build Debug APK
         run: gradle assembleDebug --no-daemon --stacktrace
 

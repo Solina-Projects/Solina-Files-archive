@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.isActive
 import java.io.File
+import ir.solina.fm.nativecore.RustFileEngine
 
 /**
  * مدیر اختصاصی عملیات فایل با پشتیبانی از کاتلین کوروتینز
@@ -63,30 +64,42 @@ object FileOperationsManager {
 
                 val target = getUniqueTarget(destinationDir, src)
 
+                // Prefer Rust for filesystem work; null means native code is unavailable.
+                val nativeResult = if (isMove) {
+                    RustFileEngine.movePath(src.absolutePath, target.absolutePath)
+                } else {
+                    RustFileEngine.copyPath(src.absolutePath, target.absolutePath)
+                }
+                if (nativeResult != null) {
+                    if (nativeResult.success) {
+                        successes++
+                    } else {
+                        failures++
+                        errors.add("${src.name}: ${nativeResult.error ?: if (isMove) "انتقال ناموفق بود" else "کپی ناموفق بود"}")
+                    }
+                    return@forEachIndexed
+                }
+
                 if (isMove) {
                     val moved = src.renameTo(target)
                     if (moved) {
                         successes++
-                    } else {
-                        if (src.copyRecursively(target, overwrite = false)) {
-                            if (src.deleteRecursively()) {
-                                successes++
-                            } else {
-                                failures++
-                                errors.add("${src.name}: فایل کپی شد اما حذف نسخهٔ مبدأ کامل نشد")
-                            }
+                    } else if (src.copyRecursively(target, overwrite = false)) {
+                        if (src.deleteRecursively()) {
+                            successes++
                         } else {
                             failures++
-                            errors.add("${src.name}: انتقال ناموفق بود")
+                            errors.add("${src.name}: فایل کپی شد اما حذف نسخهٔ مبدأ کامل نشد")
                         }
-                    }
-                } else {
-                    if (src.copyRecursively(target, overwrite = false)) {
-                        successes++
                     } else {
                         failures++
-                        errors.add("${src.name}: کپی ناموفق بود")
+                        errors.add("${src.name}: انتقال ناموفق بود")
                     }
+                } else if (src.copyRecursively(target, overwrite = false)) {
+                    successes++
+                } else {
+                    failures++
+                    errors.add("${src.name}: کپی ناموفق بود")
                 }
             } catch (e: Exception) {
                 failures++
@@ -104,6 +117,14 @@ object FileOperationsManager {
 
         files.forEach { file ->
             try {
+                val nativeResult = RustFileEngine.deletePath(file.absolutePath)
+                if (nativeResult != null) {
+                    if (nativeResult.success) successes++ else {
+                        failures++
+                        errors.add("${file.name}: ${nativeResult.error ?: "حذف ممکن نشد"}")
+                    }
+                    return@forEach
+                }
                 val ok = if (file.isDirectory) file.deleteRecursively() else file.delete()
                 if (ok) successes++ else {
                     failures++

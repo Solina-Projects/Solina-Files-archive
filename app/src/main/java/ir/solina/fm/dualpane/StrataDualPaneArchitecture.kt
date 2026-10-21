@@ -47,6 +47,7 @@ import android.content.res.Configuration
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.solina.fm.FileOperationsManager
+import ir.solina.fm.nativecore.RustFileEngine
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -130,9 +131,22 @@ class ExplorerViewModel : ViewModel() {
                     require(directory.isDirectory && directory.canRead()) {
                         "پوشه قابل خواندن نیست: $path"
                     }
-                    directory.listFiles().orEmpty()
-                        .sortedWith(compareBy<File> { !it.isDirectory }.thenBy { it.name.lowercase() })
-                        .map { ExplorerFileItem(it.absolutePath, it.name, it.isDirectory, it.length(), it.lastModified()) }
+                    val nativeListing = RustFileEngine.listDirectory(path)
+                    if (nativeListing != null) {
+                        nativeListing.map { entry ->
+                            ExplorerFileItem(
+                                path = entry.path,
+                                name = entry.name,
+                                isDirectory = entry.isDirectory,
+                                sizeBytes = entry.sizeBytes,
+                                modifiedAt = entry.modifiedAt
+                            )
+                        }
+                    } else {
+                        directory.listFiles().orEmpty()
+                            .sortedWith(compareBy<File> { !it.isDirectory }.thenBy { it.name.lowercase() })
+                            .map { ExplorerFileItem(it.absolutePath, it.name, it.isDirectory, it.length(), it.lastModified()) }
+                    }
                 }
             }
             _state.update { current ->

@@ -67,7 +67,7 @@ android {
 
 dependencies {
     // Jetpack Compose UI
-    implementation(platform("androidx.compose:compose-bom:2024.09.03"))
+    implementation(platform("androidx.compose:compose-bom:2025.04.01"))
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -109,4 +109,28 @@ dependencies {
 
     // System Tools & Root / Shizuku
     implementation("dev.rikka.shizuku:api:13.1.5")
+}
+
+
+// Build the Rust filesystem core for Android ABIs before packaging the APK.
+// Local builds require Rust, cargo-ndk and ANDROID_NDK_HOME.
+val buildRustCore by tasks.registering(Exec::class) {
+    val outputDir = layout.projectDirectory.dir("src/main/jniLibs").asFile
+    inputs.file(rootProject.file("rust-core/Cargo.toml"))
+    inputs.dir(rootProject.file("rust-core/src"))
+    outputs.dir(outputDir)
+    workingDir(rootProject.file("rust-core"))
+    commandLine(
+        "cargo", "ndk",
+        "-P", "30",
+        "-t", "arm64-v8a",
+        "-t", "armeabi-v7a",
+        "-t", "x86_64",
+        "-o", outputDir.absolutePath,
+        "build", "--release"
+    )
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(buildRustCore)
 }
