@@ -23,8 +23,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -83,7 +85,8 @@ data class ExplorerState(
     val activePane: Pane = Pane.LEFT,
     val dualPaneMode: DualPaneMode = DualPaneMode.LANDSCAPE_ONLY,
     val leftPane: PaneState = PaneState(),
-    val rightPane: PaneState = PaneState()
+    val rightPane: PaneState = PaneState(),
+    val showSelectionMenu: Boolean = false
 ) {
     fun getPaneState(pane: Pane): PaneState =
         if (pane == Pane.LEFT) leftPane else rightPane
@@ -118,6 +121,43 @@ class ExplorerViewModel : ViewModel() {
 
     fun setDualPaneMode(mode: DualPaneMode) {
         _state.update { it.copy(dualPaneMode = mode) }
+    }
+
+    fun setSelectionMenuVisible(visible: Boolean) {
+        _state.update { it.copy(showSelectionMenu = visible) }
+    }
+
+    fun deleteSelected(onFinished: (FileOperationsManager.OperationResult) -> Unit = {}) {
+        val snapshot = _state.value
+        val pane = snapshot.activePane
+        val selected = snapshot.getPaneState(pane).selectedItems.toList()
+        if (selected.isEmpty()) {
+            _state.update { it.updatePane(pane) { p -> p.copy(errorMessage = "ابتدا فایل یا پوشه‌ای انتخاب کنید") } }
+            return
+        }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                var successes = 0
+                var failures = 0
+                val errors = mutableListOf<String>()
+                selected.forEach { path ->
+                    val file = File(path)
+                    val native = RustFileEngine.deletePath(path)
+                    val ok = if (native != null) native.success else runCatching { file.deleteRecursively() }.getOrDefault(false)
+                    if (ok) successes++ else {
+                        failures++
+                        errors += "${file.name}: حذف انجام نشد"
+                    }
+                }
+                FileOperationsManager.OperationResult(successes, failures, errors)
+            }
+            _state.update { current ->
+                current.updatePane(pane) { p -> p.copy(selectedItems = emptySet(), errorMessage = result.errors.firstOrNull()) }
+                    .copy(showSelectionMenu = false)
+            }
+            refresh(pane)
+            onFinished(result)
+        }
     }
 
     fun refresh(pane: Pane) {
@@ -392,11 +432,12 @@ fun ExplorerScreen(
                                         onLongClick = {
                                             viewModel.setActivePane(pane)
                                             viewModel.toggleSelection(pane, item)
+                                            viewModel.setSelectionMenuVisible(true)
                                         }
                                     )
                                 ) {
                                     Text(
-                                        text = (if (selected) "✓ " else "") + (if (item.isDirectory) "📁 " else "📄 ") + item.name,
+                                        text = (if (item.isDirectory) "📁 " else "📄 ") + item.name,
                                         modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp)
                                     )
                                 }
@@ -410,8 +451,7 @@ fun ExplorerScreen(
             modifier = Modifier.fillMaxWidth().padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Button(onClick = { viewModel.copyToOtherPane(move = false) }) { Text("کپی به پنل دیگر") }
-            Button(onClick = { viewModel.copyToOtherPane(move = true) }) { Text("انتقال") }
+            Button(onClick = { viewModel.setSelectionMenuVisible(true) }) { Text("منوی عملیات") }
             Button(onClick = { viewModel.swapPanes() }) { Text("جابه‌جایی پنل‌ها") }
         }
         Row(
@@ -422,6 +462,39 @@ fun ExplorerScreen(
             Button(onClick = { viewModel.setDualPaneMode(DualPaneMode.ALWAYS); onDualPaneModeChanged(DualPaneMode.ALWAYS) }) { Text(if (state.dualPaneMode == DualPaneMode.ALWAYS) "✓ همیشه" else "همیشه") }
             Button(onClick = { viewModel.setDualPaneMode(DualPaneMode.NEVER); onDualPaneModeChanged(DualPaneMode.NEVER) }) { Text(if (state.dualPaneMode == DualPaneMode.NEVER) "✓ هرگز" else "هرگز") }
             Button(onClick = { viewModel.setDualPaneMode(DualPaneMode.LANDSCAPE_ONLY); onDualPaneModeChanged(DualPaneMode.LANDSCAPE_ONLY) }) { Text(if (state.dualPaneMode == DualPaneMode.LANDSCAPE_ONLY) "✓ افقی" else "فقط افقی") }
+        }
+
+        if (state.showSelectionMenu) {
+            val selectedCount = state.getPaneState(state.activePane).selectedItems.size
+            AlertDialog(
+                onDismissRequest = { viewModel.setSelectionMenuVisible(false) },
+                title = { Text("عملیات روی فایل‌ها") },
+                text = { Text(if (selectedCount == 0) "فایلی انتخاب نشده است." else "$selectedCount مورد انتخاب شده") },
+                confirmButton = {
+                    TextButton(
+                        enabled = selectedCount > 0,
+                        onClick = {
+                            viewModel.setSelectionMenuVisible(false)
+                            viewModel.copyToOtherPane(move = false)
+                        }
+                    ) { Text("کپی به پنل دیگر") }
+                },
+                dismissButton = {
+                    Row {
+                        TextButton(
+                            enabled = selectedCount > 0,
+                            onClick = {
+                                viewModel.setSelectionMenuVisible(false)
+                                viewModel.copyToOtherPane(move = true)
+                            }
+                        ) { Text("انتقال") }
+                        TextButton(
+                            enabled = selectedCount > 0,
+                            onClick = { viewModel.setSelectionMenuVisible(false); viewModel.deleteSelected() }
+                        ) { Text("حذف") }
+                    }
+                }
+            )
         }
     }
 }
