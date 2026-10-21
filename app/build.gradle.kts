@@ -107,6 +107,8 @@ dependencies {
     implementation("commons-net:commons-net:3.11.1")
     implementation("com.github.mwiede:jsch:0.2.23")
     implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
+    // Android SLF4J binding required by jcifs-ng; avoids missing StaticLoggerBinder in R8.
+    implementation("org.slf4j:slf4j-android:1.7.36")
     // WebDAV uses Android HttpURLConnection/XMLPullParser; avoid JVM-only JAXB/Sardine runtime.
 
     // System Tools & Root / Shizuku
