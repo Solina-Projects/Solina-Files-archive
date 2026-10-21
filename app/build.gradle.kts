@@ -89,6 +89,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
 
+    // JVM unit tests for file-operation helpers.
+    testImplementation("junit:junit:4.13.2")
+
     // Security & Biometric
     implementation("androidx.biometric:biometric:1.1.0")
 
