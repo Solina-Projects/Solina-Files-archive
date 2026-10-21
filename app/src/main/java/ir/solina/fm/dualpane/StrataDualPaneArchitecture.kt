@@ -147,6 +147,92 @@ private object SafDocumentAccess {
         }.getOrElse { it.localizedMessage ?: "انتقال فایل انجام نشد" }
     }
 
+    /** Extracts a ZIP beside the archive for both local paths and SAF-backed SD/USB storage. */
+    fun extract(context: Context, archivePath: String): String? = runCatching {
+        val archiveDoc = if (isSafPath(archivePath)) resolve(context, archivePath) else null
+        val archiveFile = if (isSafPath(archivePath)) null else File(archivePath)
+        require(archiveDoc?.isFile == true || archiveFile?.isFile == true) { "فایل ZIP پیدا نشد" }
+        val archiveName = archiveDoc?.name ?: archiveFile!!.name
+        require(archiveName.endsWith(".zip", ignoreCase = true)) { "فقط فایل ZIP قابل استخراج است" }
+        val folderName = archiveName.dropLast(4).ifBlank { "فایل‌های استخراج‌شده" }
+        val destinationPath = if (archiveDoc != null) {
+            val parentPath = parentPath(archivePath) ?: error("پوشه والد آرشیو پیدا نشد")
+            val parent = resolve(context, parentPath) ?: error("پوشه والد آرشیو پیدا نشد")
+            require(parent.findFile(folderName) == null) { "پوشه مقصد از قبل وجود دارد: $folderName" }
+            val folder = parent.createDirectory(folderName) ?: error("ساخت پوشه مقصد ناموفق بود")
+            childPath(parentPath, folder.name ?: folderName)
+        } else {
+            val destination = File(archiveFile!!.parentFile ?: error("پوشه والد آرشیو پیدا نشد"), folderName)
+            require(!destination.exists()) { "پوشه مقصد از قبل وجود دارد: $folderName" }
+            require(destination.mkdir()) { "ساخت پوشه مقصد ناموفق بود" }
+            destination.absolutePath
+        }
+        try {
+            val input = if (archiveDoc != null) context.contentResolver.openInputStream(archiveDoc.uri)
+                else FileInputStream(archiveFile!!)
+            requireNotNull(input) { "خواندن فایل ZIP ممکن نشد" }.use { raw ->
+                java.util.zip.ZipInputStream(raw.buffered()).use { zip ->
+                    var entryCount = 0
+                    var entry = zip.nextEntry
+                    while (entry != null) {
+                        val normalized = entry.name.replace('\\', '/')
+                        require(!normalized.startsWith("/") && !Regex("^[A-Za-z]:").containsMatchIn(normalized)) {
+                            "مسیر ناامن در ZIP شناسایی شد"
+                        }
+                        val segments = normalized.split('/').filter { it.isNotEmpty() }
+                        require(segments.isNotEmpty() && segments.none { it == "." || it == ".." || it.contains(':') }) {
+                            "نام مسیر نامعتبر در ZIP شناسایی شد"
+                        }
+                        if (archiveDoc != null) {
+                            var parent = resolve(context, destinationPath) ?: error("پوشه مقصد در دسترس نیست")
+                            segments.forEachIndexed { index, segment ->
+                                val isLast = index == segments.lastIndex
+                                val directory = !isLast || entry.isDirectory
+                                val existing = parent.findFile(segment)
+                                parent = if (directory) {
+                                    existing?.takeIf { it.isDirectory }
+                                        ?: run {
+                                            require(existing == null) { "تداخل نام هنگام استخراج: $segment" }
+                                            parent.createDirectory(segment) ?: error("ساخت پوشه ناموفق بود: $segment")
+                                        }
+                                } else {
+                                    require(existing == null) { "فایل مقصد از قبل وجود دارد: $segment" }
+                                    val target = parent.createFile("application/octet-stream", segment)
+                                        ?: error("ساخت فایل ناموفق بود: $segment")
+                                    context.contentResolver.openOutputStream(target.uri, "w")?.use { out ->
+                                        zip.copyTo(out)
+                                    } ?: error("نوشتن فایل ناموفق بود: $segment")
+                                    target
+                                }
+                            }
+                        } else {
+                            val root = File(destinationPath).canonicalFile
+                            val target = File(root, segments.joinToString(File.separator)).canonicalFile
+                            require(target.toPath().startsWith(root.toPath())) { "مسیر ناامن در ZIP شناسایی شد" }
+                            if (entry.isDirectory) {
+                                require(!target.exists() || target.isDirectory) { "تداخل نام هنگام استخراج: " + entry.name }
+                                require(target.mkdirs() || target.isDirectory) { "ساخت پوشه ناموفق بود: " + entry.name }
+                            } else {
+                                require(!target.exists()) { "فایل مقصد از قبل وجود دارد: " + entry.name }
+                                require(target.parentFile?.mkdirs() != false) { "ساخت پوشه والد ناموفق بود" }
+                                FileOutputStream(target).use { out -> zip.copyTo(out) }
+                            }
+                        }
+                        entryCount++
+                        zip.closeEntry()
+                        entry = zip.nextEntry
+                    }
+                    require(entryCount > 0) { "فایل ZIP خالی یا نامعتبر است" }
+                }
+            }
+        } catch (error: Throwable) {
+            if (isSafPath(destinationPath)) resolve(context, destinationPath)?.delete()
+            else File(destinationPath).deleteRecursively()
+            throw error
+        }
+        null
+    }.getOrElse { it.localizedMessage ?: "استخراج ZIP انجام نشد" }
+
     /** Creates a ZIP beside the source, supporting both filesystem paths and SAF documents. */
     fun compress(context: Context, sourcePath: String): String? = runCatching {
         val sourceDoc = if (isSafPath(sourcePath)) resolve(context, sourcePath) else null
@@ -407,6 +493,27 @@ class ExplorerViewModel(application: Application) : AndroidViewModel(application
                 refresh(pane)
             }
             onFinished(error)
+        }
+    }
+
+    fun extractSelected(onFinished: (String?) -> Unit = {}) {
+        val snapshot = _state.value
+        val pane = snapshot.activePane
+        val selected = snapshot.getPaneState(pane).selectedItems.toList()
+        if (selected.isEmpty()) {
+            onFinished("ابتدا یک فایل ZIP انتخاب کنید")
+            return
+        }
+        viewModelScope.launch {
+            val errors = withContext(Dispatchers.IO) {
+                selected.mapNotNull { path ->
+                    SafDocumentAccess.extract(getApplication(), path)?.let { error ->
+                        (if (SafDocumentAccess.isSafPath(path)) SafDocumentAccess.resolve(getApplication(), path)?.name else File(path).name) + ": " + error
+                    }
+                }
+            }
+            refresh(pane)
+            onFinished(errors.takeIf { it.isNotEmpty() }?.joinToString("\n"))
         }
     }
 
@@ -927,6 +1034,10 @@ fun ExplorerScreen(
                             viewModel.setSelectionMenuVisible(false)
                             viewModel.compressSelected { error -> operationMessage = error ?: "فشرده‌سازی با موفقیت انجام شد" }
                         }) { Text("فشرده‌سازی ZIP") }
+                        TextButton(enabled = selectedCount > 0, onClick = {
+                            viewModel.setSelectionMenuVisible(false)
+                            viewModel.extractSelected { error -> operationMessage = error ?: "استخراج ZIP با موفقیت انجام شد" }
+                        }) { Text("استخراج ZIP") }
                         TextButton(enabled = selectedCount == 1, onClick = { propertiesTarget = selectedPaths.firstOrNull(); viewModel.setSelectionMenuVisible(false) }) { Text("مشخصات") }
                         TextButton(enabled = selectedCount == 1, onClick = {
                             selectedPaths.firstOrNull()?.let { path ->
