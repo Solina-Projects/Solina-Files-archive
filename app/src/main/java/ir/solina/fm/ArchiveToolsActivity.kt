@@ -190,8 +190,35 @@ class ArchiveToolsActivity : AppCompatActivity() {
                 }
             }
             file.extension.equals("rar", true) -> Junrar.extract(file, target)
-            file.extension.equals("zip", true) -> ZipFile(file).extractAll(target.absolutePath)
+            file.extension.equals("zip", true) -> extractZipSafely(target)
             else -> throw IllegalArgumentException("قالب پشتیبانی نمی‌شود")
+        }
+    }
+
+
+    /**
+     * Extract ZIP entries individually and validate every resolved path before writing.
+     * This avoids delegating path selection to a bulk extractor without our containment check.
+     */
+    private fun extractZipSafely(target: File) {
+        ZipFile(file).use { archive ->
+            archive.fileHeaders.forEach { entry ->
+                val out = safeTarget(target, entry.fileName)
+                if (entry.isDirectory) {
+                    if (!out.exists() && !out.mkdirs()) {
+                        throw IllegalStateException("ساخت پوشه ممکن نشد: ${entry.fileName}")
+                    }
+                } else {
+                    out.parentFile?.let { parent ->
+                        if (!parent.exists() && !parent.mkdirs()) {
+                            throw IllegalStateException("ساخت پوشه مقصد ممکن نشد: ${parent.name}")
+                        }
+                    }
+                    archive.getInputStream(entry).use { input ->
+                        FileOutputStream(out).use { output -> input.copyTo(output) }
+                    }
+                }
+            }
         }
     }
 
