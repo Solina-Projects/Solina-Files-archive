@@ -112,7 +112,7 @@ class ComposeHomeActivity : AppCompatActivity() {
                             .putExtra("category_title", title)
                             .putExtra("category_filter", category))
                     },
-                    onDualPane = { startActivity(Intent(this, DualPaneActivity::class.java)) },
+                    onDualPane = { startActivity(Intent(this, StrataDualPaneActivity::class.java)) },
                     onVault = { startActivity(Intent(this, VaultActivity::class.java)) },
                     onShare = { startActivity(Intent(this, WifiTransferActivity::class.java)) },
                     onSettings = { startActivity(Intent(this, AdvancedSettingsActivity::class.java)) }
