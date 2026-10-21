@@ -1,6 +1,8 @@
 package ir.solina.fm.dualpane
 
 import android.os.Environment
+import android.content.ClipData
+import android.view.DragEvent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -33,6 +35,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.DragAndDropTransferData
+import androidx.compose.ui.draganddrop.dragAndDropSource
+import androidx.compose.ui.draganddrop.dragAndDropTarget
+import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import android.content.res.Configuration
@@ -202,6 +210,41 @@ class ExplorerViewModel : ViewModel() {
         }
     }
 
+    fun dropItemOnPane(path: String, destinationPane: Pane, move: Boolean = false) {
+        val snapshot = _state.value
+        val source = File(path)
+        val destinationState = snapshot.getPaneState(destinationPane)
+        val destination = File(destinationState.currentPath)
+        if (!source.exists() || destinationState.isLoading || !destination.isDirectory || !destination.canWrite()) {
+            _state.update { it.updatePane(destinationPane) { p -> p.copy(errorMessage = "مبدأ یا مقصد عملیات در دسترس نیست") } }
+            return
+        }
+        if (source.canonicalPath == destination.canonicalPath ||
+            (source.isDirectory && destination.canonicalPath.startsWith(source.canonicalPath + File.separator))) {
+            _state.update { it.updatePane(destinationPane) { p -> p.copy(errorMessage = "این پوشه مقصد مجاز برای خودش نیست") } }
+            return
+        }
+        val sourcePane = Pane.entries.firstOrNull { pane ->
+            snapshot.getPaneState(pane).items.any { it.path == path }
+        }
+        viewModelScope.launch {
+            val result = FileOperationsManager.executeTransfer(
+                sources = listOf(source),
+                destinationDir = destination,
+                isMove = move,
+                onProgress = {}
+            )
+            _state.update { current ->
+                current.updatePane(destinationPane) { p ->
+                    p.copy(errorMessage = result.errors.firstOrNull())
+                }
+            }
+            if (result.failureCount == 0 && sourcePane != null) clearSelection(sourcePane)
+            refresh(destinationPane)
+            if (move && result.failureCount == 0 && sourcePane != null) refresh(sourcePane)
+        }
+    }
+
     fun copyToOtherPane(move: Boolean, onFinished: (FileOperationsManager.OperationResult) -> Unit = {}) {
         val snapshot = _state.value
         val sourcePane = snapshot.activePane
@@ -212,9 +255,15 @@ class ExplorerViewModel : ViewModel() {
             .filter { it.path in sourceState.selectedItems }
             .map { File(it.path) }
             .toList()
-        if (selectedPaths.isEmpty() || sourceState.isLoading || destinationState.isLoading) return
+        if (selectedPaths.isEmpty() || sourceState.isLoading || destinationState.isLoading) {
+            _state.update { it.updatePane(sourcePane) { p -> p.copy(errorMessage = "ابتدا فایل یا پوشه‌ای انتخاب کنید و صبر کنید بارگذاری تمام شود") } }
+            return
+        }
         val destination = File(destinationState.currentPath)
-        if (!destination.isDirectory || !destination.canWrite()) return
+        if (!destination.isDirectory || !destination.canWrite()) {
+            _state.update { it.updatePane(destinationPane) { p -> p.copy(errorMessage = "پوشه مقصد قابل نوشتن نیست") } }
+            return
+        }
         viewModelScope.launch {
             val result = FileOperationsManager.executeTransfer(
                 sources = selectedPaths,
@@ -232,7 +281,11 @@ class ExplorerViewModel : ViewModel() {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ExplorerScreen(viewModel: ExplorerViewModel, modifier: Modifier = Modifier) {
+fun ExplorerScreen(
+    viewModel: ExplorerViewModel,
+    modifier: Modifier = Modifier,
+    onDualPaneModeChanged: (DualPaneMode) -> Unit = {}
+) {
     val state by viewModel.state.collectAsState()
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -261,8 +314,26 @@ fun ExplorerScreen(viewModel: ExplorerViewModel, modifier: Modifier = Modifier) 
                 DisposableEffect(scrollKey, listState) {
                     onDispose { savedScroll[scrollKey] = listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
                 }
+                val paneDropTarget = remember(pane) {
+                    object : DragAndDropTarget {
+                        override fun onDrop(event: DragAndDropEvent): Boolean {
+                            val clip = event.toAndroidDragEvent().clipData ?: return false
+                            val path = clip.getItemAt(0).text?.toString() ?: return false
+                            viewModel.setActivePane(pane)
+                            viewModel.dropItemOnPane(path, pane, move = false)
+                            return true
+                        }
+                    }
+                }
                 Column(
                     modifier = Modifier
+                        .dragAndDropTarget(
+                            shouldStartDragAndDrop = { event ->
+                                event.toAndroidDragEvent().action == DragEvent.ACTION_DRAG_STARTED &&
+                                    event.toAndroidDragEvent().clipDescription?.hasMimeType("text/plain") == true
+                            },
+                            target = paneDropTarget
+                        )
                         .weight(1f)
                         .fillMaxSize()
                         .background(if (state.activePane == pane) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface)
@@ -293,7 +364,13 @@ fun ExplorerScreen(viewModel: ExplorerViewModel, modifier: Modifier = Modifier) 
                                 val selected = item.path in paneState.selectedItems
                                 Surface(
                                     color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
-                                    modifier = Modifier.fillMaxWidth().combinedClickable(
+                                    modifier = Modifier.fillMaxWidth()
+                                        .dragAndDropSource {
+                                            DragAndDropTransferData(
+                                                clipData = ClipData.newPlainText("Solina file path", item.path)
+                                            )
+                                        }
+                                        .combinedClickable(
                                         onClick = {
                                             viewModel.setActivePane(pane)
                                             if (paneState.selectedItems.isNotEmpty()) viewModel.toggleSelection(pane, item)
@@ -329,9 +406,9 @@ fun ExplorerScreen(viewModel: ExplorerViewModel, modifier: Modifier = Modifier) 
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text("نمایش پنل‌ها:", modifier = Modifier.padding(top = 10.dp))
-            Button(onClick = { viewModel.setDualPaneMode(DualPaneMode.ALWAYS) }) { Text(if (state.dualPaneMode == DualPaneMode.ALWAYS) "✓ همیشه" else "همیشه") }
-            Button(onClick = { viewModel.setDualPaneMode(DualPaneMode.NEVER) }) { Text(if (state.dualPaneMode == DualPaneMode.NEVER) "✓ هرگز" else "هرگز") }
-            Button(onClick = { viewModel.setDualPaneMode(DualPaneMode.LANDSCAPE_ONLY) }) { Text(if (state.dualPaneMode == DualPaneMode.LANDSCAPE_ONLY) "✓ افقی" else "فقط افقی") }
+            Button(onClick = { viewModel.setDualPaneMode(DualPaneMode.ALWAYS); onDualPaneModeChanged(DualPaneMode.ALWAYS) }) { Text(if (state.dualPaneMode == DualPaneMode.ALWAYS) "✓ همیشه" else "همیشه") }
+            Button(onClick = { viewModel.setDualPaneMode(DualPaneMode.NEVER); onDualPaneModeChanged(DualPaneMode.NEVER) }) { Text(if (state.dualPaneMode == DualPaneMode.NEVER) "✓ هرگز" else "هرگز") }
+            Button(onClick = { viewModel.setDualPaneMode(DualPaneMode.LANDSCAPE_ONLY); onDualPaneModeChanged(DualPaneMode.LANDSCAPE_ONLY) }) { Text(if (state.dualPaneMode == DualPaneMode.LANDSCAPE_ONLY) "✓ افقی" else "فقط افقی") }
         }
     }
 }
