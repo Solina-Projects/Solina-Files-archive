@@ -843,7 +843,7 @@ fun ExplorerScreen(
                                     },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text(File(path).name.ifBlank { path }, maxLines = 1)
+                                    Text((if (SafDocumentAccess.isSafPath(path)) SafDocumentAccess.resolve(context, path)?.name else File(path).name).orEmpty().ifBlank { path }, maxLines = 1)
                                 }
                             }
                         }
@@ -879,7 +879,7 @@ fun ExplorerScreen(
                         TextButton(enabled = selectedCount > 0, onClick = { viewModel.setSelectionMenuVisible(false); viewModel.deleteSelected { result -> operationMessage = if (result.failureCount == 0) "حذف ${result.successCount} مورد انجام شد" else result.errors.joinToString("\n") } }) { Text("حذف") }
                         TextButton(enabled = selectedCount == 1, onClick = {
                             renameTarget = selectedPaths.firstOrNull()
-                            renameText = selectedPaths.firstOrNull()?.let { File(it).name }.orEmpty()
+                            renameText = selectedPaths.firstOrNull()?.let { path -> if (SafDocumentAccess.isSafPath(path)) SafDocumentAccess.resolve(context, path)?.name.orEmpty() else File(path).name }.orEmpty()
                             viewModel.setSelectionMenuVisible(false)
                         }) { Text("تغییر نام") }
                         TextButton(enabled = selectedCount > 0, onClick = {
@@ -895,19 +895,27 @@ fun ExplorerScreen(
                             viewModel.setSelectionMenuVisible(false)
                         }) { Text(if (selectedPaths.any { it in state.bookmarkedPaths }) "حذف از نشانک‌ها" else "افزودن نشانک") }
                         TextButton(enabled = selectedCount == 1, onClick = {
-                            val file = selectedPaths.firstOrNull()?.let(::File)
-                            if (file != null && file.exists()) runCatching {
-                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                                val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase()) ?: "*/*"
+                            val path = selectedPaths.firstOrNull()
+                            if (path != null) runCatching {
+                                val saf = SafDocumentAccess.isSafPath(path)
+                                val file = if (saf) null else File(path)
+                                val document = if (saf) SafDocumentAccess.resolve(context, path) else null
+                                require(document?.exists() == true || file?.exists() == true) { "فایل پیدا نشد" }
+                                val uri = document?.uri ?: FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file!!)
+                                val mime = document?.type ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(file?.extension?.lowercase().orEmpty()) ?: "*/*"
                                 context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "اشتراک‌گذاری فایل"))
                             }.onFailure { operationMessage = it.localizedMessage ?: "اشتراک‌گذاری ممکن نشد" }
                             viewModel.setSelectionMenuVisible(false)
                         }) { Text("اشتراک‌گذاری") }
                         TextButton(enabled = selectedCount == 1, onClick = {
-                            val file = selectedPaths.firstOrNull()?.let(::File)
-                            if (file != null && file.exists()) runCatching {
-                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                                val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase()) ?: "*/*"
+                            val path = selectedPaths.firstOrNull()
+                            if (path != null) runCatching {
+                                val saf = SafDocumentAccess.isSafPath(path)
+                                val file = if (saf) null else File(path)
+                                val document = if (saf) SafDocumentAccess.resolve(context, path) else null
+                                require(document?.exists() == true || file?.exists() == true) { "فایل پیدا نشد" }
+                                val uri = document?.uri ?: FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file!!)
+                                val mime = document?.type ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(file?.extension?.lowercase().orEmpty()) ?: "*/*"
                                 context.startActivity(Intent.createChooser(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "باز کردن با"))
                             }.onFailure { operationMessage = it.localizedMessage ?: "برنامه‌ای برای باز کردن فایل پیدا نشد" }
                             viewModel.setSelectionMenuVisible(false)
@@ -930,17 +938,23 @@ fun ExplorerScreen(
         }
 
         propertiesTarget?.let { path ->
-            val file = File(path)
+            val saf = SafDocumentAccess.isSafPath(path)
+            val document = if (saf) SafDocumentAccess.resolve(context, path) else null
+            val file = if (saf) null else File(path)
+            val name = document?.name ?: file?.name ?: path
+            val isDirectory = document?.isDirectory ?: (file?.isDirectory == true)
+            val size = document?.length() ?: file?.length() ?: 0L
+            val modified = document?.lastModified() ?: file?.lastModified() ?: 0L
             AlertDialog(
                 onDismissRequest = { propertiesTarget = null },
                 title = { Text("مشخصات فایل") },
                 text = {
                     Column {
-                        Text("نام: ${file.name}")
-                        Text("مسیر: ${file.absolutePath}")
-                        Text("نوع: ${if (file.isDirectory) "پوشه" else "فایل"}")
-                        Text("اندازه: ${if (file.isDirectory) "محاسبه نشده" else android.text.format.Formatter.formatShortFileSize(context, file.length())}")
-                        Text("آخرین تغییر: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(file.lastModified()))}")
+                        Text("نام: $name")
+                        Text("مسیر: ${if (saf) path.removePrefix("saf|") else file?.absolutePath ?: path}")
+                        Text("نوع: ${if (isDirectory) "پوشه" else "فایل"}")
+                        Text("اندازه: ${if (isDirectory) "محاسبه نشده" else android.text.format.Formatter.formatShortFileSize(context, size)}")
+                        Text("آخرین تغییر: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(modified))}")
                     }
                 },
                 confirmButton = { TextButton(onClick = { propertiesTarget = null }) { Text("بستن") } }
