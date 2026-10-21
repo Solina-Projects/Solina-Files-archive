@@ -60,6 +60,9 @@ jobs:
       - name: Build Debug APK
         run: gradle assembleDebug --no-daemon --stacktrace
 
+      - name: Run Kotlin unit tests
+        run: gradle testDebugUnitTest --no-daemon --stacktrace
+
       # Exercise the optimized release variant so R8/ProGuard rules are tested in CI.
       # bundleRelease creates an unsigned AAB; signing and publishing remain manual.
       - name: Build optimized Release App Bundle
