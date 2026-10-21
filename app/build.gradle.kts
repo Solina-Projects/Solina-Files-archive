@@ -91,6 +91,7 @@ dependencies {
 
     // JVM unit tests for file-operation helpers.
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 
     // Security & Biometric
     implementation("androidx.biometric:biometric:1.1.0")
