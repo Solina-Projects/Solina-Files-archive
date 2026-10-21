@@ -43,6 +43,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".StrataDualPaneActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".ComposeHomeActivity"
             android:exported="true">
             <intent-filter>
