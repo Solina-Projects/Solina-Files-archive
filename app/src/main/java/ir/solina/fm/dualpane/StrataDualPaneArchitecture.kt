@@ -2,7 +2,11 @@ package ir.solina.fm.dualpane
 
 import android.os.Environment
 import android.content.ClipData
+import android.content.Intent
+import android.net.Uri
 import android.view.DragEvent
+import androidx.core.content.FileProvider
+import android.webkit.MimeTypeMap
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -24,6 +28,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TextButton
@@ -33,6 +38,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -57,6 +65,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.BufferedOutputStream
 
 /** Independent identity for the two explorer panes. */
 enum class Pane { LEFT, RIGHT }
@@ -86,7 +99,8 @@ data class ExplorerState(
     val dualPaneMode: DualPaneMode = DualPaneMode.LANDSCAPE_ONLY,
     val leftPane: PaneState = PaneState(),
     val rightPane: PaneState = PaneState(),
-    val showSelectionMenu: Boolean = false
+    val showSelectionMenu: Boolean = false,
+    val bookmarkedPaths: Set<String> = emptySet()
 ) {
     fun getPaneState(pane: Pane): PaneState =
         if (pane == Pane.LEFT) leftPane else rightPane
@@ -125,6 +139,81 @@ class ExplorerViewModel : ViewModel() {
 
     fun setSelectionMenuVisible(visible: Boolean) {
         _state.update { it.copy(showSelectionMenu = visible) }
+    }
+
+    fun toggleBookmark(path: String) {
+        _state.update { current ->
+            val next = current.bookmarkedPaths.toMutableSet()
+            if (!next.add(path)) next.remove(path)
+            current.copy(bookmarkedPaths = next)
+        }
+    }
+
+    fun renameSelected(newName: String, onFinished: (String?) -> Unit = {}) {
+        val snapshot = _state.value
+        val pane = snapshot.activePane
+        val selected = snapshot.getPaneState(pane).selectedItems.singleOrNull()
+        if (selected == null || newName.isBlank() || newName == "." || newName == ".." || newName.contains(File.separator)) {
+            onFinished("برای تغییر نام، یک مورد و نام معتبر انتخاب کنید")
+            return
+        }
+        viewModelScope.launch {
+            val error = withContext(Dispatchers.IO) {
+                runCatching {
+                    val source = File(selected)
+                    require(source.exists()) { "فایل یا پوشه پیدا نشد" }
+                    val target = File(source.parentFile ?: error("مسیر والد پیدا نشد"), newName.trim())
+                    require(!target.exists()) { "فایلی با این نام از قبل وجود دارد" }
+                    val native = RustFileEngine.renamePath(source.absolutePath, target.absolutePath)
+                    val success = if (native != null) native.success else source.renameTo(target)
+                    if (!success) native?.error ?: "تغییر نام انجام نشد" else null
+                }.getOrElse { it.localizedMessage ?: "تغییر نام انجام نشد" }
+            }
+            if (error == null) {
+                clearSelection(pane)
+                refresh(pane)
+            }
+            onFinished(error)
+        }
+    }
+
+    fun compressSelected(onFinished: (String?) -> Unit = {}) {
+        val snapshot = _state.value
+        val pane = snapshot.activePane
+        val selected = snapshot.getPaneState(pane).items.filter { it.path in snapshot.getPaneState(pane).selectedItems }
+        if (selected.isEmpty()) {
+            onFinished("ابتدا فایل یا پوشه‌ای انتخاب کنید")
+            return
+        }
+        viewModelScope.launch {
+            val error = withContext(Dispatchers.IO) {
+                runCatching {
+                    selected.forEach { source ->
+                        require(source.exists()) { "فایل پیدا نشد: ${source.name}" }
+                        val output = File(source.parentFile, "${source.name}.zip")
+                        require(!output.exists()) { "فایل فشرده از قبل وجود دارد: ${output.name}" }
+                        ZipOutputStream(BufferedOutputStream(FileOutputStream(output))).use { zip ->
+                            fun addFile(file: File, entryName: String) {
+                                if (file.isDirectory) {
+                                    val children = file.listFiles() ?: emptyArray()
+                                    if (children.isEmpty()) zip.putNextEntry(ZipEntry("$entryName/")).also { zip.closeEntry() }
+                                    children.forEach { child ->
+                                        addFile(child, if (entryName.isEmpty()) child.name else "$entryName/${child.name}")
+                                    }
+                                } else {
+                                    zip.putNextEntry(ZipEntry(entryName))
+                                    FileInputStream(file).use { input -> input.copyTo(zip) }
+                                    zip.closeEntry()
+                                }
+                            }
+                            addFile(source, source.name)
+                        }
+                    }
+                }.exceptionOrNull()?.localizedMessage
+            }
+            refresh(pane)
+            onFinished(error)
+        }
     }
 
     fun deleteSelected(onFinished: (FileOperationsManager.OperationResult) -> Unit = {}) {
@@ -340,6 +429,11 @@ fun ExplorerScreen(
     onDualPaneModeChanged: (DualPaneMode) -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
+    var renameTarget by remember { mutableStateOf<String?>(null) }
+    var renameText by remember { mutableStateOf("") }
+    var propertiesTarget by remember { mutableStateOf<String?>(null) }
+    var operationMessage by remember { mutableStateOf<String?>(null) }
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val showDual = when (state.dualPaneMode) {
@@ -465,36 +559,90 @@ fun ExplorerScreen(
         }
 
         if (state.showSelectionMenu) {
-            val selectedCount = state.getPaneState(state.activePane).selectedItems.size
+            val activeState = state.getPaneState(state.activePane)
+            val selectedPaths = activeState.selectedItems.toList()
+            val selectedCount = selectedPaths.size
             AlertDialog(
                 onDismissRequest = { viewModel.setSelectionMenuVisible(false) },
                 title = { Text("عملیات روی فایل‌ها") },
-                text = { Text(if (selectedCount == 0) "فایلی انتخاب نشده است." else "$selectedCount مورد انتخاب شده") },
-                confirmButton = {
-                    TextButton(
-                        enabled = selectedCount > 0,
-                        onClick = {
+                text = {
+                    Column {
+                        Text(if (selectedCount == 0) "فایلی انتخاب نشده است." else "$selectedCount مورد انتخاب شده")
+                        TextButton(enabled = selectedCount > 0, onClick = { viewModel.setSelectionMenuVisible(false); viewModel.copyToOtherPane(move = false) }) { Text("کپی به پنل دیگر") }
+                        TextButton(enabled = selectedCount > 0, onClick = { viewModel.setSelectionMenuVisible(false); viewModel.copyToOtherPane(move = true) }) { Text("انتقال به پنل دیگر") }
+                        TextButton(enabled = selectedCount > 0, onClick = { viewModel.setSelectionMenuVisible(false); viewModel.deleteSelected { result -> operationMessage = if (result.failureCount == 0) "حذف ${result.successCount} مورد انجام شد" else result.errors.joinToString("\n") } }) { Text("حذف") }
+                        TextButton(enabled = selectedCount == 1, onClick = {
+                            renameTarget = selectedPaths.firstOrNull()
+                            renameText = selectedPaths.firstOrNull()?.let { File(it).name }.orEmpty()
                             viewModel.setSelectionMenuVisible(false)
-                            viewModel.copyToOtherPane(move = false)
-                        }
-                    ) { Text("کپی به پنل دیگر") }
-                },
-                dismissButton = {
-                    Row {
-                        TextButton(
-                            enabled = selectedCount > 0,
-                            onClick = {
-                                viewModel.setSelectionMenuVisible(false)
-                                viewModel.copyToOtherPane(move = true)
+                        }) { Text("تغییر نام") }
+                        TextButton(enabled = selectedCount > 0, onClick = {
+                            viewModel.setSelectionMenuVisible(false)
+                            viewModel.compressSelected { error -> operationMessage = error ?: "فشرده‌سازی با موفقیت انجام شد" }
+                        }) { Text("فشرده‌سازی ZIP") }
+                        TextButton(enabled = selectedCount == 1, onClick = { propertiesTarget = selectedPaths.firstOrNull(); viewModel.setSelectionMenuVisible(false) }) { Text("مشخصات") }
+                        TextButton(enabled = selectedCount == 1, onClick = {
+                            selectedPaths.firstOrNull()?.let { path ->
+                                viewModel.toggleBookmark(path)
+                                operationMessage = if (path in state.bookmarkedPaths) "نشانک حذف شد" else "به نشانک‌ها اضافه شد"
                             }
-                        ) { Text("انتقال") }
-                        TextButton(
-                            enabled = selectedCount > 0,
-                            onClick = { viewModel.setSelectionMenuVisible(false); viewModel.deleteSelected() }
-                        ) { Text("حذف") }
+                            viewModel.setSelectionMenuVisible(false)
+                        }) { Text(if (selectedPaths.any { it in state.bookmarkedPaths }) "حذف از نشانک‌ها" else "افزودن نشانک") }
+                        TextButton(enabled = selectedCount == 1, onClick = {
+                            val file = selectedPaths.firstOrNull()?.let(::File)
+                            if (file != null && file.exists()) runCatching {
+                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase()) ?: "*/*"
+                                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "اشتراک‌گذاری فایل"))
+                            }.onFailure { operationMessage = it.localizedMessage ?: "اشتراک‌گذاری ممکن نشد" }
+                            viewModel.setSelectionMenuVisible(false)
+                        }) { Text("اشتراک‌گذاری") }
+                        TextButton(enabled = selectedCount == 1, onClick = {
+                            val file = selectedPaths.firstOrNull()?.let(::File)
+                            if (file != null && file.exists()) runCatching {
+                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase()) ?: "*/*"
+                                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "باز کردن با"))
+                            }.onFailure { operationMessage = it.localizedMessage ?: "برنامه‌ای برای باز کردن فایل پیدا نشد" }
+                            viewModel.setSelectionMenuVisible(false)
+                        }) { Text("باز کردن با…") }
                     }
+                },
+                confirmButton = { TextButton(onClick = { viewModel.setSelectionMenuVisible(false) }) { Text("بستن") }
                 }
             )
+        }
+
+        renameTarget?.let { path ->
+            AlertDialog(
+                onDismissRequest = { renameTarget = null },
+                title = { Text("تغییر نام") },
+                text = { OutlinedTextField(value = renameText, onValueChange = { renameText = it }, singleLine = true, label = { Text("نام جدید") }) },
+                confirmButton = { TextButton(onClick = { viewModel.renameSelected(renameText) { error -> operationMessage = error ?: "تغییر نام انجام شد" }; renameTarget = null }) { Text("ذخیره") } },
+                dismissButton = { TextButton(onClick = { renameTarget = null }) { Text("لغو") } }
+            )
+        }
+
+        propertiesTarget?.let { path ->
+            val file = File(path)
+            AlertDialog(
+                onDismissRequest = { propertiesTarget = null },
+                title = { Text("مشخصات فایل") },
+                text = {
+                    Column {
+                        Text("نام: ${file.name}")
+                        Text("مسیر: ${file.absolutePath}")
+                        Text("نوع: ${if (file.isDirectory) "پوشه" else "فایل"}")
+                        Text("اندازه: ${if (file.isDirectory) "محاسبه نشده" else android.text.format.Formatter.formatShortFileSize(context, file.length())}")
+                        Text("آخرین تغییر: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(file.lastModified()))}")
+                    }
+                },
+                confirmButton = { TextButton(onClick = { propertiesTarget = null }) { Text("بستن") } }
+            )
+        }
+
+        operationMessage?.let { message ->
+            AlertDialog(onDismissRequest = { operationMessage = null }, title = { Text("نتیجه عملیات") }, text = { Text(message) }, confirmButton = { TextButton(onClick = { operationMessage = null }) { Text("باشه") } })
         }
     }
 }
