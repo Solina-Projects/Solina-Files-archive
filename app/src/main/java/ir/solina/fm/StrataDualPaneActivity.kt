@@ -18,6 +18,9 @@ class StrataDualPaneActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         explorerViewModel = ViewModelProvider(this)[ExplorerViewModel::class.java]
         val preferences = getSharedPreferences("solina_dual_pane", MODE_PRIVATE)
+        explorerViewModel.setBookmarkedPaths(
+            preferences.getStringSet("bookmarks", emptySet())?.toSet().orEmpty()
+        )
         val savedMode = runCatching {
             DualPaneMode.valueOf(preferences.getString("display_mode", DualPaneMode.LANDSCAPE_ONLY.name)!!)
         }.getOrDefault(DualPaneMode.LANDSCAPE_ONLY)
@@ -29,6 +32,9 @@ class StrataDualPaneActivity : ComponentActivity() {
                         viewModel = explorerViewModel,
                         onDualPaneModeChanged = { mode ->
                             preferences.edit().putString("display_mode", mode.name).apply()
+                        },
+                        onBookmarksChanged = { paths ->
+                            preferences.edit().putStringSet("bookmarks", paths.toSet()).apply()
                         }
                     )
                 }
