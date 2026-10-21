@@ -107,7 +107,7 @@ dependencies {
     implementation("commons-net:commons-net:3.11.1")
     implementation("com.github.mwiede:jsch:0.2.23")
     implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
-    implementation("com.github.lookfirst:sardine:5.13")
+    // WebDAV uses Android HttpURLConnection/XMLPullParser; avoid JVM-only JAXB/Sardine runtime.
 
     // System Tools & Root / Shizuku
     implementation("dev.rikka.shizuku:api:13.1.5")
