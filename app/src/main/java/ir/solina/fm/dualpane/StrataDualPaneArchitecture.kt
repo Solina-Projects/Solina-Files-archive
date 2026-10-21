@@ -78,6 +78,47 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.BufferedOutputStream
 
+/**
+ * Persistable SAF tree paths encoded as: saf|<tree-uri>|<encoded/relative/path>.
+ * This keeps tree permissions attached to every item path without treating content URIs as File paths.
+ */
+private object SafDocumentAccess {
+    fun isSafPath(path: String): Boolean = path.startsWith("saf|")
+
+    fun rootPath(treeUri: Uri): String = "saf|$treeUri|"
+
+    private fun parts(path: String): List<String> {
+        val values = path.split("|", limit = 3)
+        require(values.size == 3 && values[0] == "saf") { "مسیر SAF نامعتبر است" }
+        return values
+    }
+
+    fun childPath(parentPath: String, name: String): String {
+        val p = parts(parentPath)
+        val suffix = p[2].trimEnd('/')
+        val child = Uri.encode(name)
+        return "saf|" + p[1] + "|" + (if (suffix.isEmpty()) child else "$suffix/$child")
+    }
+
+    fun parentPath(path: String): String? {
+        val p = parts(path)
+        if (p[2].isEmpty()) return null
+        val parent = p[2].substringBeforeLast('/', missingDelimiterValue = "")
+        return "saf|" + p[1] + "|" + parent
+    }
+
+    fun resolve(context: Context, path: String): DocumentFile? {
+        val p = parts(path)
+        var document = DocumentFile.fromTreeUri(context, Uri.parse(p[1])) ?: return null
+        if (p[2].isNotEmpty()) {
+            for (encodedName in p[2].split('/')) {
+                val name = Uri.decode(encodedName)
+                document = document.findFile(name) ?: return null
+            }
+        }
+        return document
+    }
+}
 /** Independent identity for the two explorer panes. */
 enum class Pane { LEFT, RIGHT }
 
