@@ -32,12 +32,15 @@ internal class WebDavClient(
             setRequestProperty("Content-Type", "application/xml; charset=utf-8")
             doOutput = true
         }
+        var responseStream: InputStream? = null
         try {
             connection.outputStream.use { it.write(xml.toByteArray(Charsets.UTF_8)) }
             val code = connection.responseCode
             if (code !in 200..299) throw IllegalStateException("WebDAV فهرست‌گیری ناموفق بود (HTTP $code)")
             val parser = XmlPullParserFactory.newInstance().newPullParser()
-            connection.inputStream.use { parser.setInput(it, "UTF-8") }
+            val stream = connection.inputStream
+            responseStream = stream
+            parser.setInput(stream, "UTF-8")
             val results = mutableListOf<Entry>()
             var inResponse = false
             var href: String? = null
@@ -69,6 +72,7 @@ internal class WebDavClient(
             return results.distinctBy { it.name }
                 .sortedWith(compareByDescending<Entry> { it.directory }.thenBy { it.name.lowercase() })
         } finally {
+            try { responseStream?.close() } catch (_: Exception) {}
             connection.disconnect()
         }
     }
