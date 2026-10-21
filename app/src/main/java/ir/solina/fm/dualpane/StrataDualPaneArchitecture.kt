@@ -327,13 +327,20 @@ class ExplorerViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val error = withContext(Dispatchers.IO) {
                 runCatching {
-                    val source = File(selected)
-                    require(source.exists()) { "فایل یا پوشه پیدا نشد" }
-                    val target = File(source.parentFile ?: error("مسیر والد پیدا نشد"), newName.trim())
-                    require(!target.exists()) { "فایلی با این نام از قبل وجود دارد" }
-                    val native = RustFileEngine.renamePath(source.absolutePath, target.absolutePath)
-                    val success = if (native != null) native.success else source.renameTo(target)
-                    if (!success) native?.error ?: "تغییر نام انجام نشد" else null
+                    if (SafDocumentAccess.isSafPath(selected)) {
+                        val source = SafDocumentAccess.resolve(getApplication(), selected)
+                            ?: error("فایل یا پوشه پیدا نشد")
+                        require(source.parentFile?.findFile(newName.trim()) == null) { "فایلی با این نام از قبل وجود دارد" }
+                        if (!source.renameTo(newName.trim())) "تغییر نام انجام نشد" else null
+                    } else {
+                        val source = File(selected)
+                        require(source.exists()) { "فایل یا پوشه پیدا نشد" }
+                        val target = File(source.parentFile ?: error("مسیر والد پیدا نشد"), newName.trim())
+                        require(!target.exists()) { "فایلی با این نام از قبل وجود دارد" }
+                        val native = RustFileEngine.renamePath(source.absolutePath, target.absolutePath)
+                        val success = if (native != null) native.success else source.renameTo(target)
+                        if (!success) native?.error ?: "تغییر نام انجام نشد" else null
+                    }
                 }.getOrElse { it.localizedMessage ?: "تغییر نام انجام نشد" }
             }
             if (error == null) {
@@ -397,12 +404,18 @@ class ExplorerViewModel(application: Application) : AndroidViewModel(application
                 var failures = 0
                 val errors = mutableListOf<String>()
                 selected.forEach { path ->
-                    val file = File(path)
-                    val native = RustFileEngine.deletePath(path)
-                    val ok = if (native != null) native.success else runCatching { file.deleteRecursively() }.getOrDefault(false)
+                    val fileName = if (SafDocumentAccess.isSafPath(path)) {
+                        SafDocumentAccess.resolve(getApplication(), path)?.name ?: path.substringAfterLast('/')
+                    } else File(path).name
+                    val ok = if (SafDocumentAccess.isSafPath(path)) {
+                        SafDocumentAccess.resolve(getApplication(), path)?.delete() == true
+                    } else {
+                        val native = RustFileEngine.deletePath(path)
+                        if (native != null) native.success else runCatching { File(path).deleteRecursively() }.getOrDefault(false)
+                    }
                     if (ok) successes++ else {
                         failures++
-                        errors += "${file.name}: حذف انجام نشد"
+                        errors += "$fileName: حذف انجام نشد"
                     }
                 }
                 FileOperationsManager.OperationResult(successes, failures, errors)
