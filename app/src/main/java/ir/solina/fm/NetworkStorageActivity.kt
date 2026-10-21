@@ -13,9 +13,6 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.github.sardine.DavResource
-import com.github.sardine.Sardine
-import com.github.sardine.SardineFactory
 import com.jcraft.jsch.ChannelSftp
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
@@ -48,7 +45,7 @@ class NetworkStorageActivity : AppCompatActivity() {
     private var sftp: ChannelSftp? = null
     private var sftpSession: Session? = null
     private var smbContext: CIFSContext? = null
-    private var sardine: Sardine? = null
+    private var webDavClient: WebDavClient? = null
     private var baseHost = ""
     private var user = ""
     private var password = ""
@@ -166,8 +163,8 @@ class NetworkStorageActivity : AppCompatActivity() {
                         probe.connect()
                     }
                     Protocol.WEBDAV -> {
-                        sardine = SardineFactory.begin(user, password)
-                        sardine!!.list(webDavUrl(remotePath))
+                        webDavClient = WebDavClient(user, password)
+                        webDavClient!!.list(webDavUrl(remotePath))
                     }
                 }
             } catch (e: Exception) { error = e.message ?: "اتصال ناموفق بود"; disconnect() }
@@ -193,9 +190,8 @@ class NetworkStorageActivity : AppCompatActivity() {
                     Protocol.SMB -> SmbFile(smbUrl(remotePath), smbContext).listFiles().map {
                         RemoteEntry(it.name.trimEnd('/'), it.isDirectory, joinRemote(remotePath, it.name.trimEnd('/')))
                     }
-                    Protocol.WEBDAV -> sardine!!.list(webDavUrl(remotePath)).filter { it.path.trimEnd('/') != webDavUrl(remotePath).trimEnd('/') }.map { resource ->
-                        val name = resource.name.trimEnd('/').substringAfterLast('/')
-                        RemoteEntry(name, resource.isDirectory, joinRemote(remotePath, name))
+                    Protocol.WEBDAV -> webDavClient!!.list(webDavUrl(remotePath)).map { resource ->
+                        RemoteEntry(resource.name, resource.directory, joinRemote(remotePath, resource.name))
                     }
                 }.sortedWith(compareByDescending<RemoteEntry> { it.directory }.thenBy { it.name.lowercase() })
             } catch (e: Exception) {
@@ -240,7 +236,7 @@ class NetworkStorageActivity : AppCompatActivity() {
                     }
                     Protocol.SFTP -> FileOutputStream(target).use { sftp!!.get(entry.path, it) }
                     Protocol.SMB -> SmbFile(smbUrl(entry.path), smbContext).getInputStream().use { ins -> FileOutputStream(target).use { ins.copyTo(it) } }
-                    Protocol.WEBDAV -> sardine!!.get(webDavUrl(entry.path)).use { ins -> FileOutputStream(target).use { ins.copyTo(it) } }
+                    Protocol.WEBDAV -> webDavClient!!.get(webDavUrl(entry.path)).use { ins -> FileOutputStream(target).use { ins.copyTo(it) } }
                 }
                 ok = true
             } catch (e: Exception) { target.delete(); runOnUiThread { status.text = "دریافت ناموفق: ${e.message}" } }
@@ -267,7 +263,7 @@ class NetworkStorageActivity : AppCompatActivity() {
                         Protocol.FTP -> { if (!ftp!!.storeFile(target, input)) throw IllegalStateException("سرور FTP فایل را نپذیرفت"); Unit }
                         Protocol.SFTP -> sftp!!.put(input, target)
                         Protocol.SMB -> SmbFile(smbUrl(target), smbContext).outputStream.use { input.copyTo(it) }
-                        Protocol.WEBDAV -> sardine!!.put(webDavUrl(target), input, "application/octet-stream")
+                        Protocol.WEBDAV -> webDavClient!!.put(webDavUrl(target), input, "application/octet-stream")
                     }
                 }
             } catch (e: Exception) { error = e.message ?: "بارگذاری ناموفق بود" }
@@ -292,8 +288,7 @@ class NetworkStorageActivity : AppCompatActivity() {
     private fun disconnect() {
         try { ftp?.logout(); ftp?.disconnect() } catch (_: Exception) {}
         try { sftp?.disconnect(); sftpSession?.disconnect() } catch (_: Exception) {}
-        try { sardine?.shutdown() } catch (_: Exception) {}
-        ftp = null; sftp = null; sftpSession = null; sardine = null; smbContext = null
+        ftp = null; sftp = null; sftpSession = null; webDavClient = null; smbContext = null
     }
 
     override fun onDestroy() { disconnect(); super.onDestroy() }
