@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
@@ -36,10 +35,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draganddrop.DragAndDropEvent
-import androidx.compose.ui.draganddrop.DragAndDropTarget
-import androidx.compose.ui.draganddrop.DragAndDropTransferData
-import androidx.compose.ui.draganddrop.dragAndDropSource
-import androidx.compose.ui.draganddrop.dragAndDropTarget
+import androidx.compose.foundation.draganddrop.DragAndDropTarget
+import androidx.compose.foundation.draganddrop.DragAndDropTransferData
+import androidx.compose.foundation.draganddrop.dragAndDropSource
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
@@ -379,7 +378,7 @@ fun ExplorerScreen(
                                 Surface(
                                     color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
                                     modifier = Modifier.fillMaxWidth()
-                                        .dragAndDropSource {
+                                        .dragAndDropSource { _ ->
                                             DragAndDropTransferData(
                                                 clipData = ClipData.newPlainText("Solina file path", item.path)
                                             )
