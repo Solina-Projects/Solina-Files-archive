@@ -36,6 +36,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
@@ -147,6 +148,10 @@ class ExplorerViewModel : ViewModel() {
             if (!next.add(path)) next.remove(path)
             current.copy(bookmarkedPaths = next)
         }
+    }
+
+    fun setBookmarkedPaths(paths: Set<String>) {
+        _state.update { it.copy(bookmarkedPaths = paths.toSet()) }
     }
 
     fun renameSelected(newName: String, onFinished: (String?) -> Unit = {}) {
@@ -426,9 +431,13 @@ class ExplorerViewModel : ViewModel() {
 fun ExplorerScreen(
     viewModel: ExplorerViewModel,
     modifier: Modifier = Modifier,
-    onDualPaneModeChanged: (DualPaneMode) -> Unit = {}
+    onDualPaneModeChanged: (DualPaneMode) -> Unit = {},
+    onBookmarksChanged: (Set<String>) -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
+    LaunchedEffect(state.bookmarkedPaths) {
+        onBookmarksChanged(state.bookmarkedPaths)
+    }
     val context = LocalContext.current
     var renameTarget by remember { mutableStateOf<String?>(null) }
     var renameText by remember { mutableStateOf("") }
