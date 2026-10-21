@@ -443,6 +443,7 @@ fun ExplorerScreen(
     var renameText by remember { mutableStateOf("") }
     var propertiesTarget by remember { mutableStateOf<String?>(null) }
     var operationMessage by remember { mutableStateOf<String?>(null) }
+    var showBookmarksDialog by remember { mutableStateOf(false) }
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val showDual = when (state.dualPaneMode) {
@@ -556,6 +557,36 @@ fun ExplorerScreen(
         ) {
             Button(onClick = { viewModel.setSelectionMenuVisible(true) }) { Text("منوی عملیات") }
             Button(onClick = { viewModel.swapPanes() }) { Text("جابه‌جایی پنل‌ها") }
+            Button(onClick = { showBookmarksDialog = true }) { Text("نشانک‌ها (${state.bookmarkedPaths.size})") }
+        }
+
+        if (showBookmarksDialog) {
+            AlertDialog(
+                onDismissRequest = { showBookmarksDialog = false },
+                title = { Text("نشانک‌ها") },
+                text = {
+                    if (state.bookmarkedPaths.isEmpty()) {
+                        Text("هنوز مسیری به نشانک‌ها اضافه نشده است.")
+                    } else {
+                        Column {
+                            state.bookmarkedPaths.sorted().forEach { path ->
+                                TextButton(
+                                    onClick = {
+                                        showBookmarksDialog = false
+                                        viewModel.navigateTo(state.activePane, path)
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(File(path).name.ifBlank { path }, maxLines = 1)
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showBookmarksDialog = false }) { Text("بستن") }
+                }
+            )
         }
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
