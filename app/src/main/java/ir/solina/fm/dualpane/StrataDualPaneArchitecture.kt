@@ -10,6 +10,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -265,10 +266,13 @@ fun ExplorerScreen(viewModel: ExplorerViewModel, modifier: Modifier = Modifier) 
                         .weight(1f)
                         .fillMaxSize()
                         .background(if (state.activePane == pane) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface)
-                        .then(if (state.activePane == pane) Modifier.padding(1.dp) else Modifier)
+                        .then(
+                            if (state.activePane == pane) Modifier.border(
+                                BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                            ) else Modifier
+                        )
                         .combinedClickable(onClick = { viewModel.setActivePane(pane) }, onLongClick = { viewModel.setActivePane(pane) })
-                        .padding(6.dp),
-                    
+                        .padding(6.dp)
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(if (pane == Pane.LEFT) "چپ" else "راست", style = MaterialTheme.typography.labelLarge)
