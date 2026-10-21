@@ -37,12 +37,9 @@ jobs:
       - name: Grant Execute Permission for Gradlew (if present)
         run: chmod +x gradlew 2>/dev/null || true
 
-      - name: Set up Android SDK and NDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android NDK
         run: |
-          sdkmanager "ndk;26.3.11579264"
+          sdkmanager --install "ndk;26.3.11579264"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> "$GITHUB_ENV"
 
       - name: Set up Rust toolchain
