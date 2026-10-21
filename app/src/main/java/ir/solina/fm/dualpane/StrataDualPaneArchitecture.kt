@@ -8,7 +8,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -75,8 +75,7 @@ data class ExplorerState(
 
 /**
  * State holder for the Strata-style dual-pane explorer.
- * File I/O is dispatched off the main thread; each pane owns its own path,
- * selection, loading state and back history.
+ * Each pane owns its path, selection, loading state and back history.
  */
 class ExplorerViewModel : ViewModel() {
     private val initialPath = Environment.getExternalStorageDirectory().absolutePath
@@ -210,10 +209,7 @@ class ExplorerViewModel : ViewModel() {
 }
 
 @Composable
-fun ExplorerScreen(
-    viewModel: ExplorerViewModel,
-    modifier: Modifier = Modifier
-) {
+fun ExplorerScreen(viewModel: ExplorerViewModel, modifier: Modifier = Modifier) {
     val state by viewModel.state.collectAsState()
     val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
     val showDual = state.isDualPaneForced || wide
@@ -230,11 +226,8 @@ fun ExplorerScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxSize()
-                        .background(
-                            if (state.activePane == pane) MaterialTheme.colorScheme.surfaceVariant
-                            else MaterialTheme.colorScheme.surface
-                        )
-                        .clickable { viewModel.setActivePane(pane) }
+                        .background(if (state.activePane == pane) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface)
+                        .combinedClickable(onClick = { viewModel.setActivePane(pane) }, onLongClick = { viewModel.setActivePane(pane) })
                         .padding(6.dp)
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -247,8 +240,7 @@ fun ExplorerScreen(
                     AnimatedContent(
                         targetState = paneState.currentPath,
                         transitionSpec = {
-                            slideInHorizontally { it / 3 } + fadeIn() togetherWith
-                                slideOutHorizontally { -it / 3 } + fadeOut()
+                            slideInHorizontally { it / 3 } + fadeIn() togetherWith slideOutHorizontally { -it / 3 } + fadeOut()
                         },
                         label = "ExplorerFolderTransition"
                     ) {
@@ -256,16 +248,21 @@ fun ExplorerScreen(
                             items(paneState.items, key = { it.path }) { item ->
                                 val selected = item.path in paneState.selectedItems
                                 Surface(
-                                    color = if (selected) MaterialTheme.colorScheme.secondaryContainer
-                                    else MaterialTheme.colorScheme.surface,
-                                    modifier = Modifier.fillMaxWidth().clickable {
-                                        viewModel.setActivePane(pane)
-                                        if (paneState.selectedItems.isNotEmpty()) viewModel.toggleSelection(pane, item)
-                                        else viewModel.openItem(pane, item)
-                                    }
+                                    color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier.fillMaxWidth().combinedClickable(
+                                        onClick = {
+                                            viewModel.setActivePane(pane)
+                                            if (paneState.selectedItems.isNotEmpty()) viewModel.toggleSelection(pane, item)
+                                            else viewModel.openItem(pane, item)
+                                        },
+                                        onLongClick = {
+                                            viewModel.setActivePane(pane)
+                                            viewModel.toggleSelection(pane, item)
+                                        }
+                                    )
                                 ) {
                                     Text(
-                                        text = (if (item.isDirectory) "📁 " else "📄 ") + item.name,
+                                        text = (if (selected) "✓ " else "") + (if (item.isDirectory) "📁 " else "📄 ") + item.name,
                                         modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp)
                                     )
                                 }
