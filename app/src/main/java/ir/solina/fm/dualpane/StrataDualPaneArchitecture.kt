@@ -1,6 +1,10 @@
 package ir.solina.fm.dualpane
 
 import android.os.Environment
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.documentfile.provider.DocumentFile
+import android.content.Context
 import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
@@ -42,6 +46,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -119,7 +125,7 @@ data class ExplorerState(
  * State holder for the Strata-style dual-pane explorer.
  * Each pane owns its path, selection, loading state and back history.
  */
-class ExplorerViewModel : ViewModel() {
+class ExplorerViewModel(application: Application) : AndroidViewModel(application) {
     private val initialPath = Environment.getExternalStorageDirectory().absolutePath
     private val _state = MutableStateFlow(
         ExplorerState(
@@ -273,12 +279,34 @@ class ExplorerViewModel : ViewModel() {
         }
     }
 
+    fun navigateToSafRoot(pane: Pane, treeUri: Uri) {
+        val path = SafDocumentAccess.rootPath(treeUri)
+        _state.update { current -> current.updatePane(pane) { p ->
+            p.copy(currentPath = path, history = p.history + p.currentPath, selectedItems = emptySet(), errorMessage = null)
+        } }
+        refresh(pane)
+    }
+
     fun refresh(pane: Pane) {
         val path = _state.value.getPaneState(pane).currentPath
         _state.update { it.updatePane(pane) { it.copy(isLoading = true, errorMessage = null) } }
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
+                    if (SafDocumentAccess.isSafPath(path)) {
+                        val directory = SafDocumentAccess.resolve(getApplication(), path)
+                            ?: error("دسترسی به پوشهٔ حافظهٔ جانبی منقضی شده است؛ دوباره آن را انتخاب کنید")
+                        require(directory.isDirectory) { "مسیر انتخاب‌شده پوشه نیست" }
+                        directory.listFiles().map { child ->
+                            ExplorerFileItem(
+                                path = SafDocumentAccess.childPath(path, child.name ?: ""),
+                                name = child.name ?: "بدون نام",
+                                isDirectory = child.isDirectory,
+                                sizeBytes = child.length(),
+                                modifiedAt = child.lastModified()
+                            )
+                        }.sortedWith(compareBy<ExplorerFileItem> { !it.isDirectory }.thenBy { it.name.lowercase() })
+                    } else {
                     val directory = File(path)
                     require(directory.isDirectory && directory.canRead()) {
                         "پوشه قابل خواندن نیست: $path"
@@ -299,6 +327,7 @@ class ExplorerViewModel : ViewModel() {
                             .sortedWith(compareBy<File> { !it.isDirectory }.thenBy { it.name.lowercase() })
                             .map { ExplorerFileItem(it.absolutePath, it.name, it.isDirectory, it.length(), it.lastModified()) }
                     }
+                    }
                 }
             }
             _state.update { current ->
@@ -314,6 +343,18 @@ class ExplorerViewModel : ViewModel() {
     }
 
     fun navigateTo(pane: Pane, path: String) {
+        if (SafDocumentAccess.isSafPath(path)) {
+            val target = SafDocumentAccess.resolve(getApplication(), path)
+            if (target == null || !target.isDirectory) {
+                _state.update { it.updatePane(pane) { p -> p.copy(errorMessage = "دسترسی به پوشهٔ حافظهٔ جانبی ممکن نیست") } }
+                return
+            }
+            _state.update { current -> current.updatePane(pane) { p ->
+                p.copy(currentPath = path, history = p.history + p.currentPath, selectedItems = emptySet(), errorMessage = null)
+            } }
+            refresh(pane)
+            return
+        }
         val target = File(path)
         if (!target.isDirectory || !target.canRead()) {
             _state.update { it.updatePane(pane) { p -> p.copy(errorMessage = "دسترسی به پوشه ممکن نیست") } }
@@ -342,6 +383,9 @@ class ExplorerViewModel : ViewModel() {
                 }
             }
             refresh(pane)
+        } else if (SafDocumentAccess.isSafPath(current.currentPath)) {
+            val parent = SafDocumentAccess.parentPath(current.currentPath) ?: return
+            navigateTo(pane, parent)
         } else {
             val parent = File(current.currentPath).parentFile ?: return
             navigateTo(pane, parent.absolutePath)
@@ -458,6 +502,13 @@ fun ExplorerScreen(
         onBookmarksChanged(state.bookmarkedPaths)
     }
     val context = LocalContext.current
+    var safPickerPane by remember { mutableStateOf(Pane.LEFT) }
+    val safTreePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
+            viewModel.navigateToSafRoot(safPickerPane, uri)
+        }
+    }
     var renameTarget by remember { mutableStateOf<String?>(null) }
     var renameText by remember { mutableStateOf("") }
     var propertiesTarget by remember { mutableStateOf<String?>(null) }
@@ -532,6 +583,7 @@ fun ExplorerScreen(
                         Text(if (pane == Pane.LEFT) "چپ" else "راست", style = MaterialTheme.typography.labelLarge)
                         Text(paneState.currentPath, modifier = Modifier.weight(1f), maxLines = 2)
                         Button(onClick = { viewModel.navigateUp(pane) }) { Text("بالا") }
+                        Button(onClick = { safPickerPane = pane; safTreePicker.launch(null) }) { Text("SD/USB") }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         OutlinedTextField(
