@@ -180,7 +180,7 @@ class ExplorerViewModel : ViewModel() {
     fun compressSelected(onFinished: (String?) -> Unit = {}) {
         val snapshot = _state.value
         val pane = snapshot.activePane
-        val selected = snapshot.getPaneState(pane).items.filter { it.path in snapshot.getPaneState(pane).selectedItems }
+        val selected = snapshot.getPaneState(pane).items.filter { it.path in snapshot.getPaneState(pane).selectedItems }.map { File(it.path) }
         if (selected.isEmpty()) {
             onFinished("ابتدا فایل یا پوشه‌ای انتخاب کنید")
             return
