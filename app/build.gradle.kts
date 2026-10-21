@@ -122,7 +122,6 @@ val buildRustCore by tasks.registering(Exec::class) {
     workingDir(rootProject.file("rust-core"))
     commandLine(
         "cargo", "ndk",
-        "-P", "30",
         "-t", "arm64-v8a",
         "-t", "armeabi-v7a",
         "-t", "x86_64",
