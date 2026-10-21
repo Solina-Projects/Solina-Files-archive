@@ -600,24 +600,46 @@ class ExplorerViewModel(application: Application) : AndroidViewModel(application
         val destinationState = snapshot.getPaneState(destinationPane)
         val selectedPaths = sourceState.items.asSequence()
             .filter { it.path in sourceState.selectedItems }
-            .map { File(it.path) }
+            .map { it.path }
             .toList()
         if (selectedPaths.isEmpty() || sourceState.isLoading || destinationState.isLoading) {
             _state.update { it.updatePane(sourcePane) { p -> p.copy(errorMessage = "ابتدا فایل یا پوشه‌ای انتخاب کنید و صبر کنید بارگذاری تمام شود") } }
             return
         }
-        val destination = File(destinationState.currentPath)
-        if (!destination.isDirectory || !destination.canWrite()) {
+        val destinationPath = destinationState.currentPath
+        val destinationIsValid = if (SafDocumentAccess.isSafPath(destinationPath)) {
+            SafDocumentAccess.resolve(getApplication(), destinationPath)?.isDirectory == true
+        } else {
+            File(destinationPath).let { it.isDirectory && it.canWrite() }
+        }
+        if (!destinationIsValid) {
             _state.update { it.updatePane(destinationPane) { p -> p.copy(errorMessage = "پوشه مقصد قابل نوشتن نیست") } }
             return
         }
         viewModelScope.launch {
-            val result = FileOperationsManager.executeTransfer(
-                sources = selectedPaths,
-                destinationDir = destination,
-                isMove = move,
-                onProgress = {}
-            )
+            val usesSaf = selectedPaths.any { SafDocumentAccess.supportsTransfer(it, destinationPath) }
+            val result = if (usesSaf) {
+                withContext(Dispatchers.IO) {
+                    var success = 0
+                    var failure = 0
+                    val errors = mutableListOf<String>()
+                    selectedPaths.forEach { sourcePath ->
+                        val error = SafDocumentAccess.transfer(getApplication(), sourcePath, destinationPath, move)
+                        if (error == null) success++ else {
+                            failure++
+                            errors += "${sourcePath.substringAfterLast('/').ifBlank { sourcePath }}: $error"
+                        }
+                    }
+                    FileOperationsManager.OperationResult(success, failure, errors)
+                }
+            } else {
+                FileOperationsManager.executeTransfer(
+                    sources = selectedPaths.map(::File),
+                    destinationDir = File(destinationPath),
+                    isMove = move,
+                    onProgress = {}
+                )
+            }
             if (result.failureCount == 0) clearSelection(sourcePane)
             refresh(destinationPane)
             if (move && result.failureCount == 0) refresh(sourcePane)
