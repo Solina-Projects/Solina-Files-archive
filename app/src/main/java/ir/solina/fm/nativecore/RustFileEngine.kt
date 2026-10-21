@@ -38,6 +38,9 @@ object RustFileEngine {
     private external fun nativeMove(source: String, target: String): String
 
     @JvmStatic
+    private external fun nativeRename(source: String, target: String): String
+
+    @JvmStatic
     private external fun nativeDelete(path: String): String
 
     @JvmStatic
@@ -71,6 +74,9 @@ object RustFileEngine {
 
     fun movePath(source: String, target: String): NativeOperationResult? =
         operation { nativeMove(source, target) }
+
+    fun renamePath(source: String, target: String): NativeOperationResult? =
+        operation { nativeRename(source, target) }
 
     fun deletePath(path: String): NativeOperationResult? =
         operation { nativeDelete(path) }

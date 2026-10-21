@@ -145,6 +145,11 @@ fn move_path(source: &Path, target: &Path) -> io::Result<()> {
     }
 }
 
+fn rename_path(source: &Path, target: &Path) -> io::Result<()> {
+    validate_target(source, target)?;
+    fs::rename(source, target)
+}
+
 fn remove_tree(path: &Path) -> io::Result<()> {
     let metadata = fs::symlink_metadata(path)?;
     if metadata.is_dir() && !metadata.file_type().is_symlink() {
@@ -240,6 +245,19 @@ pub extern "system" fn Java_ir_solina_fm_nativecore_RustFileEngine_nativeMove(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_ir_solina_fm_nativecore_RustFileEngine_nativeRename(
+    mut env: JNIEnv,
+    _class: JClass,
+    source: JString,
+    target: JString,
+) -> jstring {
+    let result = jstring_to_path(&mut env, &source).and_then(|source| {
+        jstring_to_path(&mut env, &target).and_then(|target| rename_path(&source, &target))
+    });
+    return_string(&mut env, result_string(result))
+}
+
+#[no_mangle]
 pub extern "system" fn Java_ir_solina_fm_nativecore_RustFileEngine_nativeDelete(
     mut env: JNIEnv,
     _class: JClass,
@@ -320,6 +338,22 @@ mod tests {
         assert_eq!(fs::read_to_string(&target).unwrap(), "content");
         remove_tree(&target).unwrap();
         assert!(!target.exists());
+    }
+
+    #[test]
+    fn renames_without_overwriting_existing_target() {
+        let temp = TestDir::new();
+        let source = temp.0.join("old.txt");
+        let target = temp.0.join("new.txt");
+        fs::write(&source, "content").unwrap();
+        rename_path(&source, &target).unwrap();
+        assert!(!source.exists());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "content");
+
+        let existing = temp.0.join("existing.txt");
+        fs::write(&existing, "keep").unwrap();
+        assert!(rename_path(&target, &existing).is_err());
+        assert_eq!(fs::read_to_string(&existing).unwrap(), "keep");
     }
 
     #[test]

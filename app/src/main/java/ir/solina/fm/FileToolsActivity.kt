@@ -1,5 +1,7 @@
 package ir.solina.fm
 
+import ir.solina.fm.nativecore.RustFileEngine
+
 import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
@@ -130,8 +132,17 @@ class FileToolsActivity : AppCompatActivity() {
                     val newName = pre + changed + suf + if (file.extension.isNotEmpty()) ".${file.extension}" else ""
                     val target = File(file.parentFile, newName)
                     if (target == file) return@forEachIndexed
-                    if (target.exists()) errors.add("${file.name}: نام مقصد وجود دارد")
-                    else if (file.renameTo(target)) renamed++ else errors.add("${file.name}: تغییر نام ناموفق")
+                    if (target.exists()) {
+                        errors.add("${file.name}: نام مقصد وجود دارد")
+                    } else {
+                        val nativeResult = RustFileEngine.renamePath(file.absolutePath, target.absolutePath)
+                        when {
+                            nativeResult == null && file.renameTo(target) -> renamed++
+                            nativeResult == null -> errors.add("${file.name}: تغییر نام ناموفق")
+                            nativeResult.success -> renamed++
+                            else -> errors.add("${file.name}: ${nativeResult.error ?: "تغییر نام ناموفق"}")
+                        }
+                    }
                 }
                 output.text = "تغییر نام موفق: $renamed از ${files.size}" + if (errors.isEmpty()) "" else "\n\n" + errors.joinToString("\n")
                 toast("تغییر نام گروهی تمام شد: $renamed فایل")
