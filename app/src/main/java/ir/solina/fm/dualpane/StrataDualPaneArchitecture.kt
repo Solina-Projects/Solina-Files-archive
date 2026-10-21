@@ -118,6 +118,102 @@ private object SafDocumentAccess {
         }
         return document
     }
+    fun supportsTransfer(sourcePath: String, destinationPath: String): Boolean =
+        isSafPath(sourcePath) || isSafPath(destinationPath)
+
+    /** Copies through ContentResolver/DocumentFile when either endpoint is SAF-backed. */
+    fun transfer(context: Context, sourcePath: String, destinationPath: String, move: Boolean): String? {
+        return runCatching {
+            val sourceDoc = if (isSafPath(sourcePath)) resolve(context, sourcePath) else null
+            val sourceFile = if (isSafPath(sourcePath)) null else File(sourcePath)
+            require(sourceDoc?.exists() == true || sourceFile?.exists() == true) { "فایل مبدأ پیدا نشد" }
+            val sourceName = sourceDoc?.name ?: sourceFile!!.name
+            if (isSafPath(destinationPath)) {
+                val destination = resolve(context, destinationPath) ?: error("دسترسی نوشتن به مقصد وجود ندارد")
+                require(destination.isDirectory) { "مقصد پوشه نیست" }
+                val targetName = uniqueDocumentName(destination, sourceName)
+                copyNodeToDocument(context, sourcePath, destination, targetName)
+            } else {
+                val destination = File(destinationPath)
+                require(destination.isDirectory && destination.canWrite()) { "مقصد قابل نوشتن نیست" }
+                val target = uniqueFile(destination, sourceName)
+                copyNodeToFile(context, sourcePath, target)
+            }
+            if (move) {
+                val deleted = if (sourceDoc != null) sourceDoc.delete() else if (sourceFile!!.isDirectory) sourceFile.deleteRecursively() else sourceFile.delete()
+                require(deleted) { "کپی انجام شد اما حذف مبدأ ممکن نشد" }
+            }
+            null
+        }.getOrElse { it.localizedMessage ?: "انتقال فایل انجام نشد" }
+    }
+
+    private fun uniqueDocumentName(parent: DocumentFile, name: String): String {
+        if (parent.findFile(name) == null) return name
+        val dot = name.lastIndexOf('.').takeIf { it > 0 } ?: name.length
+        val base = name.substring(0, dot)
+        val ext = name.substring(dot)
+        var i = 1
+        while (parent.findFile("$base ($i)$ext") != null) i++
+        return "$base ($i)$ext"
+    }
+
+    private fun uniqueFile(parent: File, name: String): File {
+        var target = File(parent, name)
+        if (!target.exists()) return target
+        val dot = name.lastIndexOf('.').takeIf { it > 0 } ?: name.length
+        val base = name.substring(0, dot)
+        val ext = name.substring(dot)
+        var i = 1
+        while (File(parent, "$base ($i)$ext").exists()) i++
+        target = File(parent, "$base ($i)$ext")
+        return target
+    }
+
+    private fun copyNodeToDocument(context: Context, sourcePath: String, destination: DocumentFile, targetName: String) {
+        val sourceDoc = if (isSafPath(sourcePath)) resolve(context, sourcePath) else null
+        val sourceFile = if (isSafPath(sourcePath)) null else File(sourcePath)
+        val isDirectory = sourceDoc?.isDirectory ?: sourceFile!!.isDirectory
+        if (isDirectory) {
+            val targetDir = destination.createDirectory(targetName) ?: error("ساخت پوشه در مقصد ناموفق بود")
+            val children = sourceDoc?.listFiles()?.map { child -> childPath(sourcePath, child.name ?: "") }
+                ?: sourceFile!!.listFiles()?.map { it.absolutePath }.orEmpty()
+            children.forEach { childPath ->
+                val childName = if (isSafPath(childPath)) resolve(context, childPath)?.name.orEmpty() else File(childPath).name
+                require(childName.isNotBlank()) { "نام فایل نامعتبر است" }
+                copyNodeToDocument(context, childPath, targetDir, uniqueDocumentName(targetDir, childName))
+            }
+        } else {
+            val name = sourceDoc?.name ?: sourceFile!!.name
+            val mime = context.contentResolver.getType(sourceDoc?.uri ?: Uri.fromFile(sourceFile!!)) ?: "application/octet-stream"
+            val outputDoc = destination.createFile(mime, targetName) ?: error("ساخت فایل در مقصد ناموفق بود")
+            val input = if (sourceDoc != null) context.contentResolver.openInputStream(sourceDoc.uri) else FileInputStream(sourceFile!!)
+            requireNotNull(input) { "خواندن فایل مبدأ ممکن نشد" }.use { stream ->
+                val output = context.contentResolver.openOutputStream(outputDoc.uri, "w") ?: error("نوشتن فایل مقصد ممکن نشد")
+                output.use { stream.copyTo(it) }
+            }
+        }
+    }
+
+    private fun copyNodeToFile(context: Context, sourcePath: String, target: File) {
+        val sourceDoc = if (isSafPath(sourcePath)) resolve(context, sourcePath) else null
+        val sourceFile = if (isSafPath(sourcePath)) null else File(sourcePath)
+        val isDirectory = sourceDoc?.isDirectory ?: sourceFile!!.isDirectory
+        if (isDirectory) {
+            require(target.mkdirs() || target.isDirectory) { "ساخت پوشه در مقصد ناموفق بود" }
+            val children = sourceDoc?.listFiles()?.map { child -> childPath(sourcePath, child.name ?: "") }
+                ?: sourceFile!!.listFiles()?.map { it.absolutePath }.orEmpty()
+            children.forEach { childPath ->
+                val name = if (isSafPath(childPath)) resolve(context, childPath)?.name.orEmpty() else File(childPath).name
+                require(name.isNotBlank()) { "نام فایل نامعتبر است" }
+                copyNodeToFile(context, childPath, File(target, name))
+            }
+        } else {
+            val input = if (sourceDoc != null) context.contentResolver.openInputStream(sourceDoc.uri) else FileInputStream(sourceFile!!)
+            requireNotNull(input) { "خواندن فایل مبدأ ممکن نشد" }.use { stream ->
+                FileOutputStream(target).use { output -> stream.copyTo(output) }
+            }
+        }
+    }
 }
 /** Independent identity for the two explorer panes. */
 enum class Pane { LEFT, RIGHT }
