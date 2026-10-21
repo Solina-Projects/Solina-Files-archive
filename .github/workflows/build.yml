@@ -60,11 +60,24 @@ jobs:
       - name: Build Debug APK
         run: gradle assembleDebug --no-daemon --stacktrace
 
+      # Exercise the optimized release variant so R8/ProGuard rules are tested in CI.
+      # bundleRelease creates an unsigned AAB; signing and publishing remain manual.
+      - name: Build optimized Release App Bundle
+        run: gradle bundleRelease --no-daemon --stacktrace
+
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: SolinaFiles-v1.0-debug
           path: app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
+      - name: Upload Release AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolinaFiles-release-aab-unsigned
+          path: app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
           retention-days: 14
 
       - name: Send Telegram Alert on Failure
