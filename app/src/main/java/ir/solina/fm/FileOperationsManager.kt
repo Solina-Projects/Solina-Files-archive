@@ -1,6 +1,7 @@
 package ir.solina.fm
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.isActive
 import java.io.File
@@ -35,6 +36,14 @@ object FileOperationsManager {
         var failures = 0
         val errors = mutableListOf<String>()
         val total = sources.size
+
+        if (!destinationDir.isDirectory || !destinationDir.canWrite()) {
+            return@withContext OperationResult(
+                successCount = 0,
+                failureCount = sources.size,
+                errors = listOf("پوشهٔ مقصد وجود ندارد یا قابل نوشتن نیست")
+            )
+        }
 
         sources.forEachIndexed { index, src ->
             if (!isActive) return@withContext OperationResult(successes, failures, errors)
@@ -101,6 +110,10 @@ object FileOperationsManager {
                     failures++
                     errors.add("${src.name}: کپی ناموفق بود")
                 }
+            } catch (cancelled: CancellationException) {
+                // Cancellation must propagate; treating it as an ordinary file error
+                // makes a cancelled transfer continue processing the remaining files.
+                throw cancelled
             } catch (e: Exception) {
                 failures++
                 errors.add("${src.name}: ${e.localizedMessage ?: "خطای ناشناخته"}")
