@@ -128,6 +128,18 @@ private object SafDocumentAccess {
             val sourceFile = if (isSafPath(sourcePath)) null else File(sourcePath)
             require(sourceDoc?.exists() == true || sourceFile?.exists() == true) { "فایل مبدأ پیدا نشد" }
             val sourceName = sourceDoc?.name ?: sourceFile!!.name
+            if (isSafPath(sourcePath) && isSafPath(destinationPath)) {
+                val sourceParts = parts(sourcePath)
+                val destinationParts = parts(destinationPath)
+                if (sourceParts[1] == destinationParts[1]) {
+                    val sourceRelative = sourceParts[2].trimEnd('/')
+                    val destinationRelative = destinationParts[2].trimEnd('/')
+                    require(destinationRelative != sourceRelative &&
+                        !destinationRelative.startsWith("$sourceRelative/")) {
+                        "پوشه را نمی‌توان به خودش یا یکی از زیرپوشه‌هایش کپی یا منتقل کرد"
+                    }
+                }
+            }
             if (isSafPath(destinationPath)) {
                 val destination = resolve(context, destinationPath) ?: error("دسترسی نوشتن به مقصد وجود ندارد")
                 require(destination.isDirectory) { "مقصد پوشه نیست" }
@@ -136,6 +148,14 @@ private object SafDocumentAccess {
             } else {
                 val destination = File(destinationPath)
                 require(destination.isDirectory && destination.canWrite()) { "مقصد قابل نوشتن نیست" }
+                if (sourceFile?.isDirectory == true) {
+                    val sourceCanonical = sourceFile.canonicalFile
+                    val destinationCanonical = destination.canonicalFile
+                    require(destinationCanonical != sourceCanonical &&
+                        !destinationCanonical.toPath().startsWith(sourceCanonical.toPath())) {
+                        "پوشه را نمی‌توان به خودش یا یکی از زیرپوشه‌هایش کپی یا منتقل کرد"
+                    }
+                }
                 val target = uniqueFile(destination, sourceName)
                 copyNodeToFile(context, sourcePath, target)
             }
@@ -720,32 +740,55 @@ class ExplorerViewModel(application: Application) : AndroidViewModel(application
 
     fun dropItemOnPane(path: String, destinationPane: Pane, move: Boolean = false) {
         val snapshot = _state.value
-        val source = File(path)
         val destinationState = snapshot.getPaneState(destinationPane)
-        val destination = File(destinationState.currentPath)
-        if (!source.exists() || destinationState.isLoading || !destination.isDirectory || !destination.canWrite()) {
-            _state.update { it.updatePane(destinationPane) { p -> p.copy(errorMessage = "مبدأ یا مقصد عملیات در دسترس نیست") } }
+        val destinationPath = destinationState.currentPath
+        if (destinationState.isLoading) {
+            _state.update { it.updatePane(destinationPane) { p -> p.copy(errorMessage = "مقصد هنوز در حال بارگذاری است") } }
             return
         }
-        if (source.canonicalPath == destination.canonicalPath ||
-            (source.isDirectory && destination.canonicalPath.startsWith(source.canonicalPath + File.separator))) {
-            _state.update { it.updatePane(destinationPane) { p -> p.copy(errorMessage = "این پوشه مقصد مجاز برای خودش نیست") } }
+        val destinationValid = if (SafDocumentAccess.isSafPath(destinationPath)) {
+            SafDocumentAccess.resolve(getApplication(), destinationPath)?.isDirectory == true
+        } else {
+            File(destinationPath).let { it.isDirectory && it.canWrite() }
+        }
+        if (!destinationValid) {
+            _state.update { it.updatePane(destinationPane) { p -> p.copy(errorMessage = "مبدأ یا مقصد عملیات در دسترس نیست") } }
             return
         }
         val sourcePane = Pane.entries.firstOrNull { pane ->
             snapshot.getPaneState(pane).items.any { it.path == path }
         }
         viewModelScope.launch {
-            val result = FileOperationsManager.executeTransfer(
-                sources = listOf(source),
-                destinationDir = destination,
-                isMove = move,
-                onProgress = {}
-            )
-            _state.update { current ->
-                current.updatePane(destinationPane) { p ->
-                    p.copy(errorMessage = result.errors.firstOrNull())
+            val result = if (SafDocumentAccess.supportsTransfer(path, destinationPath)) {
+                val error = withContext(Dispatchers.IO) {
+                    SafDocumentAccess.transfer(getApplication(), path, destinationPath, move)
                 }
+                FileOperationsManager.OperationResult(
+                    successCount = if (error == null) 1 else 0,
+                    failureCount = if (error == null) 0 else 1,
+                    errors = error?.let { listOf(it) } ?: emptyList()
+                )
+            } else {
+                val source = File(path)
+                val destination = File(destinationPath)
+                val invalidTarget = runCatching {
+                    val src = source.canonicalFile
+                    val dst = destination.canonicalFile
+                    src == dst || (source.isDirectory && dst.toPath().startsWith(src.toPath()))
+                }.getOrDefault(true)
+                if (!source.exists() || invalidTarget) {
+                    FileOperationsManager.OperationResult(0, 1, listOf("مبدأ یا مقصد عملیات معتبر نیست"))
+                } else {
+                    FileOperationsManager.executeTransfer(
+                        sources = listOf(source),
+                        destinationDir = destination,
+                        isMove = move,
+                        onProgress = {}
+                    )
+                }
+            }
+            _state.update { current ->
+                current.updatePane(destinationPane) { p -> p.copy(errorMessage = result.errors.firstOrNull()) }
             }
             if (result.failureCount == 0 && sourcePane != null) clearSelection(sourcePane)
             refresh(destinationPane)
