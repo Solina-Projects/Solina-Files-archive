@@ -78,6 +78,8 @@ enum class Pane { LEFT, RIGHT }
 /** Controls when the second pane is displayed. */
 enum class DualPaneMode { ALWAYS, NEVER, LANDSCAPE_ONLY }
 
+enum class ExplorerSortMode { NAME, SIZE, MODIFIED }
+
 data class ExplorerFileItem(
     val path: String,
     val name: String,
@@ -92,7 +94,9 @@ data class PaneState(
     val selectedItems: Set<String> = emptySet(),
     val isLoading: Boolean = false,
     val history: List<String> = emptyList(),
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val searchQuery: String = "",
+    val sortMode: ExplorerSortMode = ExplorerSortMode.NAME
 )
 
 data class ExplorerState(
@@ -128,6 +132,21 @@ class ExplorerViewModel : ViewModel() {
     init {
         refresh(Pane.LEFT)
         refresh(Pane.RIGHT)
+    }
+
+    fun setSearchQuery(pane: Pane, query: String) {
+        _state.update { current -> current.updatePane(pane) { it.copy(searchQuery = query) } }
+    }
+
+    fun cycleSortMode(pane: Pane) {
+        _state.update { current -> current.updatePane(pane) { paneState ->
+            val next = when (paneState.sortMode) {
+                ExplorerSortMode.NAME -> ExplorerSortMode.SIZE
+                ExplorerSortMode.SIZE -> ExplorerSortMode.MODIFIED
+                ExplorerSortMode.MODIFIED -> ExplorerSortMode.NAME
+            }
+            paneState.copy(sortMode = next)
+        } }
     }
 
     fun setActivePane(pane: Pane) {
@@ -462,6 +481,13 @@ fun ExplorerScreen(
         ) {
             panes.forEach { pane ->
                 val paneState = state.getPaneState(pane)
+                val displayedItems = paneState.items
+                    .filter { it.name.contains(paneState.searchQuery.trim(), ignoreCase = true) }
+                    .let { items -> when (paneState.sortMode) {
+                        ExplorerSortMode.NAME -> items.sortedWith(compareBy<ExplorerFileItem> { !it.isDirectory }.thenBy { it.name.lowercase() })
+                        ExplorerSortMode.SIZE -> items.sortedWith(compareBy<ExplorerFileItem> { !it.isDirectory }.thenByDescending { it.sizeBytes }.thenBy { it.name.lowercase() })
+                        ExplorerSortMode.MODIFIED -> items.sortedWith(compareBy<ExplorerFileItem> { !it.isDirectory }.thenByDescending { it.modifiedAt }.thenBy { it.name.lowercase() })
+                    } }
                 val scrollKey = "${pane.name}:${paneState.currentPath}"
                 val savedPosition = savedScroll[scrollKey] ?: (0 to 0)
                 val listState = rememberLazyListState(
@@ -507,6 +533,22 @@ fun ExplorerScreen(
                         Text(paneState.currentPath, modifier = Modifier.weight(1f), maxLines = 2)
                         Button(onClick = { viewModel.navigateUp(pane) }) { Text("بالا") }
                     }
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OutlinedTextField(
+                            value = paneState.searchQuery,
+                            onValueChange = { viewModel.setSearchQuery(pane, it) },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            label = { Text("جست‌وجو در پوشه") }
+                        )
+                        Button(onClick = { viewModel.cycleSortMode(pane) }) {
+                            Text(when (paneState.sortMode) {
+                                ExplorerSortMode.NAME -> "نام"
+                                ExplorerSortMode.SIZE -> "حجم"
+                                ExplorerSortMode.MODIFIED -> "تاریخ"
+                            })
+                        }
+                    }
                     if (paneState.isLoading) Text("در حال بارگذاری…")
                     paneState.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     AnimatedContent(
@@ -517,7 +559,7 @@ fun ExplorerScreen(
                         label = "ExplorerFolderTransition"
                     ) {
                         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                            items(paneState.items, key = { it.path }) { item ->
+                            items(displayedItems, key = { it.path }) { item ->
                                 val selected = item.path in paneState.selectedItems
                                 Surface(
                                     color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
