@@ -8,6 +8,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,16 +19,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
+import android.content.res.Configuration
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ir.solina.fm.FileOperationsManager
@@ -42,6 +49,9 @@ import kotlinx.coroutines.withContext
 
 /** Independent identity for the two explorer panes. */
 enum class Pane { LEFT, RIGHT }
+
+/** Controls when the second pane is displayed. */
+enum class DualPaneMode { ALWAYS, NEVER, LANDSCAPE_ONLY }
 
 data class ExplorerFileItem(
     val path: String,
@@ -62,7 +72,7 @@ data class PaneState(
 
 data class ExplorerState(
     val activePane: Pane = Pane.LEFT,
-    val isDualPaneForced: Boolean = false,
+    val dualPaneMode: DualPaneMode = DualPaneMode.LANDSCAPE_ONLY,
     val leftPane: PaneState = PaneState(),
     val rightPane: PaneState = PaneState()
 ) {
@@ -97,8 +107,8 @@ class ExplorerViewModel : ViewModel() {
         _state.update { it.copy(activePane = pane) }
     }
 
-    fun setDualPaneForced(forced: Boolean) {
-        _state.update { it.copy(isDualPaneForced = forced) }
+    fun setDualPaneMode(mode: DualPaneMode) {
+        _state.update { it.copy(dualPaneMode = mode) }
     }
 
     fun refresh(pane: Pane) {
@@ -182,7 +192,13 @@ class ExplorerViewModel : ViewModel() {
     }
 
     fun swapPanes() {
-        _state.update { it.copy(leftPane = it.rightPane, rightPane = it.leftPane) }
+        _state.update { current ->
+            current.copy(
+                leftPane = current.rightPane,
+                rightPane = current.leftPane,
+                activePane = if (current.activePane == Pane.LEFT) Pane.RIGHT else Pane.LEFT
+            )
+        }
     }
 
     fun copyToOtherPane(move: Boolean, onFinished: (FileOperationsManager.OperationResult) -> Unit = {}) {
@@ -191,12 +207,16 @@ class ExplorerViewModel : ViewModel() {
         val destinationPane = if (sourcePane == Pane.LEFT) Pane.RIGHT else Pane.LEFT
         val sourceState = snapshot.getPaneState(sourcePane)
         val destinationState = snapshot.getPaneState(destinationPane)
-        val selected = sourceState.selectedItems.map(::File)
-        if (selected.isEmpty()) return
+        val selectedPaths = sourceState.items.asSequence()
+            .filter { it.path in sourceState.selectedItems }
+            .map { File(it.path) }
+            .toList()
+        if (selectedPaths.isEmpty() || sourceState.isLoading || destinationState.isLoading) return
         val destination = File(destinationState.currentPath)
+        if (!destination.isDirectory || !destination.canWrite()) return
         viewModelScope.launch {
             val result = FileOperationsManager.executeTransfer(
-                sources = selected,
+                sources = selectedPaths,
                 destinationDir = destination,
                 isMove = move,
                 onProgress = {}
@@ -213,9 +233,16 @@ class ExplorerViewModel : ViewModel() {
 @Composable
 fun ExplorerScreen(viewModel: ExplorerViewModel, modifier: Modifier = Modifier) {
     val state by viewModel.state.collectAsState()
-    val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
-    val showDual = state.isDualPaneForced || wide
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val showDual = when (state.dualPaneMode) {
+        DualPaneMode.ALWAYS -> true
+        DualPaneMode.NEVER -> false
+        DualPaneMode.LANDSCAPE_ONLY -> isLandscape && configuration.screenWidthDp >= 600
+    }
     val panes = if (showDual) listOf(Pane.LEFT, Pane.RIGHT) else listOf(state.activePane)
+    // Keep list positions by pane and directory path, restoring them when returning to a folder.
+    val savedScroll = remember { mutableStateMapOf<String, Pair<Int, Int>>() }
 
     Column(modifier = modifier.fillMaxSize()) {
         Row(
@@ -224,13 +251,24 @@ fun ExplorerScreen(viewModel: ExplorerViewModel, modifier: Modifier = Modifier) 
         ) {
             panes.forEach { pane ->
                 val paneState = state.getPaneState(pane)
+                val scrollKey = "${pane.name}:${paneState.currentPath}"
+                val savedPosition = savedScroll[scrollKey] ?: (0 to 0)
+                val listState = rememberLazyListState(
+                    initialFirstVisibleItemIndex = savedPosition.first,
+                    initialFirstVisibleItemScrollOffset = savedPosition.second
+                )
+                DisposableEffect(scrollKey, listState) {
+                    onDispose { savedScroll[scrollKey] = listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+                }
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxSize()
                         .background(if (state.activePane == pane) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface)
+                        .then(if (state.activePane == pane) Modifier.padding(1.dp) else Modifier)
                         .combinedClickable(onClick = { viewModel.setActivePane(pane) }, onLongClick = { viewModel.setActivePane(pane) })
-                        .padding(6.dp)
+                        .padding(6.dp),
+                    
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(if (pane == Pane.LEFT) "چپ" else "راست", style = MaterialTheme.typography.labelLarge)
@@ -246,7 +284,7 @@ fun ExplorerScreen(viewModel: ExplorerViewModel, modifier: Modifier = Modifier) 
                         },
                         label = "ExplorerFolderTransition"
                     ) {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                             items(paneState.items, key = { it.path }) { item ->
                                 val selected = item.path in paneState.selectedItems
                                 Surface(
@@ -281,6 +319,15 @@ fun ExplorerScreen(viewModel: ExplorerViewModel, modifier: Modifier = Modifier) 
             Button(onClick = { viewModel.copyToOtherPane(move = false) }) { Text("کپی به پنل دیگر") }
             Button(onClick = { viewModel.copyToOtherPane(move = true) }) { Text("انتقال") }
             Button(onClick = { viewModel.swapPanes() }) { Text("جابه‌جایی پنل‌ها") }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text("نمایش پنل‌ها:", modifier = Modifier.padding(top = 10.dp))
+            Button(onClick = { viewModel.setDualPaneMode(DualPaneMode.ALWAYS) }) { Text(if (state.dualPaneMode == DualPaneMode.ALWAYS) "✓ همیشه" else "همیشه") }
+            Button(onClick = { viewModel.setDualPaneMode(DualPaneMode.NEVER) }) { Text(if (state.dualPaneMode == DualPaneMode.NEVER) "✓ هرگز" else "هرگز") }
+            Button(onClick = { viewModel.setDualPaneMode(DualPaneMode.LANDSCAPE_ONLY) }) { Text(if (state.dualPaneMode == DualPaneMode.LANDSCAPE_ONLY) "✓ افقی" else "فقط افقی") }
         }
     }
 }
