@@ -147,6 +147,65 @@ private object SafDocumentAccess {
         }.getOrElse { it.localizedMessage ?: "انتقال فایل انجام نشد" }
     }
 
+    /** Creates a ZIP beside the source, supporting both filesystem paths and SAF documents. */
+    fun compress(context: Context, sourcePath: String): String? = runCatching {
+        val sourceDoc = if (isSafPath(sourcePath)) resolve(context, sourcePath) else null
+        val sourceFile = if (isSafPath(sourcePath)) null else File(sourcePath)
+        require(sourceDoc?.exists() == true || sourceFile?.exists() == true) { "فایل یا پوشه پیدا نشد" }
+        val sourceName = sourceDoc?.name ?: sourceFile!!.name
+        val zipName = "$sourceName.zip"
+        val output = if (sourceDoc != null) {
+            val parentPath = parentPath(sourcePath) ?: error("برای ریشه حافظه نمی‌توان فایل ZIP ساخت")
+            val parent = resolve(context, parentPath) ?: error("پوشه والد پیدا نشد")
+            require(parent.findFile(zipName) == null) { "فایل فشرده از قبل وجود دارد: $zipName" }
+            parent.createFile("application/zip", zipName) ?: error("ساخت فایل ZIP در حافظه خارجی ناموفق بود")
+        } else {
+            val target = File(sourceFile!!.parentFile ?: error("پوشه والد پیدا نشد"), zipName)
+            require(!target.exists()) { "فایل فشرده از قبل وجود دارد: $zipName" }
+            target
+        }
+        val outputStream = if (output is DocumentFile) {
+            context.contentResolver.openOutputStream(output.uri, "w") ?: error("نوشتن فایل ZIP ممکن نشد")
+        } else {
+            FileOutputStream(output as File)
+        }
+        try {
+            ZipOutputStream(BufferedOutputStream(outputStream)).use { zip ->
+                fun addNode(path: String, entryName: String) {
+                    val doc = if (isSafPath(path)) resolve(context, path) else null
+                    val file = if (isSafPath(path)) null else File(path)
+                    require(doc?.exists() == true || file?.exists() == true) { "فایل پیدا نشد: $entryName" }
+                    val directory = doc?.isDirectory ?: (file?.isDirectory == true)
+                    if (directory) {
+                        val children = doc?.listFiles()?.map { child ->
+                            childPath(path, child.name ?: error("نام فایل نامعتبر است"))
+                        } ?: file!!.listFiles()?.map { it.absolutePath }.orEmpty()
+                        if (children.isEmpty()) {
+                            zip.putNextEntry(ZipEntry("$entryName/"))
+                            zip.closeEntry()
+                        } else {
+                            children.forEach { child ->
+                                val childName = if (isSafPath(child)) resolve(context, child)?.name else File(child).name
+                                require(!childName.isNullOrBlank()) { "نام فایل نامعتبر است" }
+                                addNode(child, "$entryName/$childName")
+                            }
+                        }
+                    } else {
+                        zip.putNextEntry(ZipEntry(entryName))
+                        val input = if (doc != null) context.contentResolver.openInputStream(doc.uri) else FileInputStream(file!!)
+                        requireNotNull(input) { "خواندن فایل مبدأ ممکن نشد" }.use { it.copyTo(zip) }
+                        zip.closeEntry()
+                    }
+                }
+                addNode(sourcePath, sourceName)
+            }
+        } catch (error: Throwable) {
+            if (output is DocumentFile) output.delete() else (output as File).delete()
+            throw error
+        }
+        null
+    }.getOrElse { it.localizedMessage ?: "فشرده‌سازی ZIP انجام نشد" }
+
     private fun uniqueDocumentName(parent: DocumentFile, name: String): String {
         if (parent.findFile(name) == null) return name
         val dot = name.lastIndexOf('.').takeIf { it > 0 } ?: name.length
@@ -354,39 +413,21 @@ class ExplorerViewModel(application: Application) : AndroidViewModel(application
     fun compressSelected(onFinished: (String?) -> Unit = {}) {
         val snapshot = _state.value
         val pane = snapshot.activePane
-        val selected = snapshot.getPaneState(pane).items.filter { it.path in snapshot.getPaneState(pane).selectedItems }.map { File(it.path) }
+        val selected = snapshot.getPaneState(pane).selectedItems.toList()
         if (selected.isEmpty()) {
             onFinished("ابتدا فایل یا پوشه‌ای انتخاب کنید")
             return
         }
         viewModelScope.launch {
-            val error = withContext(Dispatchers.IO) {
-                runCatching {
-                    selected.forEach { source ->
-                        require(source.exists()) { "فایل پیدا نشد: ${source.name}" }
-                        val output = File(source.parentFile, "${source.name}.zip")
-                        require(!output.exists()) { "فایل فشرده از قبل وجود دارد: ${output.name}" }
-                        ZipOutputStream(BufferedOutputStream(FileOutputStream(output))).use { zip ->
-                            fun addFile(file: File, entryName: String) {
-                                if (file.isDirectory) {
-                                    val children = file.listFiles() ?: emptyArray()
-                                    if (children.isEmpty()) zip.putNextEntry(ZipEntry("$entryName/")).also { zip.closeEntry() }
-                                    children.forEach { child ->
-                                        addFile(child, if (entryName.isEmpty()) child.name else "$entryName/${child.name}")
-                                    }
-                                } else {
-                                    zip.putNextEntry(ZipEntry(entryName))
-                                    FileInputStream(file).use { input -> input.copyTo(zip) }
-                                    zip.closeEntry()
-                                }
-                            }
-                            addFile(source, source.name)
-                        }
+            val errors = withContext(Dispatchers.IO) {
+                selected.mapNotNull { path ->
+                    SafDocumentAccess.compress(getApplication(), path)?.let { error ->
+                        "${if (SafDocumentAccess.isSafPath(path)) SafDocumentAccess.resolve(getApplication(), path)?.name else File(path).name}: $error"
                     }
-                }.exceptionOrNull()?.localizedMessage
+                }
             }
             refresh(pane)
-            onFinished(error)
+            onFinished(errors.takeIf { it.isNotEmpty() }?.joinToString("\n"))
         }
     }
 
