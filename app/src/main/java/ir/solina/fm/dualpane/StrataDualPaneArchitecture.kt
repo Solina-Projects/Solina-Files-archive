@@ -135,7 +135,7 @@ private object SafDocumentAccess {
                     val sourceRelative = sourceParts[2].trimEnd('/')
                     val destinationRelative = destinationParts[2].trimEnd('/')
                     require(destinationRelative != sourceRelative &&
-                        !destinationRelative.startsWith("$sourceRelative/")) {
+                        (sourceRelative.isEmpty() || !destinationRelative.startsWith("$sourceRelative/"))) {
                         "پوشه را نمی‌توان به خودش یا یکی از زیرپوشه‌هایش کپی یا منتقل کرد"
                     }
                 }
@@ -144,7 +144,13 @@ private object SafDocumentAccess {
                 val destination = resolve(context, destinationPath) ?: error("دسترسی نوشتن به مقصد وجود ندارد")
                 require(destination.isDirectory) { "مقصد پوشه نیست" }
                 val targetName = uniqueDocumentName(destination, sourceName)
-                copyNodeToDocument(context, sourcePath, destination, targetName)
+                try {
+                    copyNodeToDocument(context, sourcePath, destination, targetName)
+                } catch (error: Throwable) {
+                    // Do not leave a partial directory/file behind after a failed copy.
+                    destination.findFile(targetName)?.delete()
+                    throw error
+                }
             } else {
                 val destination = File(destinationPath)
                 require(destination.isDirectory && destination.canWrite()) { "مقصد قابل نوشتن نیست" }
@@ -157,7 +163,13 @@ private object SafDocumentAccess {
                     }
                 }
                 val target = uniqueFile(destination, sourceName)
-                copyNodeToFile(context, sourcePath, target)
+                try {
+                    copyNodeToFile(context, sourcePath, target)
+                } catch (error: Throwable) {
+                    // Remove incomplete output so a retry does not collide with a broken copy.
+                    if (target.isDirectory) target.deleteRecursively() else target.delete()
+                    throw error
+                }
             }
             if (move) {
                 val deleted = if (sourceDoc != null) sourceDoc.delete() else if (sourceFile!!.isDirectory) sourceFile.deleteRecursively() else sourceFile.delete()
